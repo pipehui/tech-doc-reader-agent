@@ -17,10 +17,10 @@ class State(TypedDict):
         list[
             Literal[
                 "assistant",
-                "update_flight",
-                "book_car_rental",
-                "book_hotel",
-                "book_excursion",
+                "doc_parser",
+                "concept_explainer",
+                "relation_searcher",
+                "summarizer",
             ]
         ],
         update_dialog_stack,
