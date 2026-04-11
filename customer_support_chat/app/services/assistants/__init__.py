@@ -1,3 +1,13 @@
+'''
+
+primary      — 路由
+parse        — 文档解析
+explanation  — 概念解释
+relation     — 关联检索
+examination  — 考验出题
+summary      — 摘要生成
+
+'''
 from .assistant_base import Assistant, CompleteOrEscalate, llm
 from .primary_assistant import (
     primary_assistant,
