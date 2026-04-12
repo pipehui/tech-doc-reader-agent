@@ -16,11 +16,12 @@ class State(TypedDict):
     dialog_state: Annotated[
         list[
             Literal[
-                "assistant",
+                "primary",
                 "doc_parser",
-                "concept_explainer",
-                "relation_searcher",
-                "summarizer",
+                "explanation",
+                "relation",
+                "examination",
+                "summary",
             ]
         ],
         update_dialog_stack,

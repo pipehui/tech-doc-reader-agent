@@ -1,39 +1,23 @@
 '''
-
 primary      — 路由
 parse        — 文档解析
 explanation  — 概念解释
 relation     — 关联检索
 examination  — 考验出题
 summary      — 摘要生成
-
 '''
 from .assistant_base import Assistant, CompleteOrEscalate, llm
 from .primary_assistant import (
     primary_assistant,
     primary_assistant_tools,
-    ToFlightBookingAssistant,
-    ToBookCarRental,
-    ToHotelBookingAssistant,
-    ToBookExcursion,
+    ToDocParserAssistant,
+    ToExplanationAssistant,
+    ToRelationAssistant,
+    ToExaminationAssistant,
+    ToSummaryAssistant,
 )
-from .flight_booking_assistant import (
-    flight_booking_assistant,
-    update_flight_safe_tools,
-    update_flight_sensitive_tools,
-)
-from .hotel_booking_assistant import (
-    hotel_booking_assistant,
-    book_hotel_safe_tools,
-    book_hotel_sensitive_tools,
-)
-from .car_rental_assistant import (
-    car_rental_assistant,
-    book_car_rental_safe_tools,
-    book_car_rental_sensitive_tools,
-)
-from .excursion_assistant import (
-    excursion_assistant,
-    book_excursion_safe_tools,
-    book_excursion_sensitive_tools,
-)
+from .parser_assistant import doc_parser_assistant
+from .explanation_assistant import explanation_assistant
+from .relation_assistant import relation_assistant
+from .examination_assistant import examination_assistant
+from .summary_assistant import summary_assistant
