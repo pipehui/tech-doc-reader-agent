@@ -1,6 +1,14 @@
 from typing import Annotated, Literal, Optional
-from typing_extensions import TypedDict
+from typing_extensions import TypedDict, NotRequired
 from langgraph.graph.message import AnyMessage, add_messages
+
+WorkflowStep = Literal[
+    "parser",
+    "relation",
+    "explanation",
+    "examination",
+    "summary",
+]
 
 def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
     """Push or pop the dialog state stack."""
@@ -13,16 +21,9 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
 class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     user_info: str
-    dialog_state: Annotated[
-        list[
-            Literal[
-                "primary",
-                "doc_parser",
-                "explanation",
-                "relation",
-                "examination",
-                "summary",
-            ]
-        ],
-        update_dialog_stack,
-    ]
+    dialog_state: Annotated[list[WorkflowStep | Literal["primary"]], update_dialog_stack]
+    
+    workflow_plan: NotRequired[list[WorkflowStep]]
+    plan_index: NotRequired[int]
+    parser_result: NotRequired[str]
+    relation_result: NotRequired[str]

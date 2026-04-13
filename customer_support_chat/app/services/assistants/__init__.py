@@ -16,7 +16,7 @@ from .primary_assistant import (
     ToExaminationAssistant,
     ToSummaryAssistant,
 )
-from .parser_assistant import doc_parser_assistant
+from .parser_assistant import parser_assistant
 from .explanation_assistant import explanation_assistant
 from .relation_assistant import relation_assistant
 from .examination_assistant import examination_assistant
