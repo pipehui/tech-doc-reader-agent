@@ -37,6 +37,8 @@ class ToSummaryAssistant(BaseModel):
 class PlanWorkflow(BaseModel):
     steps: list[Literal["parser", "relation", "explanation", "examination", "summary"]]
     goal: str = Field(description="The user's learning goal in this turn.")
+    learning_target: str = Field(description="The canonical learning target for this turn. Use one stable, concise, reusable topic name. Prefer the exact term used by the user or document. Do not add suffixes like 'core concepts', 'basics', 'summary', or 'notes'.")
+
 
 # Primary assistant prompt
 primary_assistant_prompt = ChatPromptTemplate.from_messages(
@@ -64,6 +66,12 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 如果用户的目标是理解一个新知识点，通常优先考虑 parser、relation、explanation 这几个步骤中的必要部分。"
             "\n- 如果用户已经明确提供足够上下文，不要加入多余步骤。"
             "\n- 如果用户后续还想练习或总结，再把 examination 或 summary 放入计划。"
+
+            "\n- 当你使用 PlanWorkflow 时，必须同时给出本轮学习目标的标准名称 learning_target。"
+            "\n- 这个名称必须稳定、简洁、可复用。"
+            "\n- 优先复用用户或文档中已经出现的原始术语，不要自行扩写、缩写，或添加“核心概念”“基础知识”“总结”“笔记”等后缀。"
+            "\n- 如果本轮涉及多个概念，选择当前最核心、最值得被记录为学习对象的那个主题。"
+
 
             "\n\n关于 relation 步骤："
             "\n- 当用户希望理解一个新的概念、机制或技术内容时，你应主动考虑是否需要加入 relation 步骤。"

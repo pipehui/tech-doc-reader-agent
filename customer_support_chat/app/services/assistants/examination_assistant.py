@@ -50,6 +50,9 @@ examination_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 只有在你已经完成一次较完整的评估后，才考虑调用 upsert_learning_history。"
             "\n- 记录内容应聚焦于知识点、时间和掌握得分，而不是保存整套题目或完整反馈。"
             "\n- 如果用户只是让你出题，但还没有作答，通常不要写入最终掌握分数。"
+            "\n- 更新学习记录时，优先使用当前标准学习目标 learning_target 作为 knowledge 名称。"
+            "\n- 如果 learning_target 已经明确，必须沿用这个名称，不要自行改写、扩写或添加解释性后缀。"
+            "\n- 如果 learning_target 为空或当前目标不明确，不要写入学习记录。"
 
             "\n\n你的输出尽量使用稳定结构。"
 
@@ -86,7 +89,7 @@ examination_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 不要把不确定的判断说成确定结论。"
             "\n- 默认面向初学者，反馈要具体、温和、可执行。"
 
-            "\n当前时间：{time}。",
+            "\n当前时间：{time}；当前标准学习目标：{learning_target}",
         ),
         ("placeholder", "{messages}"),
     ]

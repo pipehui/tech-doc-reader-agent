@@ -4,7 +4,7 @@ read_docs -> 从文档数据库中读取与查询相关的文档
 save_docs -> 将新的文档保存到文档数据库中
 search_related_docs -> 使用向量索引搜索与查询相关的文档
 '''
-
+import json
 from customer_support_chat.app.core.settings import get_settings
 from langchain_core.tools import tool
 from typing import List, Dict, Optional, Union
@@ -31,17 +31,14 @@ def web_search(query: str) -> List[Dict]:
     return results
 
 @tool
-def read_docs(query: str) -> List[Dict]:
-    """
-    当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。
-    例如用户问'LangGraph是什么'时，用'LangGraph'作为query进行检索。
-    """
-    # Implement your document retrieval logic here
+def read_docs(query: str) -> str:
+    """当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。"""
     documents = []
     for doc in _doc_store:
         if query.lower() in doc["title"].lower() or query.lower() in doc["content"].lower():
             documents.append(doc)
-    return documents
+    return json.dumps(documents, ensure_ascii=False)
+
 
 @tool
 def save_docs(title: str, content: str) -> str:

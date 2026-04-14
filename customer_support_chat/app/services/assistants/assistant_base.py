@@ -9,7 +9,7 @@ settings = get_settings()
 
 # Initialize the language model (shared among assistants)
 llm = ChatOpenAI(
-    model="gpt-4",
+    model="deepseek-chat",
     openai_api_key=settings.OPENAI_API_KEY,
     temperature=1,
 )

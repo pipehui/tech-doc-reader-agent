@@ -94,7 +94,10 @@ def user_info(state: State, config: RunnableConfig):
         "- 语言偏好：中文为主，技术术语保留英文"
     )
     # user_info_str = flight_info_to_string(flight_info)
-    return {"user_info": info_str}
+    return {
+        "user_info": info_str,
+        "learning_target": state.get("learning_target", ""),
+    }
 
 builder.add_node("fetch_user_info", user_info)
 builder.add_edge(START, "fetch_user_info")

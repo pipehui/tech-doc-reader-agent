@@ -37,6 +37,9 @@ summary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 如果这次总结明确体现了用户对某个知识点有新的理解，也可以酌情更新掌握分数。"
             "\n- 如果一次总结涉及多个知识点，应只选择 1 到 3 个最关键的知识点更新，而不是机械更新所有提到的术语。"
             "\n- 只有在你已经完成总结并识别出明确的核心复习知识点后，才考虑调用 upsert_learning_history。"
+            "\n- 更新学习记录时，优先使用当前标准学习目标 learning_target 作为 knowledge 名称。"
+            "\n- 如果 learning_target 已经明确，必须沿用这个名称，不要自行改写、扩写或添加解释性后缀。"
+            "\n- 如果 learning_target 为空或当前目标不明确，不要写入学习记录。"
 
             "\n\n你的输出尽量使用稳定结构："
             "\n- 本次学习主题"
@@ -69,7 +72,7 @@ summary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 不要把总结写成纯知识定义堆砌。"
             "\n- 你的总结应直接面向用户本人，便于复习和回顾。"
 
-            "\n当前时间：{time}。",
+            "\n当前时间：{time}；当前标准学习目标：{learning_target}",
         ),
         ("placeholder", "{messages}"),
     ]

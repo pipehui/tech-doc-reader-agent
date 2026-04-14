@@ -22,7 +22,7 @@ class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
     user_info: str
     dialog_state: Annotated[list[WorkflowStep | Literal["primary"]], update_dialog_stack]
-    
+    learning_target: str
     workflow_plan: NotRequired[list[WorkflowStep]]
     plan_index: NotRequired[int]
     parser_result: NotRequired[str]

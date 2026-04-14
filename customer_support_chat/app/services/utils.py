@@ -124,6 +124,7 @@ def store_plan(state: State) -> dict:
         "plan_index": 0,
         "parser_result": "",
         "relation_result": "",
+        "learning_target": args["learning_target"],
     }
 
 def download_and_prepare_db():
