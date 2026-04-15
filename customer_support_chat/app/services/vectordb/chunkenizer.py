@@ -1,6 +1,6 @@
 # customer_support_chat/app/services/vectordb/chunkenizer.py
 
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def recursive_character_splitting(text, chunk_size=300, chunk_overlap=20):
     text_splitter = RecursiveCharacterTextSplitter(

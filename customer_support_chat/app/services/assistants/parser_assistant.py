@@ -28,9 +28,10 @@ parser_assistant_prompt = ChatPromptTemplate.from_messages(
 
             "\n\n你的工作顺序必须遵循以下规则："
             "\n1. 如果用户已经提供了足够的文档原文或片段，优先直接解析。"
-            "\n2. 如果原文不足，可以使用 read_docs 和 web_search 补充资料。"
-            "\n3. 如果需要长期复用且内容已经足够完整，可以使用 save_docs 保存整理结果。"
-            "\n4. 你的重点是分析、抽取、归纳和记录，而不是展开面向用户的教学式解释。"
+            "\n2. 如果用户没有提供足够原文，优先使用 read_docs 从本地文档库检索相关资料。"
+            "\n3. 只有当 read_docs 返回为空，或者返回内容明显不足以完成解析时，才可以考虑使用 web_search 补充资料。"
+            "\n4. 如果需要长期复用且内容已经足够完整，可以使用 save_docs 保存整理结果。"
+            "\n5. 你的重点是分析、抽取、归纳和记录，而不是展开面向用户的教学式解释。"
 
             "\n\n你的输出必须使用稳定结构，尽量包含以下部分："
             "\n- 文档主题"
@@ -74,7 +75,7 @@ parser_assistant_prompt = ChatPromptTemplate.from_messages(
 ).partial(time=datetime.now())
 
 # 2. 文档解析工具
-parser_assistant_safe_tools = [web_search, read_docs]
+parser_assistant_safe_tools = [read_docs, web_search]
 parser_assistant_sensitive_tools = [save_docs]
 parser_assistant_tools = parser_assistant_safe_tools + parser_assistant_sensitive_tools
 

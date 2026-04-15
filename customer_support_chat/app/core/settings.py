@@ -13,7 +13,10 @@ class Config:
     )
     QDRANT_URL: str = environ.get("QDRANT_URL", "http://localhost:6333")
     RECREATE_COLLECTIONS: bool = environ.get("RECREATE_COLLECTIONS", "False")
-    LIMIT_ROWS: int = environ.get("LIMIT_ROWS", "100")
+    # LIMIT_ROWS: int = environ.get("LIMIT_ROWS", "100")
+    EMBEDDING_API_KEY: str = environ.get("EMBEDDING_API_KEY", "")
+    EMBEDDING_API_BASE: str = environ.get("EMBEDDING_API_BASE", "")
+    EMBEDDING_MODEL: str = environ.get("EMBEDDING_MODEL", "")
 
 def get_settings():
     return Config()
