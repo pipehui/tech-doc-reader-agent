@@ -35,7 +35,7 @@ tools/
 └── learning_store.py     → read_learning_history, upsert_learning_history
 '''
 from .doc_store import web_search, read_docs, save_docs, search_related_docs
-from .learning_store import read_learning_history, upsert_learning_history
+from .learning_store import read_learning_history, read_all_learning_history, upsert_learning_history
 
 __all__ = [
     "web_search",
@@ -43,5 +43,6 @@ __all__ = [
     "save_docs",
     "search_related_docs",
     "read_learning_history",
+    "read_all_learning_history",
     "upsert_learning_history",
 ]

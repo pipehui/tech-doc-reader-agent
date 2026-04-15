@@ -56,13 +56,13 @@ class LearningStore:
                 break
         if idx == -1:
             self.records.append(self._make_record(knowledge, timestamp, score))
-            return "Learning record for '{knowledge}' has been added successfully."
+            return f"Learning record for '{knowledge}' has been added successfully."
         
         self.records[idx]["timestamp"] = timestamp
         if score is not None:
             self.records[idx]["score"] = score
         self.records[idx]["reviewtimes"] += 1
-        return "Learning record for '{knowledge}' has been updated successfully."
+        return f"Learning record for '{knowledge}' has been updated successfully."
         
         
 

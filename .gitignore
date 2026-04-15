@@ -167,4 +167,7 @@ qdrant_storage
 *.bkp*
 
 # IDEs
-.vscode/.snow/
+.vscode/
+.snow/
+faiss_store/
+learning_store/
