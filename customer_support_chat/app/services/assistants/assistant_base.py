@@ -9,14 +9,14 @@ settings = get_settings()
 
 # Initialize the language model (shared among assistants)
 primary_llm = ChatOpenAI(
-    model="deepseek-chat",
+    model=settings.PRIMARY_MODEL,
     openai_api_key=settings.OPENAI_API_KEY,
     openai_api_base=settings.OPENAI_BASE_URL,
     temperature=1,
 )
 
 backup_llm = ChatOpenAI(
-    model="glm-4.7-flash",
+    model=settings.BACKUP_MODEL,
     openai_api_key=settings.BACKUP_API_KEY,
     openai_api_base=settings.BACKUP_API_BASE,
     temperature=1,
