@@ -72,9 +72,11 @@ relation_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 正常完成时，不要调用 CompleteOrEscalate。"
 
             "\n\n何时调用 CompleteOrEscalate："
-            "\n- 用户的任务已经变成文档解析、面向用户解释、出题、总结或学习记录管理。"
             "\n- 当前任务仍属于关系检索，但目标知识点不明确，无法继续安全完成。"
             "\n- 用户改变了目标，当前关系检索步骤已经不再合适。"
+            "\n- 当前上下文表明继续做类比分析会明显误导后续解释，必须先由 primary assistant 重新判断。"
+            "\n- 不要因为后续还会有 explanation assistant、examination assistant 或 summary assistant 接手，就调用 CompleteOrEscalate。"
+            "\n- 如果你已经完成当前关系检索和类比分析任务，应直接输出结构化结果，系统会自动进入计划中的下一步。"
 
             "\n\n你必须遵守："
             "\n- 不要编造不存在的知识关系。"

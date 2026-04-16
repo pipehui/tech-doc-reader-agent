@@ -5,12 +5,10 @@ save_docs -> 将新的文档保存到文档数据库中
 search_related_docs -> 使用向量索引搜索与查询相关的文档
 '''
 import json
-from customer_support_chat.app.core.settings import get_settings
 from customer_support_chat.app.services.vectordb.faiss_store import FaissStore
+from customer_support_chat.app.services.vectordb.web_search_backend import WebSearchBackend
 from langchain_core.tools import tool
-from typing import List, Dict, Optional, Union
 
-settings = get_settings()
 
 # 假设这是一个存储表
 _seed_docs = [
@@ -23,6 +21,8 @@ if not _faiss_store.load():
     _faiss_store.build_index(_seed_docs)
     _faiss_store.save()
 
+_web_search_backend = WebSearchBackend()
+
 @tool
 def web_search(query: str) -> str:
     """
@@ -30,10 +30,7 @@ def web_search(query: str) -> str:
     例如用户问'最新的AI技术有哪些'时，就用这个查询在网络上搜索相关信息，并返回搜索结果。
     """
     # Implement your web search logic here
-    results = [
-        {"title": "Example Result 1", "url": "https://example.com/1", "snippet": "This is an example search result."},
-        {"title": "Example Result 2", "url": "https://example.com/2", "snippet": "This is another example search result."},
-    ]
+    results = _web_search_backend.search(query)
     return json.dumps(results, ensure_ascii=False)
 
 @tool

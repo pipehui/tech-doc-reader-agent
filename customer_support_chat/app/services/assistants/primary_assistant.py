@@ -73,6 +73,12 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 如果用户已经明确提供足够上下文，不要加入多余步骤。"
             "\n- 如果用户后续还想练习或总结，再把 examination 或 summary 放入计划。"
             "\n- 当任务需要详细解释、类比分析或机制理解时，不要先把学习记录查询当成主要内容来源。"
+            "\n- 如果计划同时包含 parser、relation、explanation，这三个步骤的顺序必须是 parser -> relation -> explanation。"
+            "\n- 不要把 relation 放在 explanation 之后。类比检索应当先于最终解释。"
+            "\n- 当用户的目标是理解一个新的技术概念、机制、框架、协议或设计思想时，如果用户没有提供完整原文，默认先加入 parser。"
+            "\n- explanation 通常应当放在 parser 或 relation 之后，而不是单独抢在前面开始。"
+            "\n- 只有当任务非常简单、上下文已经足够完整，或者用户明确只要一个简短直答时，才可以跳过 parser。"
+
 
             "\n- 当你使用 PlanWorkflow 时，必须同时给出本轮学习目标的标准名称 learning_target。"
             "\n- 这个名称必须稳定、简洁、可复用。"

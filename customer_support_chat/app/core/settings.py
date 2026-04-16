@@ -18,5 +18,10 @@ class Config:
     EMBEDDING_API_BASE: str = environ.get("EMBEDDING_API_BASE", "")
     EMBEDDING_MODEL: str = environ.get("EMBEDDING_MODEL", "")
 
+    TAVILY_API_KEY: str = environ.get("TAVILY_API_KEY", "")
+    TAVILY_DAILY_LIMIT: int = environ.get("TAVILY_DAILY_LIMIT", "10")
+    
+    PROXY_URL: str = environ.get("PROXY_URL", "")
+
 def get_settings():
     return Config()

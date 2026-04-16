@@ -171,3 +171,4 @@ qdrant_storage
 .snow/
 faiss_store/
 learning_store/
+web_search/

@@ -44,10 +44,10 @@ def main():
                     "\n是否批准以上操作？输入 'y' 继续，否则请说明你的修改意见。\n\n"
                 )
                 if user_input.strip().lower() == "y":
-                    result = multi_agentic_graph.invoke(None, config)
+                    resume_events = multi_agentic_graph.stream(None, config, stream_mode="values")
                 else:
                     tool_call_id = snapshot.value["messages"][-1].tool_calls[0]["id"]
-                    result = multi_agentic_graph.invoke(
+                    resume_events = multi_agentic_graph.stream(
                         {
                             "messages": [
                                 ToolMessage(
@@ -57,12 +57,14 @@ def main():
                             ]
                         },
                         config,
+                        stream_mode="values",
                     )
-                messages = result.get("messages", [])
-                for message in messages:
-                    if message.id not in printed_message_ids:
-                        message.pretty_print()
-                        printed_message_ids.add(message.id)
+                for event in resume_events:
+                    messages = event.get("messages", [])
+                    for message in messages:
+                        if message.id not in printed_message_ids:
+                            message.pretty_print()
+                            printed_message_ids.add(message.id)
 
                 snapshot = multi_agentic_graph.get_state(config)
 

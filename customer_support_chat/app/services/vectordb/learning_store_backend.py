@@ -63,7 +63,3 @@ class LearningStore:
             self.records[idx]["score"] = score
         self.records[idx]["reviewtimes"] += 1
         return f"Learning record for '{knowledge}' has been updated successfully."
-        
-        
-
-
