@@ -23,5 +23,8 @@ class Config:
     
     PROXY_URL: str = environ.get("PROXY_URL", "")
 
+    BACKUP_API_BASE : str = environ.get("BACKUP_API_BASE", "")
+    BACKUP_API_KEY : str = environ.get("BACKUP_API_KEY", "")
+
 def get_settings():
     return Config()

@@ -8,11 +8,20 @@ from langchain_openai import ChatOpenAI
 settings = get_settings()
 
 # Initialize the language model (shared among assistants)
-llm = ChatOpenAI(
+primary_llm = ChatOpenAI(
     model="deepseek-chat",
     openai_api_key=settings.OPENAI_API_KEY,
     temperature=1,
 )
+
+backup_llm = ChatOpenAI(
+    model="glm-4.7-flash",
+    openai_api_key=settings.BACKUP_API_KEY,
+    openai_api_base=settings.BACKUP_API_BASE,
+    temperature=1,
+)
+
+llm = primary_llm.with_fallbacks([backup_llm])
 
 class Assistant:
     def __init__(self, runnable: Runnable):
