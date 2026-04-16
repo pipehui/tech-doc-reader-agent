@@ -11,6 +11,7 @@ settings = get_settings()
 primary_llm = ChatOpenAI(
     model="deepseek-chat",
     openai_api_key=settings.OPENAI_API_KEY,
+    openai_api_base=settings.OPENAI_BASE_URL,
     temperature=1,
 )
 

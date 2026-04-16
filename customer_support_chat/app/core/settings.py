@@ -5,7 +5,8 @@ load_dotenv()
 
 class Config:
     OPENAI_API_KEY: str = environ.get("OPENAI_API_KEY", "")
-    OPENAI_BASE_URL: str = environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")   # 热切换与降级容错
+    OPENAI_BASE_URL: str = environ.get("OPENAI_BASE_URL", "")   # 热切换与降级容错
+    PRIMARY_MODEL: str = environ.get("PRIMARY_MODEL", "")
     DATA_PATH: str = "./customer_support_chat/data"
     LOG_LEVEL: str = environ.get("LOG_LEVEL", "DEBUG")
     SQLITE_DB_PATH: str = environ.get(
@@ -25,6 +26,7 @@ class Config:
 
     BACKUP_API_BASE : str = environ.get("BACKUP_API_BASE", "")
     BACKUP_API_KEY : str = environ.get("BACKUP_API_KEY", "")
+    BACKUP_MODEL : str = environ.get("BACKUP_MODEL", "")
 
 def get_settings():
     return Config()
