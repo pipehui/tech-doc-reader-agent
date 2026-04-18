@@ -1,9 +1,7 @@
 from typing import Literal
 from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import tools_condition
 from langchain_core.runnables import RunnableConfig
-
 from customer_support_chat.app.core.state import State
 from customer_support_chat.app.services.utils import (
     create_tool_node_with_fallback,
@@ -428,8 +426,14 @@ interrupt_nodes = [
     "summary_assistant_sensitive_tools",
 ]
 
-memory = MemorySaver()
-multi_agentic_graph = builder.compile(
-    checkpointer=memory,
-    interrupt_before=interrupt_nodes,
-)
+# memory = MemorySaver()
+# multi_agentic_graph = builder.compile(
+#     checkpointer=memory,
+#     interrupt_before=interrupt_nodes,
+# )
+
+def build_multi_agentic_graph(checkpointer):
+    return builder.compile(
+        checkpointer=checkpointer,
+        interrupt_before=interrupt_nodes,
+    )

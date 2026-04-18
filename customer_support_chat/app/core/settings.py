@@ -28,5 +28,7 @@ class Config:
     BACKUP_API_KEY : str = environ.get("BACKUP_API_KEY", "")
     BACKUP_MODEL : str = environ.get("BACKUP_MODEL", "")
 
+    REDIS_URL: str = environ.get("REDIS_URL", "redis://localhost:6379")
+
 def get_settings():
     return Config()

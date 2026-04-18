@@ -172,3 +172,4 @@ qdrant_storage
 faiss_store/
 learning_store/
 web_search/
+redis/
