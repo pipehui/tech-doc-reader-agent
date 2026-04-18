@@ -18,6 +18,7 @@ from customer_support_chat.app.services.assistants.assistant_base import (
 from customer_support_chat.app.services.assistants.primary_assistant import (
     primary_assistant,
     primary_assistant_tools,
+    primary_assistant_sensitive_tools,
     PlanWorkflow,
     ToDocParserAssistant,
     ToExplanationAssistant,
@@ -356,12 +357,16 @@ builder.add_node("primary_assistant", primary_assistant)
 builder.add_node(
   "primary_assistant_tools", create_tool_node_with_fallback(primary_assistant_tools)
 )
+builder.add_node(
+  "primary_assistant_sensitive_tools", create_tool_node_with_fallback(primary_assistant_sensitive_tools)
+)
 builder.add_edge("fetch_user_info", "primary_assistant")
 builder.add_node("store_plan", store_plan)
 
 def route_primary_assistant(state: State) -> Literal[
     "store_plan",
     "primary_assistant_tools",
+    "primary_assistant_sensitive_tools",
     "enter_parser",
     "enter_explanation",
     "enter_relation",
@@ -373,6 +378,7 @@ def route_primary_assistant(state: State) -> Literal[
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
+    unsafe_toolnames = [t.name for t in primary_assistant_sensitive_tools]
     if tool_calls:
         tool_name = tool_calls[0]["name"]
         if tool_name == PlanWorkflow.__name__:
@@ -387,6 +393,8 @@ def route_primary_assistant(state: State) -> Literal[
             return "enter_examination"
         elif tool_name == ToSummaryAssistant.__name__:
             return "enter_summary"
+        elif tool_name in unsafe_toolnames:
+            return "primary_assistant_sensitive_tools"
         else:
             return "primary_assistant_tools"
     return END
@@ -402,6 +410,7 @@ builder.add_conditional_edges(
         "enter_examination": "enter_examination",
         "enter_summary": "enter_summary",
         "primary_assistant_tools": "primary_assistant_tools",
+        "primary_assistant_sensitive_tools": "primary_assistant_sensitive_tools",
         END: END,
     },
 )
@@ -418,12 +427,14 @@ builder.add_conditional_edges(
     },
 )
 builder.add_edge("primary_assistant_tools", "primary_assistant")
+builder.add_edge("primary_assistant_sensitive_tools", "primary_assistant")
 
 # Compile the graph with interrupts
 interrupt_nodes = [
     "parser_assistant_sensitive_tools",
     "examination_assistant_sensitive_tools",
     "summary_assistant_sensitive_tools",
+    "primary_assistant_sensitive_tools",
 ]
 
 # memory = MemorySaver()

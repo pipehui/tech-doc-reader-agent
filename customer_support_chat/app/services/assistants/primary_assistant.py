@@ -4,6 +4,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from customer_support_chat.app.services.tools import (
     read_learning_history,
     web_search,
+    upsert_learning_history,
 )
 # from langchain_community.tools.ddg_search.tool import DuckDuckGoSearchResults
 from customer_support_chat.app.services.assistants.assistant_base import Assistant, llm
@@ -59,6 +60,22 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 学习记录不包含某个知识点的详细技术内容、完整定义、机制说明、代码示例或系统化讲解。"
             "\n- 如果用户需要详细内容、文档依据、机制分析或面向学习的解释，不要把学习记录当作正文来源，应优先通过 parser、read_docs 或其他文档相关步骤获取。"
             "\n- 只有在简单查询用户学过什么、掌握情况如何、复习过几次时，才直接调用学习记录工具。"
+
+            "\n\n关于“用户明确提出更新学习记录”的处理，请严格遵守："
+            "\n- 如果用户明确要求“更新学习记录”“记录这次复习”“保存本次学习情况”“写入复习记录”“更新掌握分数”或表达了同等含义，这类请求属于显式的学习记录管理请求。"
+            "\n- 对于显式的学习记录管理请求，如果所需信息已经足够，你可以直接调用学习记录相关工具处理，而不必为了这类简单记录管理请求额外生成复杂的 PlanWorkflow。"
+            "\n- 如果当前请求的核心是“更新记录”而不是“生成总结”或“进行学习检测”，不要机械地把任务交给 summary 或 examination。"
+            "\n- 只有当用户还同时需要一份完整学习总结、掌握度分析、出题评估，或者当前记录更新所需信息明显不足时，才考虑把任务交给 summary 或 examination。"
+            "\n- 如果用户明确要求更新学习记录，而你当前已具备可用的学习记录更新工具，不要因为其他 assistant 在历史消息中说过“无法更新”或“没有相关工具”，就直接继承这个判断。你必须只根据你当前绑定的工具和你自己的职责来判断是否可以更新。"
+            "\n- 不要把其他 assistant 关于工具能力的自然语言说明，当作你自己的能力边界。"
+
+            "\n\n关于 primary 直接更新学习记录时的规则，请严格遵守："
+            "\n- 优先使用当前已明确的 learning_target 作为 knowledge 名称；如果 learning_target 为空，再考虑使用用户明确指定的知识点名称。"
+            "\n- 如果用户只是明确要求“记录本次复习/学习”，但没有要求你修改分数，且当前没有可靠依据评估新的掌握分数，那么可以只更新时间与复习次数，不要随意猜测新的 score。"
+            "\n- 如果用户明确给出了新的掌握分数，或者本轮上下文中已经有充分、明确、可靠的评估依据，你才可以更新 score。"
+            "\n- 如果当前知识点是全新记录，而你又没有可靠依据给出 score，不要随意创建一个带猜测分数的记录。此时应先向用户确认，或改由 summary / examination 在完成评估后再更新。"
+            "\n- 在学习记录工具真正返回成功之前，不要对用户说“已更新学习记录”“复习次数已增加”“分数已写入”等已完成表述。"
+            "\n- 如果工具尚未执行、正在等待审批、或执行失败，你必须如实说明状态，而不能口头假装更新成功。"
 
             "\n\n你可以使用的工作流步骤包括："
             "\n- parser：解析技术文档，提取结构化信息"
@@ -123,9 +140,9 @@ primary_assistant_tools = [
     ToExaminationAssistant,
     ToSummaryAssistant,
 ]
-
+primary_assistant_sensitive_tools = [upsert_learning_history]
 # Create the primary assistant runnable
-primary_assistant_runnable = primary_assistant_prompt | llm.bind_tools(primary_assistant_tools)
+primary_assistant_runnable = primary_assistant_prompt | llm.bind_tools(primary_assistant_tools + primary_assistant_sensitive_tools)
 
 # Instantiate the primary assistant
 primary_assistant = Assistant(primary_assistant_runnable)
