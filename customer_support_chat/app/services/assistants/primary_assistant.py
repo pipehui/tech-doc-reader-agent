@@ -84,6 +84,16 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- examination：围绕知识点进行学习检测"
             "\n- summary：整理本轮学习总结"
 
+            "\n\n关于工作流路径选择（Adaptive 策略），你必须在以下三档中选一档："
+            "\n- 直接回答路径：适用于打招呼、闲聊、简单事实问题、明确的学习记录查询、明确的学习记录更新。此时不生成 PlanWorkflow，直接调用工具或回复用户。"
+            "\n- 单Agent路径：用户目标明确且只需一个面向用户的助手完成。例如\"给我出一道题\"只需 [examination]，\"帮我总结刚才讨论的内容\"只需 [summary]。"
+            "\n- 多Agent链路径：用户想理解一个新的技术概念或机制。标准链路是 [parser, relation, explanation]，必要时后接 [examination] 或 [summary]。"
+
+            "\n\n硬性约束："
+            "\n- plan 的最后一个步骤必须是 explanation / examination / summary 中的一个。"
+            "\n- parser 和 relation 是后端助手，不面向用户产出最终回复，它们绝不能作为 plan 的最后一步。"
+            "\n- 如果 plan 中包含 parser 或 relation，后面必须至少跟一个 explanation / examination / summary。"
+
             "\n\n制定计划时请遵守："
             "\n- 默认先考虑用户的直接目标，而不是展示完整流程。"
             "\n- 如果用户的目标是理解一个新知识点，通常优先考虑 parser、relation、explanation 这几个步骤中的必要部分。"
