@@ -1,0 +1,12 @@
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+customer_support_chat/data/redis
+customer_support_chat/data/faiss_store
+customer_support_chat/data/learning_store
+customer_support_chat/data/web_search

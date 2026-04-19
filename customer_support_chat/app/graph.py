@@ -92,7 +92,6 @@ def user_info(state: State, config: RunnableConfig):
         "- 解释深度：详细，多举例\n"
         "- 语言偏好：中文为主，技术术语保留英文"
     )
-    # user_info_str = flight_info_to_string(flight_info)
     return {
         "user_info": info_str,
         "learning_target": state.get("learning_target", ""),

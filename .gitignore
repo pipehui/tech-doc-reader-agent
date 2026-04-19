@@ -173,3 +173,4 @@ faiss_store/
 learning_store/
 web_search/
 redis/
+*.pyc

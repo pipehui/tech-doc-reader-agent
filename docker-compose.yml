@@ -1,27 +1,35 @@
-version: '3.8'
-
 services:
-  qdrant:
-    image: qdrant/qdrant
-    ports:
-      - "6333:6333"
+  redis:
+    image: redis:8
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - ./customer_support_chat/data/qdrant_storage:/qdrant/storage
-    networks:
-      - app-network
+      - ./customer_support_chat/data/redis:/data
 
-  customer-support-chat:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    volumes:
-      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .dev.env
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    networks:
-      - app-network
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      PRIMARY_MODEL: ${PRIMARY_MODEL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      TAVILY_DAILY_LIMIT: ${TAVILY_DAILY_LIMIT:-10}
+      BACKUP_API_BASE: ${BACKUP_API_BASE:-}
+      BACKUP_API_KEY: ${BACKUP_API_KEY:-}
+      BACKUP_MODEL: ${BACKUP_MODEL:-}
+      PYTHONPATH: /app
+    volumes:
+      - ./customer_support_chat:/app/customer_support_chat
+      - ./customer_support_chat/data:/app/customer_support_chat/data
     depends_on:
-      - qdrant
-
-networks:
-  app-network:
+      - redis
+    command: uvicorn customer_support_chat.app.api.server:app --host 0.0.0.0 --port 8000 --reload
