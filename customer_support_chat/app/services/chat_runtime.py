@@ -55,7 +55,7 @@ class ChatRuntime:
         parts = self.graph.stream(
             {"messages": [("user", user_input)]},
             self.build_config(session_id),
-            stream_mode="messages",
+            stream_mode=["messages", "updates"],
             version="v2",
         )
         for part in parts:
@@ -74,7 +74,7 @@ class ChatRuntime:
         config = self.build_config(session_id)
 
         if approved:
-            parts = self.graph.stream(None, config, stream_mode="messages", version="v2")
+            parts = self.graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
         else:
             tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
             feedback = feedback or "用户未提供原因"
@@ -88,7 +88,7 @@ class ChatRuntime:
                     ]
                 },
                 config,
-                stream_mode="messages",
+                stream_mode=["messages", "updates"],
                 version="v2",
             )
 
@@ -97,3 +97,153 @@ class ChatRuntime:
 
     def get_snapshot(self, session_id: str) -> StateSnapshot:
         return self.graph.get_state(self.build_config(session_id))
+    
+    def _extract_text_content(self, content) -> str:
+        if isinstance(content, str):
+            return content
+
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    if item.get("type") == "text":
+                        parts.append(item.get("text", ""))
+                    elif "text" in item:
+                        parts.append(item.get("text", ""))
+            return "".join(parts)
+
+        return ""
+
+    def _serialize_message(self, message) -> dict:
+        raw_type = getattr(message, "type", "unknown")
+        role_map = {
+            "human": "user",
+            "ai": "assistant",
+            "tool": "tool",
+            "system": "system",
+        }
+
+        return {
+            "id": getattr(message, "id", None),
+            "role": role_map.get(raw_type, raw_type),
+            "raw_type": raw_type,
+            "content": self._extract_text_content(getattr(message, "content", "")),
+            "name": getattr(message, "name", None),
+            "tool_call_id": getattr(message, "tool_call_id", None),
+            "tool_calls": getattr(message, "tool_calls", []) or [],
+        }
+    
+    def get_history(self, session_id: str) -> dict:
+        snapshot = self.get_snapshot(session_id)
+        state_values = getattr(snapshot, "values", None)
+
+        if not isinstance(state_values, dict):
+            state_values = {}
+
+        messages = state_values.get("messages", [])
+
+        return {
+            "session_id": session_id,
+            "learning_target": state_values.get("learning_target"),
+            "pending_interrupt": bool(snapshot.next),
+            "message_count": len(messages),
+            "messages": [self._serialize_message(message) for message in messages],
+        }
+    
+    def _to_history_view_item(self, message) -> dict | None:
+        raw_type = getattr(message, "type", "unknown")
+        content = self._extract_text_content(getattr(message, "content", ""))
+
+        if raw_type == "human":
+            return {
+                "id": getattr(message, "id", None),
+                "role": "user",
+                "kind": "message",
+                "content": content,
+            }
+
+        if raw_type == "ai":
+            if not content.strip():
+                return None
+            return {
+                "id": getattr(message, "id", None),
+                "role": "assistant",
+                "kind": "message",
+                "content": content,
+            }
+
+        if raw_type == "tool":
+            return {
+                "id": getattr(message, "id", None),
+                "role": "tool",
+                "kind": "tool_result",
+                "content": content,
+                "tool_call_id": getattr(message, "tool_call_id", None),
+                "name": getattr(message, "name", None),
+            }
+
+        return None
+    
+    def get_history_view(
+        self,
+        session_id: str,
+        include_tools: bool = False,
+    ) -> dict:
+        snapshot = self.get_snapshot(session_id)
+        state_values = getattr(snapshot, "values", None)
+
+        if not isinstance(state_values, dict):
+            state_values = {}
+
+        raw_messages = state_values.get("messages", [])
+        items = []
+
+        for message in raw_messages:
+            item = self._to_history_view_item(message)
+            if item is None:
+                continue
+
+            if item["role"] == "tool" and not include_tools:
+                continue
+
+            items.append(item)
+
+        return {
+            "session_id": session_id,
+            "learning_target": state_values.get("learning_target"),
+            "pending_interrupt": bool(snapshot.next),
+            "message_count": len(items),
+            "messages": items,
+        }
+
+    def get_session_state(self, session_id: str) -> dict:
+        snapshot = self.get_snapshot(session_id)
+        state_values = getattr(snapshot, "values", None)
+
+        if not isinstance(state_values, dict):
+            state_values = {}
+
+        messages = state_values.get("messages", [])
+        learning_target = state_values.get("learning_target")
+
+        exists = bool(messages) or bool(learning_target) or bool(snapshot.next)
+
+        dialog_stack = state_values.get("dialog_state", [])
+        current_agent = dialog_stack[-1] if dialog_stack else "primary"
+
+        workflow_plan = state_values.get("workflow_plan", [])
+        plan_index = state_values.get("plan_index", 0)
+
+        return {
+            "session_id": session_id,
+            "exists": exists,
+            "pending_interrupt": bool(snapshot.next),
+            "learning_target": learning_target,
+            "message_count": len(messages),
+            "current_agent": current_agent,
+            "workflow_plan": workflow_plan,
+            "plan_index": plan_index,
+        }
+
