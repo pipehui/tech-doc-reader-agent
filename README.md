@@ -26,6 +26,24 @@
 - `summary assistant`
   负责总结本次学习并在合适时更新复习记录
 
+## 架构概览
+
+![Multi-agent technical document reader architecture](graphs/tech_doc_reader_agent_architecture.svg)
+
+上图展示了当前系统的核心调用路径：
+
+- `Client + FastAPI` 作为统一入口，通过 `POST /chat` 返回 SSE 流
+- `primary assistant` 负责做自适应路由和 `PlanWorkflow`
+- 系统根据任务复杂度走三条主路径：
+  - 直接回复 / 直接工具调用
+  - 单 Agent 路径：`examination` 或 `summary`
+  - 多 Agent 链路：`parser -> relation -> explanation`
+- 底层共享资源包括：
+  - `FAISS` 文档向量库
+  - `Learning store` 学习/复习记录
+  - `Web search` 外部检索
+  - `Redis` 会话 checkpointer
+
 ## 接口
 
 当前后端已经提供以下接口：

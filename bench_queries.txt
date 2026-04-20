@@ -1,0 +1,55 @@
+# 测试 query 集合 —— 按 primary assistant 的三档路径设计
+# 格式：query ||| expected_plan
+#   expected_plan 语法：
+#     - direct                               不生成 PlanWorkflow，直接回答
+#     - [examination]                        单 Agent
+#     - [summary]                            单 Agent
+#     - [parser,relation,explanation]        多 Agent 标准链
+#     - [parser,relation,explanation,examination]
+#     - [parser,relation,explanation,summary]
+# 解析时忽略 # 开头的行和空行
+
+# ================== 直接回答（direct） ==================
+# 打招呼、闲聊
+你好 ||| direct
+你能帮我做什么 ||| direct
+谢谢 ||| direct
+
+# 明确的学习记录查询/更新
+我之前学过哪些内容 ||| direct
+把上次学的 StateGraph 标记为已复习 ||| direct
+看一下我的复习记录 ||| direct
+
+
+# ================== 单 Agent - [examination] ==================
+给我出一道关于 StateGraph 的题 ||| [examination]
+来个随堂测验考考我 ||| [examination]
+针对刚才讨论的内容出几道题 ||| [examination]
+测一下我对 checkpoint 的理解 ||| [examination]
+
+
+# ================== 单 Agent - [summary] ==================
+帮我总结刚才讨论的内容 ||| [summary]
+把今天学的东西归档到复习记录 ||| [summary]
+梳理一下本轮的学习要点 ||| [summary]
+
+
+# ================== 多 Agent 链 - 标准链路 ==================
+# 理解新的技术概念（没有提供完整上下文，需要 parser）
+帮我理解 LangGraph 里的 StateGraph 是什么 ||| [parser,relation,explanation]
+什么是 checkpoint 机制，讲讲原理 ||| [parser,relation,explanation]
+Function Calling 是怎么工作的 ||| [parser,relation,explanation]
+解释一下 reducer 在状态更新中的作用 ||| [parser,relation,explanation]
+interrupt_before 的机制是什么 ||| [parser,relation,explanation]
+
+
+# ================== 多 Agent 链 + examination ==================
+# 学完还想练习
+系统学一下 StateGraph，学完出几道题 ||| [parser,relation,explanation,examination]
+帮我搞懂 checkpoint，然后测测我 ||| [parser,relation,explanation,examination]
+
+
+# ================== 多 Agent 链 + summary ==================
+# 学完要归档
+理解一下 Function Calling，最后归档 ||| [parser,relation,explanation,summary]
+讲讲 reducer 的作用并更新我的学习记录 ||| [parser,relation,explanation,summary]

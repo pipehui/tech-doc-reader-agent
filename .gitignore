@@ -174,3 +174,4 @@ learning_store/
 web_search/
 redis/
 *.pyc
+bench_results.jsonl

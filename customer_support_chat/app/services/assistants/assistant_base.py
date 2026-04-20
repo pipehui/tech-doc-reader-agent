@@ -12,14 +12,14 @@ primary_llm = ChatOpenAI(
     model=settings.PRIMARY_MODEL,
     openai_api_key=settings.OPENAI_API_KEY,
     openai_api_base=settings.OPENAI_BASE_URL,
-    temperature=1,
+    temperature=0,
 )
 
 backup_llm = ChatOpenAI(
     model=settings.BACKUP_MODEL,
     openai_api_key=settings.BACKUP_API_KEY,
     openai_api_base=settings.BACKUP_API_BASE,
-    temperature=1,
+    temperature=0,
 )
 
 llm = primary_llm.with_fallbacks([backup_llm])
