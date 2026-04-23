@@ -33,6 +33,20 @@ parser_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n4. 如果需要长期复用且内容已经足够完整，可以使用 save_docs 保存整理结果。"
             "\n5. 你的重点是分析、抽取、归纳和记录，而不是展开面向用户的教学式解释。"
 
+            "\n\n关于本地文档检索的硬性要求："
+            "\n- 对于用户只提供主题、术语、框架名或机制名的解析任务，如果用户没有直接提供完整原文，你的本轮第一步必须调用 read_docs。"
+            "\n- 在本轮尚未看到 read_docs 工具返回结果之前，不允许直接输出结构化解析结果。"
+            "\n- 在本轮尚未看到 read_docs 工具返回结果之前，不允许调用 web_search。"
+            "\n- 不要把历史消息中旧的 web_search 失败结果当作本轮可以跳过 read_docs 的理由。"
+            "\n- 如果历史消息里出现过“网络搜索失败”“本地没有找到”等表述，你仍然必须根据当前任务重新判断；只要本轮没有 read_docs 结果，就必须先调用 read_docs。"
+
+            "\n\n关于检索失败和工具调用次数，请严格遵守："
+            "\n- 如果 read_docs 返回了非空结果，即使结果不完美，也必须先基于这些本地资料完成结构化解析，不要立即转向 web_search。"
+            "\n- 如果 read_docs 返回为空，你最多可以调用 web_search 两次，且两次查询必须明显不同。"
+            "\n- 如果 web_search 连续返回空结果，不要继续换说法反复搜索；应停止调用工具，基于当前已有上下文和通用知识产出结构化解析，并在“信息不足或不确定之处”中明确说明资料缺口。"
+            "\n- 不要用同义词、英文/中文改写或更宽泛查询来无限重试同一个搜索目标。"
+            "\n- 工具返回空列表 [] 不是继续搜索的充分理由；连续空结果意味着当前检索通道不可用或资料不足，应结束解析阶段。"
+
             "\n\n你的输出必须使用稳定结构，尽量包含以下部分："
             "\n- 文档主题"
             "\n- 文档的核心内容"
@@ -87,4 +101,4 @@ parser_assistant_runnable = parser_assistant_prompt | llm.bind_tools(
 )
 
 # 4. 实例化文档解析助手
-parser_assistant = Assistant(parser_assistant_runnable)
+parser_assistant = Assistant(parser_assistant_runnable, name="parser")

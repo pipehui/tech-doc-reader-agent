@@ -17,6 +17,8 @@ COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY customer_support_chat /app/customer_support_chat
+COPY frontend /app/frontend
+COPY graphs /app/graphs
 
 EXPOSE 8000
 

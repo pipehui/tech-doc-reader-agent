@@ -2,6 +2,8 @@ services:
   redis:
     image: redis:8
     command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
     volumes:
       - ./customer_support_chat/data/redis:/data
 
@@ -29,6 +31,8 @@ services:
       PYTHONPATH: /app
     volumes:
       - ./customer_support_chat:/app/customer_support_chat
+      - ./frontend:/app/frontend
+      - ./graphs:/app/graphs:ro
       - ./customer_support_chat/data:/app/customer_support_chat/data
     depends_on:
       - redis

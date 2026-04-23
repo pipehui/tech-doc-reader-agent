@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request
 from customer_support_chat.app.services.chat_runtime import ChatRuntime
 from fastapi.sse import ServerSentEvent, EventSourceResponse
 from collections.abc import Iterable
+import json
 from customer_support_chat.app.api.schemas import (
     ChatRequest,
     ApproveRequest,
@@ -11,9 +12,48 @@ from customer_support_chat.app.api.schemas import (
 
 
 router = APIRouter()
+AGENT_NODE_NAMES = {
+    "primary",
+    "primary_assistant",
+    "parser",
+    "relation",
+    "explanation",
+    "examination",
+    "summary",
+}
 
 def get_runtime(request: Request) -> ChatRuntime:
     return request.app.state.runtime
+
+def sse_event(event: str, data: dict) -> ServerSentEvent:
+    return ServerSentEvent(
+        event=event,
+        data=data,
+    )
+
+def infer_agent_from_metadata(metadata: dict) -> str | None:
+    node_name = metadata.get("langgraph_node")
+    if node_name:
+        return node_name
+
+    for key in ("langgraph_checkpoint_ns", "checkpoint_ns"):
+        checkpoint_ns = metadata.get(key)
+        if isinstance(checkpoint_ns, str) and checkpoint_ns:
+            candidate = checkpoint_ns.split(":", 1)[0]
+            if candidate in AGENT_NODE_NAMES:
+                return candidate
+
+    path = metadata.get("langgraph_path")
+    if isinstance(path, list):
+        for item in reversed(path):
+            if isinstance(item, str) and item in AGENT_NODE_NAMES:
+                return item
+            if isinstance(item, (list, tuple)):
+                for part in reversed(item):
+                    if isinstance(part, str) and part in AGENT_NODE_NAMES:
+                        return part
+
+    return None
 
 def extract_text_from_chunk(msg_chunk) -> str:
     content = getattr(msg_chunk, "content", "")
@@ -47,9 +87,16 @@ def extract_text_from_content(content) -> str:
                     parts.append(item.get("text", ""))
                 elif "text" in item:
                     parts.append(item.get("text", ""))
+                else:
+                    parts.append(json.dumps(item, ensure_ascii=False))
+            else:
+                parts.append(str(item))
         return "".join(parts)
 
-    return ""
+    if isinstance(content, dict):
+        return json.dumps(content, ensure_ascii=False)
+
+    return str(content) if content is not None else ""
 
 def iter_update_events(part) -> Iterable[ServerSentEvent]:
     update_data = part.get("data", {})
@@ -66,11 +113,22 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
             raw_type = getattr(message, "type", None)
 
             if raw_type == "ai":
+                content = extract_text_from_content(getattr(message, "content", ""))
+                if content.strip():
+                    yield sse_event(
+                        "agent_message",
+                        {
+                            "agent": node_name,
+                            "message_id": getattr(message, "id", None),
+                            "content": content,
+                        },
+                    )
+
                 tool_calls = getattr(message, "tool_calls", []) or []
                 for tool_call in tool_calls:
-                    yield ServerSentEvent(
-                        event="tool_call",
-                        data={
+                    yield sse_event(
+                        "tool_call",
+                        {
                             "agent": node_name,
                             "tool": tool_call.get("name"),
                             "args": tool_call.get("args", {}),
@@ -79,9 +137,9 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
                     )
 
             elif raw_type == "tool":
-                yield ServerSentEvent(
-                    event="tool_result",
-                    data={
+                yield sse_event(
+                    "tool_result",
+                    {
                         "agent": node_name,
                         "tool": getattr(message, "name", None),
                         "tool_call_id": getattr(message, "tool_call_id", None),
@@ -96,16 +154,21 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
 
             if part_type == "messages":
                 msg_chunk, metadata = part["data"]
+                raw_type = getattr(msg_chunk, "type", None)
+
+                if raw_type != "AIMessageChunk":
+                    continue
+
                 text = extract_text_from_chunk(msg_chunk)
 
                 if not text:
                     continue
 
-                yield ServerSentEvent(
-                    event="token",
-                    data={
+                yield sse_event(
+                    "token",
+                    {
                         "text": text,
-                        "agent": metadata.get("langgraph_node"),
+                        "agent": infer_agent_from_metadata(metadata),
                     },
                 )
 
@@ -113,26 +176,26 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
                 yield from iter_update_events(part)
 
         if runtime.has_pending_interrupt(session_id):
-            yield ServerSentEvent(
-                event="interrupt_required",
-                data={
+            yield sse_event(
+                "interrupt_required",
+                {
                     "session_id": session_id,
                     "pending": True,
                 },
             )
             return
 
-        yield ServerSentEvent(
-            event="done",
-            data={
+        yield sse_event(
+            "done",
+            {
                 "session_id": session_id,
             },
         )
 
     except Exception as e:
-        yield ServerSentEvent(
-            event="error",
-            data={
+        yield sse_event(
+            "error",
+            {
                 "message": str(e),
                 "session_id": session_id,
             },
@@ -150,9 +213,9 @@ def stream_approval_events(
     feedback: str = "",
 ) -> Iterable[ServerSentEvent]:
     if not runtime.has_pending_interrupt(session_id):
-        yield ServerSentEvent(
-            event="no_pending_interrupt",
-            data={
+        yield sse_event(
+            "no_pending_interrupt",
+            {
                 "session_id": session_id,
             },
         )

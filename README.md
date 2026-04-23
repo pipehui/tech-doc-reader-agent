@@ -133,6 +133,7 @@ PYTHONPATH=. uvicorn customer_support_chat.app.api.server:app --reload
 启动后访问：
 
 - API: `http://127.0.0.1:8000`
+- 前端: `http://127.0.0.1:8000/`
 - 文档: `http://127.0.0.1:8000/docs`
 
 ## Docker

@@ -102,4 +102,4 @@ relation_assistant_runnable = relation_assistant_prompt | llm.bind_tools(
 )
 
 # 4. 实例化关系助手
-relation_assistant = Assistant(relation_assistant_runnable)
+relation_assistant = Assistant(relation_assistant_runnable, name="relation")

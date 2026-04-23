@@ -155,4 +155,4 @@ primary_assistant_sensitive_tools = [upsert_learning_history]
 primary_assistant_runnable = primary_assistant_prompt | llm.bind_tools(primary_assistant_tools + primary_assistant_sensitive_tools)
 
 # Instantiate the primary assistant
-primary_assistant = Assistant(primary_assistant_runnable)
+primary_assistant = Assistant(primary_assistant_runnable, name="primary")

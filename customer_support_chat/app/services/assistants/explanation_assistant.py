@@ -77,4 +77,4 @@ explanation_assistant_runnable = explanation_assistant_prompt | llm.bind_tools(
 )
 
 # 4. 实例化解释助手
-explanation_assistant = Assistant(explanation_assistant_runnable)
+explanation_assistant = Assistant(explanation_assistant_runnable, name="explanation")

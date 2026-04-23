@@ -106,4 +106,4 @@ examination_assistant_runnable = examination_assistant_prompt | llm.bind_tools(
 )
 
 # 4. 实例化检测助手
-examination_assistant = Assistant(examination_assistant_runnable)
+examination_assistant = Assistant(examination_assistant_runnable, name="examination")

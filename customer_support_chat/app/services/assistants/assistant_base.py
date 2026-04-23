@@ -25,8 +25,9 @@ backup_llm = ChatOpenAI(
 llm = primary_llm.with_fallbacks([backup_llm])
 
 class Assistant:
-    def __init__(self, runnable: Runnable):
+    def __init__(self, runnable: Runnable, name: str | None = None):
         self.runnable = runnable
+        self.name = name
 
     def __call__(self, state: State, config: Optional[RunnableConfig] = None):
         while True:
@@ -41,6 +42,11 @@ class Assistant:
                 state = {**state, "messages": messages}
             else:
                 break
+        if self.name and not getattr(result, "name", None):
+            if hasattr(result, "model_copy"):
+                result = result.model_copy(update={"name": self.name})
+            else:
+                result = result.copy(update={"name": self.name})
         return {"messages": result}
 
 # Define the CompleteOrEscalate tool

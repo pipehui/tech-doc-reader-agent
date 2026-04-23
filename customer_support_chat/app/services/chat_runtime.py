@@ -172,6 +172,7 @@ class ChatRuntime:
                 "role": "assistant",
                 "kind": "message",
                 "content": content,
+                "name": getattr(message, "name", None),
             }
 
         if raw_type == "tool":
@@ -246,4 +247,3 @@ class ChatRuntime:
             "workflow_plan": workflow_plan,
             "plan_index": plan_index,
         }
-

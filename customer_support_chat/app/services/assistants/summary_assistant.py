@@ -89,4 +89,4 @@ summary_assistant_runnable = summary_assistant_prompt | llm.bind_tools(
 )
 
 # 4. 实例化总结助手
-summary_assistant = Assistant(summary_assistant_runnable)
+summary_assistant = Assistant(summary_assistant_runnable, name="summary")

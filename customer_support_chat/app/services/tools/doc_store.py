@@ -37,7 +37,21 @@ def web_search(query: str) -> str:
 def read_docs(query: str) -> str:
     """当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。"""
     documents = _faiss_store.read_documents(query)
-    return json.dumps(documents, ensure_ascii=False)
+    if documents:
+        return json.dumps(documents, ensure_ascii=False)
+
+    related_chunks = _faiss_store.search_related(query, k=3)
+    related_documents = [
+        {
+            "title": item.get("title", ""),
+            "content": item.get("chunk_text", ""),
+            "source": item.get("source", ""),
+            "match_type": "semantic",
+            "distance": item.get("distance"),
+        }
+        for item in related_chunks
+    ]
+    return json.dumps(related_documents, ensure_ascii=False)
 
 
 @tool
