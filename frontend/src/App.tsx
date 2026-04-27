@@ -2,19 +2,28 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
+  ArrowRight,
   BookOpen,
   Check,
   Copy,
   Download,
+  ExternalLink,
+  GitBranch,
+  Home,
   Layers,
+  MessageSquare,
   Moon,
   Pause,
   Play,
   Plus,
   RefreshCcw,
+  RotateCcw,
   Send,
+  ShieldCheck,
   Sun,
   ToolCase,
+  Trash2,
+  Zap,
   X
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -27,13 +36,22 @@ import type { CSSProperties } from "react";
 import type { AgentKey, ChatMessage, LearningRecord, SessionState, ToolCall, TraceEvent } from "./types";
 import { daysSince, formatTime, makeSessionId, pretty, relativeTime, scoreTone, uid } from "./utils";
 
+const GITHUB_URL = "https://github.com/pipehui/tech-doc-reader-agent";
+
 function isAtBottom(el: HTMLElement) {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
 function routeName(pathname: string) {
   const name = pathname.replace(/^\/+/, "").split("/")[0];
-  return ["studio", "inspector", "learner"].includes(name) ? name : "studio";
+  if (!name) return "landing";
+  return ["studio", "inspector", "learner"].includes(name) ? name : "landing";
+}
+
+function experiencePath(view: "studio" | "inspector" | "learner", prompt?: string) {
+  const params = new URLSearchParams({ session: makeSessionId() });
+  if (prompt) params.set("prompt", prompt);
+  return `/${view}?${params.toString()}`;
 }
 
 function toMessages(history: Awaited<ReturnType<typeof getSessionHistory>>, state: SessionState): ChatMessage[] {
@@ -51,6 +69,8 @@ function toMessages(history: Awaited<ReturnType<typeof getSessionHistory>>, stat
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const view = routeName(location.pathname);
+  const isLanding = view === "landing";
   const sessionId = useAppStore((state) => state.session.session_id);
   const theme = useAppStore((state) => state.theme);
   const setSessionId = useAppStore((state) => state.setSessionId);
@@ -66,21 +86,24 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    if (isLanding) return;
     const params = new URLSearchParams(location.search);
-    const nextSession = params.get("session") || sessionId || makeSessionId();
-    if (nextSession !== sessionId) setSessionId(nextSession);
-    else rememberSession(nextSession);
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get("session") !== sessionId) {
+    const urlSession = params.get("session");
+    if (urlSession) {
+      if (urlSession !== sessionId) setSessionId(urlSession);
+      else rememberSession(urlSession);
+      return;
+    }
+    if (sessionId) {
       params.set("session", sessionId);
       navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     }
-  }, [sessionId, location.pathname]);
+  }, [isLanding, location.pathname, location.search, sessionId]);
 
   useEffect(() => {
+    if (isLanding) return;
+    const urlSession = new URLSearchParams(location.search).get("session");
+    if (urlSession && urlSession !== sessionId) return;
     let cancelled = false;
     async function load() {
       const cached = hydrateTranscript(sessionId);
@@ -102,18 +125,18 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId]);
+  }, [isLanding, location.search, sessionId]);
 
   return (
-    <div className="app-shell">
-      <Topbar view={routeName(location.pathname)} />
-      <main className="view-frame">
+    <div className={`app-shell ${isLanding ? "landing-shell" : ""}`}>
+      <Topbar view={view} />
+      <main className={`view-frame ${isLanding ? "landing-frame" : ""}`}>
         <Routes>
-          <Route path="/" element={<Navigate to={`/studio?session=${encodeURIComponent(sessionId)}`} replace />} />
+          <Route path="/" element={<Landing />} />
           <Route path="/studio" element={<Studio />} />
           <Route path="/inspector" element={<Inspector />} />
           <Route path="/learner" element={<Learner />} />
-          <Route path="*" element={<Navigate to={`/studio?session=${encodeURIComponent(sessionId)}`} replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <ToastHost />
@@ -123,6 +146,8 @@ export default function App() {
 
 function Topbar({ view }: { view: string }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isLanding = view === "landing";
   const session = useAppStore((state) => state.session);
   const running = useAppStore((state) => state.running);
   const runLabel = useAppStore((state) => state.runLabel);
@@ -130,24 +155,34 @@ function Topbar({ view }: { view: string }) {
   const theme = useAppStore((state) => state.theme);
   const setTheme = useAppStore((state) => state.setTheme);
   const resetForSession = useAppStore((state) => state.resetForSession);
-  const newSession = useAppStore((state) => state.newSession);
   const [draft, setDraft] = useState(session.session_id);
 
   useEffect(() => setDraft(session.session_id), [session.session_id]);
 
   function go(next: string) {
-    navigate(`/${next}?session=${encodeURIComponent(session.session_id)}`);
+    const nextSession = isLanding ? makeSessionId() : session.session_id;
+    navigate(`/${next}?session=${encodeURIComponent(nextSession)}`);
+  }
+
+  function switchSession(nextSession: string) {
+    if (!nextSession.trim()) return;
+    const id = nextSession.trim();
+    const params = new URLSearchParams(location.search);
+    params.set("session", id);
+    params.delete("prompt");
+    resetForSession(id);
+    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
   }
 
   return (
-    <header className="topbar">
-      <div className="brand">
+    <header className={`topbar ${isLanding ? "landing-topbar" : ""}`}>
+      <button className="brand brand-button" type="button" onClick={() => navigate("/")} title="回到首页">
         <div className="brand-mark">TD</div>
         <div>
           <p className="eyebrow">LangGraph Agent</p>
           <h1 className="brand-title">技术文档研读助手</h1>
         </div>
-      </div>
+      </button>
 
       <nav className="view-switcher">
         {([
@@ -155,7 +190,7 @@ function Topbar({ view }: { view: string }) {
           ["inspector", "Inspector", Activity],
           ["learner", "Learner", BookOpen]
         ] as const).map(([key, label, Icon]) => (
-          <button key={String(key)} className={`view-tab ${view === key ? "active" : ""}`} type="button" onClick={() => go(String(key))}>
+          <button key={String(key)} className={`view-tab ${!isLanding && view === key ? "active" : ""}`} type="button" onClick={() => go(String(key))}>
             <Icon size={16} />
             {label}
           </button>
@@ -163,29 +198,225 @@ function Topbar({ view }: { view: string }) {
       </nav>
 
       <div className="topbar-actions">
-        <label className="session-control">
-          <span>Session</span>
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => draft.trim() && resetForSession(draft.trim())}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.currentTarget.blur();
-            }}
-          />
-        </label>
-        <button className="icon-button" type="button" title="复制 session id" onClick={() => navigator.clipboard.writeText(session.session_id)}>
-          <Copy size={16} />
-        </button>
-        <button className="icon-button" type="button" title="新建会话" onClick={newSession}>
-          <Plus size={16} />
-        </button>
+        {!isLanding && (
+          <>
+            <label className="session-control">
+              <span>Session</span>
+              <input
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onBlur={() => switchSession(draft)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+              />
+            </label>
+            <button className="icon-button" type="button" title="复制 session id" onClick={() => navigator.clipboard.writeText(session.session_id)}>
+              <Copy size={16} />
+            </button>
+            <button className="icon-button" type="button" title="新建会话" onClick={() => switchSession(makeSessionId())}>
+              <Plus size={16} />
+            </button>
+          </>
+        )}
         <button className="icon-button" type="button" title="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>
-        <span className={`status-pill ${error ? "error" : running ? "running" : ""}`}>{error ? "错误" : runLabel}</span>
+        <a className={`github-link ${isLanding ? "prominent" : ""}`} href={GITHUB_URL} target="_blank" rel="noreferrer">
+          <GitBranch size={16} />
+          GitHub
+        </a>
+        {!isLanding && (
+          <button className="icon-button" type="button" title="回到首页" onClick={() => navigate("/")}>
+            <Home size={16} />
+          </button>
+        )}
+        {!isLanding && <span className={`status-pill ${error ? "error" : running ? "running" : ""}`}>{error ? "错误" : runLabel}</span>}
       </div>
     </header>
+  );
+}
+
+function Landing() {
+  const navigate = useNavigate();
+  const modeCards = [
+    {
+      key: "studio",
+      title: "Studio",
+      subtitle: "工作台",
+      description: "日常对话工作台。看到 plan 推进、agent 切换、tool 调用全过程，支持 HITL 审批。",
+      chip: "推荐用户从这开始",
+      color: "#4F46E5",
+      cta: "进入 Studio",
+      Icon: MessageSquare
+    },
+    {
+      key: "inspector",
+      title: "Inspector",
+      subtitle: "追踪台",
+      description: "把一次对话当事件流来看：6 通道 swim lane、原始事件列表、JSON 导出。可观测性优先。",
+      chip: "推荐工程视角",
+      color: "#059669",
+      cta: "进入 Inspector",
+      Icon: Activity
+    },
+    {
+      key: "learner",
+      title: "Learner",
+      subtitle: "学习台",
+      description: "知识仪表盘 + 测验模式。看自己学过什么、该复习什么，进入测验状态时界面专门变形。",
+      chip: "推荐产品视角",
+      color: "#E11D48",
+      cta: "进入 Learner",
+      Icon: BookOpen
+    }
+  ] as const;
+  const highlights = [
+    {
+      title: "流式 + 多模型回退",
+      description: "基于 SSE 的 token 级流式输出，主模型超时时自动切换到备用模型，全程对用户透明。",
+      Icon: Zap
+    },
+    {
+      title: "HITL 审批阻塞",
+      description: "敏感工具调用前主动暂停，等待用户审批后继续。审批面板强制阻塞输入框，不可错过。",
+      Icon: ShieldCheck
+    },
+    {
+      title: "会话恢复",
+      description: "任何时刻刷新页面或断网重连，前端基于 Redis Checkpointer + 状态快照接口完整恢复对话。",
+      Icon: RotateCcw
+    },
+    {
+      title: "三视角统一",
+      description: "同一份会话状态被 Studio / Inspector / Learner 用三种不同视角呈现，状态共享、心智一致。",
+      Icon: Layers
+    }
+  ] as const;
+  const promptCards = [
+    {
+      title: "解析新概念",
+      context: "用户对一个技术点完全陌生",
+      prompt: "讲讲 LangGraph 的 StateGraph 是什么，给我一些例子"
+    },
+    {
+      title: "类比已知",
+      context: "用户用熟悉概念帮助理解新概念",
+      prompt: "我熟悉 React 的 useState，帮我用类似的心智模型理解 Vue 3 的 setup"
+    },
+    {
+      title: "复习掌握度",
+      context: "用户启动测验流程",
+      prompt: "复习一下我之前学过的内容，给我出几道题"
+    }
+  ] as const;
+
+  return (
+    <div className="landing-page">
+      <section className="landing-hero">
+        <div className="landing-hero-content">
+          <p className="landing-kicker">LANGGRAPH · MULTI-AGENT · SSE · FASTAPI</p>
+          <h2>把一份陌生的技术文档<br />读透、记住、能讲清</h2>
+          <p>
+            一个基于 LangGraph 的多智能体系统，把"读完一份技术文档"
+            变成解析 → 类比 → 讲解 → 测验 → 沉淀的协作流程。
+          </p>
+          <div className="landing-cta-row">
+            <button className="landing-primary-cta" type="button" onClick={() => navigate(experiencePath("studio"))}>
+              开始体验
+              <ArrowRight size={17} />
+            </button>
+            <a className="landing-secondary-cta" href={GITHUB_URL} target="_blank" rel="noreferrer">
+              查看源码
+              <ExternalLink size={17} />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-modes" aria-label="三种体验形态">
+        {modeCards.map(({ key, title, subtitle, description, chip, color, cta, Icon }) => (
+          <button
+            key={key}
+            className="mode-card"
+            style={{ "--landing-accent": color } as CSSProperties}
+            type="button"
+            onClick={() => navigate(experiencePath(key))}
+          >
+            <span className="mode-accent" />
+            <span className="mode-head">
+              <span className="mode-icon"><Icon size={22} strokeWidth={2} /></span>
+              <span>
+                <strong>{title}</strong>
+                <small>{subtitle}</small>
+              </span>
+            </span>
+            <span className="mode-copy">{description}</span>
+            <span className="mode-chip">{chip}</span>
+            <span className="mode-link">{cta}<ArrowRight size={16} /></span>
+          </button>
+        ))}
+      </section>
+
+      <section className="landing-section architecture-section">
+        <div className="landing-section-head">
+          <p className="eyebrow">系统架构</p>
+          <h2>Adaptive Routing × Multi-Agent Orchestration</h2>
+          <p>
+            Primary Assistant 根据用户意图自适应选择三条路径之一：
+            Direct（直接回复）、Single Agent（单步）、或 Agent Chain（链式）。
+          </p>
+        </div>
+        <div className="architecture-figure">
+          <img src="/graphs/tech_doc_reader_agent_architecture.svg" alt="技术文档研读助手系统架构图" />
+        </div>
+        <button className="landing-text-link" type="button" onClick={() => navigate(experiencePath("inspector"))}>
+          在 Inspector 看真实事件流
+          <ArrowRight size={16} />
+        </button>
+      </section>
+
+      <section className="landing-section highlights-section">
+        <div className="landing-section-head compact">
+          <p className="eyebrow">工程亮点</p>
+          <h2>四张工程王牌</h2>
+        </div>
+        <div className="highlight-grid">
+          {highlights.map(({ title, description, Icon }) => (
+            <article className="highlight-item" key={title}>
+              <Icon size={24} strokeWidth={2} />
+              <h3>{title}</h3>
+              <p>{description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section quickstart-section">
+        <div className="landing-section-head compact">
+          <p className="eyebrow">快速开始</p>
+          <h2>一键开始</h2>
+        </div>
+        <div className="prompt-grid">
+          {promptCards.map(({ title, context, prompt }) => (
+            <button
+              key={title}
+              className="prompt-card"
+              type="button"
+              onClick={() => navigate(experiencePath("studio", prompt))}
+            >
+              <span>{title}</span>
+              <small>{context}</small>
+              <code>"{prompt}"</code>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <footer className="landing-footer">
+        <p>pipehui · 2026 · <a href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub</a> · Built with LangGraph + FastAPI + React</p>
+      </footer>
+    </div>
   );
 }
 
@@ -200,11 +431,28 @@ function Studio() {
 }
 
 function StudioRail() {
+  const navigate = useNavigate();
   const session = useAppStore((state) => state.session);
   const sessions = useAppStore((state) => state.sessions);
   const messages = useAppStore((state) => state.messages);
   const resetForSession = useAppStore((state) => state.resetForSession);
+  const deleteSession = useAppStore((state) => state.deleteSession);
   const entries = sessions.length ? sessions : [{ id: session.session_id, updatedAt: new Date().toISOString() }];
+
+  function openSession(sessionId: string) {
+    resetForSession(sessionId);
+    navigate(`/studio?session=${encodeURIComponent(sessionId)}`, { replace: true });
+  }
+
+  function removeSession(sessionId: string) {
+    if (!window.confirm(`删除会话 ${sessionId}？`)) return;
+    const fallback = sessions.find((item) => item.id !== sessionId)?.id || makeSessionId();
+    deleteSession(sessionId);
+    if (sessionId === session.session_id) {
+      openSession(fallback);
+    }
+  }
+
   return (
     <aside className="rail">
       <section className="panel">
@@ -220,10 +468,15 @@ function StudioRail() {
         <div className="panel-header"><h2 className="panel-title">会话列表</h2></div>
         <div className="session-list">
           {entries.map((item) => (
-            <button key={item.id} className={`session-item ${item.id === session.session_id ? "active" : ""}`} type="button" onClick={() => resetForSession(item.id)}>
-              <strong>{item.id}</strong>
-              <span>{relativeTime(item.updatedAt)}</span>
-            </button>
+            <div key={item.id} className={`session-item ${item.id === session.session_id ? "active" : ""}`}>
+              <button className="session-select" type="button" onClick={() => openSession(item.id)}>
+                <strong>{item.id}</strong>
+                <span>{relativeTime(item.updatedAt)}</span>
+              </button>
+              <button className="session-delete-button" type="button" title="删除会话" onClick={() => removeSession(item.id)}>
+                <Trash2 size={15} />
+              </button>
+            </div>
           ))}
         </div>
       </section>
@@ -473,10 +726,24 @@ function ApprovalDrawer() {
 }
 
 function Composer() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const running = useAppStore((state) => state.running);
   const pending = useAppStore((state) => state.session.pending_interrupt);
   const { send } = useChatStream();
   const [value, setValue] = useState("");
+
+  useEffect(() => {
+    if (location.pathname !== "/studio") return;
+    const params = new URLSearchParams(location.search);
+    const prompt = params.get("prompt");
+    if (!prompt) return;
+    setValue(prompt);
+    params.delete("prompt");
+    const nextSearch = params.toString();
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ""}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+
   return (
     <form
       className="composer"

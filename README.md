@@ -1,67 +1,74 @@
-# Multi-Agent Technical Document Learning Assistant
+# Tech Doc Reader Agent
 
-这是一个基于 LangGraph 的多智能体技术文档研读助手项目。系统围绕“技术文档学习”场景构建，支持：
+一个基于 LangGraph 的多智能体技术文档研读助手。它把“读完一份陌生技术文档”拆成解析、关联、讲解、测验、沉淀的协作流程，并用 Studio / Inspector / Learner 三种前端视角展示同一条会话状态。
 
-- 多智能体分工协作
-- 本地文档读取与向量检索
-- 外部网页检索补充知识
-- 学习记录与复习记录管理
-- Redis 会话持久化
-- FastAPI + SSE 流式接口
+![Landing page](docs/images/landing.png)
 
-## 当前能力
+## Highlights
 
-系统目前包含以下核心角色：
+- **Multi-agent orchestration**: `primary` 自适应路由，按任务复杂度选择 direct response、single agent 或 parser -> relation -> explanation 链式研读。
+- **SSE streaming UI**: FastAPI 通过 SSE 返回 token、tool、plan、agent transition 等事件，前端实时渲染。
+- **HITL approval**: 敏感工具调用前暂停，用户审批后继续执行。
+- **Session recovery**: Redis checkpointer + 状态接口支持刷新后恢复会话。
+- **Learning memory**: 学习记录、掌握度和复习次数会沉淀到 learner 视角。
+- **Three product views**: Studio 面向日常对话，Inspector 面向事件可观测性，Learner 面向学习复盘。
 
-- `primary assistant`
-  负责理解用户意图、规划学习步骤、直接处理显式学习记录请求
-- `parser assistant`
-  负责读取文档、提取结构化信息
-- `relation assistant`
-  负责补充相关知识、类比知识和上下文
-- `explanation assistant`
-  负责把知识点解释给用户
-- `examination assistant`
-  负责测验、评估和学习情况更新
-- `summary assistant`
-  负责总结本次学习并在合适时更新复习记录
+## Frontend
 
-## 架构概览
+当前前端是 Vite + React + TypeScript。
+
+主要路由：
+
+- `/`：Landing page，项目介绍和入口分流
+- `/studio?session=xxx`：日常研读工作台
+- `/inspector?session=xxx`：事件流追踪台
+- `/learner?session=xxx`：学习记录与复习台
+- `/studio?session=xxx&prompt=xxx`：从首页快速体验卡片进入，自动预填 prompt
+
+三种视角：
+
+- **Studio**：对话、计划推进、agent 切换、tool 调用、HITL 审批。
+- **Inspector**：swim lane、事件列表、事件详情、trace JSON 导出。
+- **Learner**：知识卡片、复习队列、测验模式。
+
+## Architecture
 
 ![Multi-agent technical document reader architecture](graphs/tech_doc_reader_agent_architecture.svg)
 
-上图展示了当前系统的核心调用路径：
+核心路径：
 
-- `Client + FastAPI` 作为统一入口，通过 `POST /chat` 返回 SSE 流
-- `primary assistant` 负责做自适应路由和 `PlanWorkflow`
-- 系统根据任务复杂度走三条主路径：
-  - 直接回复 / 直接工具调用
-  - 单 Agent 路径：`examination` 或 `summary`
-  - 多 Agent 链路：`parser -> relation -> explanation`
-- 底层共享资源包括：
-  - `FAISS` 文档向量库
-  - `Learning store` 学习/复习记录
-  - `Web search` 外部检索
-  - `Redis` 会话 checkpointer
+- `Client + FastAPI` 作为统一入口，通过 `POST /chat` 返回 SSE 流。
+- `primary assistant` 负责用户意图理解、自适应路由和 `PlanWorkflow`。
+- 多 agent 链路主要是 `parser -> relation -> explanation`。
+- `examination` 和 `summary` 处理测验、评估、总结与学习记录更新。
+- 底层共享 FAISS 文档向量库、Learning store、Web search 和 Redis checkpointer。
 
-## 接口
+## Agents
 
-当前后端已经提供以下接口：
+- `primary assistant`：理解用户意图，直接回答或规划研读流程
+- `parser assistant`：读取文档，提取结构化信息
+- `relation assistant`：补充相关知识、类比和上下文
+- `explanation assistant`：把知识点解释给用户
+- `examination assistant`：出题、评估和更新掌握度
+- `summary assistant`：总结学习过程并沉淀复习记录
 
-- `POST /chat`
-  发送用户消息，返回 SSE 流
-- `POST /chat/approve`
-  对敏感工具调用进行批准或拒绝
-- `GET /sessions/{id}/history`
-  获取前端友好的会话历史
-- `GET /sessions/{id}/state`
-  获取当前会话状态
+## API
 
-## SSE 事件
+常用接口：
 
-目前 SSE 事件流包含这些事件类型：
+- `POST /chat`：发送用户消息，返回 SSE 流
+- `POST /chat/approve`：批准或拒绝待审批工具调用
+- `GET /sessions/{id}/history`：获取前端友好的会话历史
+- `GET /sessions/{id}/state`：获取当前会话状态
+- `GET /learning/overview`：获取学习记录概览
 
+SSE 事件包括：
+
+- `session_snapshot`
+- `agent_transition`
+- `plan_update`
 - `token`
+- `agent_message`
 - `tool_call`
 - `tool_result`
 - `interrupt_required`
@@ -69,40 +76,13 @@
 - `done`
 - `error`
 
-## 项目结构
+更完整的接口说明见 [docs/api.md](docs/api.md)。
 
-```text
-customer_support_chat/
-  app/
-    api/
-    core/
-    services/
-      assistants/
-      tools/
-      vectordb/
-  data/
-graphs/
-images/
-```
+## Local Development
 
-其中：
+### 1. Environment
 
-- `customer_support_chat/app/api`
-  FastAPI 服务与路由
-- `customer_support_chat/app/services/chat_runtime.py`
-  图运行时封装，负责 Redis checkpointer、会话状态和流式执行
-- `customer_support_chat/app/graph.py`
-  LangGraph 工作流定义
-- `customer_support_chat/app/services/tools`
-  文档库、学习记录等工具接口
-- `customer_support_chat/app/services/vectordb/faiss_store.py`
-  本地 FAISS 文档向量存储
-
-## 本地运行
-
-### 1. 准备环境变量
-
-创建 `.env`，至少包含：
+创建 `.env` 或 `.dev.env`，至少包含：
 
 ```bash
 OPENAI_API_KEY=your_key
@@ -114,38 +94,100 @@ TAVILY_API_KEY=your_tavily_key
 REDIS_URL=redis://localhost:6379
 ```
 
-### 2. 启动 Redis
-
-如果你想直接使用 Docker：
+### 2. Start Redis
 
 ```bash
 docker compose up -d redis
 ```
 
-### 3. 启动 FastAPI
-
-如果你本地已经安装依赖：
+### 3. Start Backend
 
 ```bash
 PYTHONPATH=. uvicorn customer_support_chat.app.api.server:app --reload
 ```
 
-启动后访问：
+Backend:
 
-- API: `http://127.0.0.1:8000`
-- 前端: `http://127.0.0.1:8000/`
-- 文档: `http://127.0.0.1:8000/docs`
+```text
+http://127.0.0.1:8000
+```
+
+### 4. Start Frontend Dev Server
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend dev server:
+
+```text
+http://127.0.0.1:5173
+```
+
+Vite 会把 `/chat`、`/sessions`、`/learning`、`/graphs` 代理到 `http://127.0.0.1:8000`。
+
+## Production Build
+
+```bash
+cd frontend
+npm run build
+```
+
+构建产物会生成到 `frontend/dist/`。FastAPI 会优先服务 `frontend/dist/index.html` 和 `/assets`。
+
+然后启动后端：
+
+```bash
+PYTHONPATH=. uvicorn customer_support_chat.app.api.server:app --host 0.0.0.0 --port 8000
+```
+
+访问：
+
+```text
+http://127.0.0.1:8000/
+```
 
 ## Docker
 
-仓库提供了面向当前项目的 `Dockerfile` 和 `docker-compose.yml`：
+当前 `docker-compose.yml` 启动 Redis 和 FastAPI 后端：
 
-- `docker-compose.yml`
-  用于启动 Redis 和应用服务
-- `Dockerfile`
-  默认启动 FastAPI 服务，而不是旧的 CLI 入口
+```bash
+docker compose up --build
+```
 
-## 当前数据目录
+访问生产构建形态：
+
+```text
+http://127.0.0.1:8000/
+```
+
+注意：`docker compose up --build` 不会启动 Vite dev server，所以不会开放 `5173`。开发时如果需要 `5173`，请另开终端执行 `cd frontend && npm run dev`。
+
+## Project Structure
+
+```text
+customer_support_chat/
+  app/
+    api/          FastAPI routes and schemas
+    core/         settings
+    services/
+      assistants/  LangGraph agent implementations
+      tools/       document, learning and web-search tools
+      vectordb/    FAISS vector store
+  data/           runtime data
+docs/
+  api.md
+frontend/
+  src/            React + TypeScript frontend
+  styles.css
+graphs/
+  tech_doc_reader_agent_architecture.svg
+scripts/
+```
+
+## Runtime Data
 
 运行时数据默认位于：
 
@@ -154,6 +196,4 @@ PYTHONPATH=. uvicorn customer_support_chat.app.api.server:app --reload
 - `customer_support_chat/data/web_search`
 - `customer_support_chat/data/redis`
 
-## 说明
-
-这个仓库已经完成面向当前项目场景的重构，当前文档、配置和运行方式都应以“技术文档研读助手”为准。
+这些目录通常不应提交到 Git。

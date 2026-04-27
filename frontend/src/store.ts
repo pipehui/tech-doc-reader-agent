@@ -77,6 +77,7 @@ interface AppStore {
   setHasNewMessageContent: (hasNew: boolean) => void;
   hydrateTranscript: (sessionId: string) => boolean;
   persistTranscript: () => void;
+  deleteSession: (sessionId: string) => void;
   resetForSession: (sessionId: string) => void;
   newSession: () => void;
   setTheme: (theme: "dark" | "light") => void;
@@ -352,6 +353,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       toolCalls: state.toolCalls
     };
     localStorage.setItem(transcriptKey(state.session.session_id), JSON.stringify(payload));
+  },
+
+  deleteSession(sessionId) {
+    const next = readSessions().filter((item) => item.id !== sessionId);
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
+    localStorage.removeItem(transcriptKey(sessionId));
+    if (localStorage.getItem(SESSION_KEY) === sessionId) {
+      const fallback = next[0]?.id;
+      if (fallback) localStorage.setItem(SESSION_KEY, fallback);
+      else localStorage.removeItem(SESSION_KEY);
+    }
+    set({ sessions: next });
   },
 
   resetForSession(sessionId) {
