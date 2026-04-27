@@ -175,3 +175,7 @@ web_search/
 redis/
 *.pyc
 bench_results.jsonl
+
+# Frontend dependencies and TypeScript build cache
+node_modules/
+*.tsbuildinfo
