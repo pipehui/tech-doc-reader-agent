@@ -53,3 +53,15 @@ class SessionStateResponse(BaseModel):
     current_agent: str | None = None
     workflow_plan: list[str] = Field(default_factory=list)
     plan_index: int = 0
+
+class LearningRecord(BaseModel):
+    knowledge: str
+    timestamp: str
+    score: float
+    reviewtimes: int
+
+class LearningOverviewResponse(BaseModel):
+    total: int
+    average_score: float
+    needs_review_count: int
+    records: list[LearningRecord] = Field(default_factory=list)

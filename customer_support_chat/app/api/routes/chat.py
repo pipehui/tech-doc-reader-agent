@@ -21,6 +21,11 @@ AGENT_NODE_NAMES = {
     "examination",
     "summary",
 }
+TRANSITION_PREFIXES = (
+    ("enter_", "enter"),
+    ("finish_", "finish"),
+    ("leave_", "leave"),
+)
 
 def get_runtime(request: Request) -> ChatRuntime:
     return request.app.state.runtime
@@ -98,6 +103,36 @@ def extract_text_from_content(content) -> str:
 
     return str(content) if content is not None else ""
 
+def _agent_transition_payload(node_name: str) -> dict | None:
+    for prefix, phase in TRANSITION_PREFIXES:
+        if not node_name.startswith(prefix):
+            continue
+
+        agent = node_name[len(prefix):]
+        if agent not in AGENT_NODE_NAMES:
+            return None
+
+        return {
+            "phase": phase,
+            "agent": agent,
+        }
+
+    return None
+
+def _plan_update_payload(node_name: str, node_update: dict) -> dict:
+    if node_name != "store_plan" and not node_name.startswith("finish_"):
+        return {}
+
+    payload = {}
+    if "workflow_plan" in node_update:
+        payload["plan"] = node_update["workflow_plan"]
+    if "plan_index" in node_update:
+        payload["plan_index"] = node_update["plan_index"]
+    if "learning_target" in node_update:
+        payload["learning_target"] = node_update["learning_target"]
+
+    return payload
+
 def iter_update_events(part) -> Iterable[ServerSentEvent]:
     update_data = part.get("data", {})
 
@@ -105,12 +140,21 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
         return
 
     for node_name, node_update in update_data.items():
+        transition_payload = _agent_transition_payload(node_name)
+        if transition_payload:
+            yield sse_event("agent_transition", transition_payload)
+
         if not isinstance(node_update, dict):
             continue
+
+        plan_payload = _plan_update_payload(node_name, node_update)
+        if plan_payload:
+            yield sse_event("plan_update", plan_payload)
 
         messages = node_update.get("messages", [])
         for message in messages:
             raw_type = getattr(message, "type", None)
+            message_agent = getattr(message, "name", None) or node_name
 
             if raw_type == "ai":
                 content = extract_text_from_content(getattr(message, "content", ""))
@@ -118,7 +162,8 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
                     yield sse_event(
                         "agent_message",
                         {
-                            "agent": node_name,
+                            "agent": message_agent,
+                            "node": node_name,
                             "message_id": getattr(message, "id", None),
                             "content": content,
                         },
@@ -129,7 +174,8 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
                     yield sse_event(
                         "tool_call",
                         {
-                            "agent": node_name,
+                            "agent": message_agent,
+                            "node": node_name,
                             "tool": tool_call.get("name"),
                             "args": tool_call.get("args", {}),
                             "tool_call_id": tool_call.get("id"),
@@ -141,6 +187,7 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
                     "tool_result",
                     {
                         "agent": node_name,
+                        "node": node_name,
                         "tool": getattr(message, "name", None),
                         "tool_call_id": getattr(message, "tool_call_id", None),
                         "content": extract_text_from_content(getattr(message, "content", "")),
@@ -203,6 +250,9 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
 
 
 def stream_chat_events(runtime: ChatRuntime, session_id: str, message: str) -> Iterable[ServerSentEvent]:
+    snapshot = runtime.get_session_state(session_id)
+    yield sse_event("session_snapshot", snapshot)
+
     parts = runtime.stream_user_message(session_id, message)
     yield from stream_parts_as_sse(runtime, session_id, parts)
 
@@ -212,6 +262,9 @@ def stream_approval_events(
     approved: bool,
     feedback: str = "",
 ) -> Iterable[ServerSentEvent]:
+    snapshot = runtime.get_session_state(session_id)
+    yield sse_event("session_snapshot", snapshot)
+
     if not runtime.has_pending_interrupt(session_id):
         yield sse_event(
             "no_pending_interrupt",

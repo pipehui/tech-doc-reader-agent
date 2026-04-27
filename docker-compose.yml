@@ -29,6 +29,9 @@ services:
       BACKUP_API_KEY: ${BACKUP_API_KEY:-}
       BACKUP_MODEL: ${BACKUP_MODEL:-}
       PYTHONPATH: /app
+      PROXY_URL: ${PROXY_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./customer_support_chat:/app/customer_support_chat
       - ./frontend:/app/frontend
