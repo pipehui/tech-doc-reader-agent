@@ -1,6 +1,10 @@
 # Tech Doc Reader Agent
 
+[![CI](https://github.com/pipehui/tech-doc-reader-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/pipehui/tech-doc-reader-agent/actions/workflows/ci.yml)
+
 一个基于 LangGraph 的多智能体技术文档研读助手。它把“读完一份陌生技术文档”拆成解析、关联、讲解、测验、沉淀的协作流程，并用 Studio / Inspector / Learner 三种前端视角展示同一条会话状态。
+
+项目最初参考了 LangGraph 多助手教程中的对话状态管理思路；当前的 PlanWorkflow、Adaptive 三档路由、tool budget 守卫、SSE Inspector 和 Learner 视角为本项目围绕技术文档研读场景的自主扩展。
 
 ![Landing page](docs/images/landing.png)
 
@@ -12,6 +16,17 @@
 - **Session recovery**: Redis checkpointer + 状态接口支持刷新后恢复会话。
 - **Learning memory**: 学习记录、掌握度和复习次数会沉淀到 learner 视角。
 - **Three product views**: Studio 面向日常对话，Inspector 面向事件可观测性，Learner 面向学习复盘。
+
+## Quality Gates
+
+当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查和生产构建：
+
+```bash
+python -m ruff check tech_doc_agent tests
+python -m mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py
+python -m pytest
+cd frontend && npm run check && npm run build
+```
 
 ## Frontend
 
@@ -82,7 +97,7 @@ SSE 事件包括：
 
 ### 1. Environment
 
-创建 `.env` 或 `.dev.env`，至少包含：
+复制 `.env.example` 为 `.env` 或本地 `.dev.env`，至少包含：
 
 ```bash
 OPENAI_API_KEY=your_key
@@ -103,7 +118,7 @@ docker compose up -d redis
 ### 3. Start Backend
 
 ```bash
-PYTHONPATH=. uvicorn customer_support_chat.app.api.server:app --reload
+PYTHONPATH=. uvicorn tech_doc_agent.app.api.server:app --reload
 ```
 
 Backend:
@@ -140,7 +155,7 @@ npm run build
 然后启动后端：
 
 ```bash
-PYTHONPATH=. uvicorn customer_support_chat.app.api.server:app --host 0.0.0.0 --port 8000
+PYTHONPATH=. uvicorn tech_doc_agent.app.api.server:app --host 0.0.0.0 --port 8000
 ```
 
 访问：
@@ -168,7 +183,7 @@ http://127.0.0.1:8000/
 ## Project Structure
 
 ```text
-customer_support_chat/
+tech_doc_agent/
   app/
     api/          FastAPI routes and schemas
     core/         settings
@@ -191,9 +206,9 @@ scripts/
 
 运行时数据默认位于：
 
-- `customer_support_chat/data/faiss_store`
-- `customer_support_chat/data/learning_store`
-- `customer_support_chat/data/web_search`
-- `customer_support_chat/data/redis`
+- `tech_doc_agent/data/faiss_store`
+- `tech_doc_agent/data/learning_store`
+- `tech_doc_agent/data/web_search`
+- `tech_doc_agent/data/redis`
 
 这些目录通常不应提交到 Git。

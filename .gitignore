@@ -123,6 +123,7 @@ celerybeat.pid
 
 # Environments
 .env
+.dev.env
 .venv
 env/
 venv/
@@ -173,8 +174,13 @@ faiss_store/
 learning_store/
 web_search/
 redis/
+tech_doc_agent/data/
+customer_support_chat/data/
 *.pyc
-bench_results.jsonl
+bench_results*.jsonl
+eval_results/
+eval_reports/
+生产级改造清单*.md
 
 # Frontend dependencies and TypeScript build cache
 node_modules/

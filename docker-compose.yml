@@ -5,7 +5,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./customer_support_chat/data/redis:/data
+      - ./tech_doc_agent/data/redis:/data
 
   app:
     build:
@@ -14,7 +14,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .dev.env
+      - .env
     environment:
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
@@ -33,10 +33,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./customer_support_chat:/app/customer_support_chat
+      - ./tech_doc_agent:/app/tech_doc_agent
       - ./frontend:/app/frontend
       - ./graphs:/app/graphs:ro
-      - ./customer_support_chat/data:/app/customer_support_chat/data
+      - ./tech_doc_agent/data:/app/tech_doc_agent/data
     depends_on:
       - redis
-    command: uvicorn customer_support_chat.app.api.server:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn tech_doc_agent.app.api.server:app --host 0.0.0.0 --port 8000 --reload

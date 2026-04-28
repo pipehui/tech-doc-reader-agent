@@ -16,10 +16,10 @@ COPY requirements.txt /app/
 
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
-COPY customer_support_chat /app/customer_support_chat
+COPY tech_doc_agent /app/tech_doc_agent
 COPY frontend /app/frontend
 COPY graphs /app/graphs
 
 EXPOSE 8000
 
-CMD ["uvicorn", "customer_support_chat.app.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "tech_doc_agent.app.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
