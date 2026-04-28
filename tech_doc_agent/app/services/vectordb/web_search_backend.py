@@ -3,11 +3,12 @@ from datetime import datetime
 from pathlib import Path
 from duckduckgo_search import DDGS
 from tavily import TavilyClient
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 
 class WebSearchBackend:
-    def __init__(self) -> None:
-        settings = get_settings()
+    def __init__(self, settings: Settings | None = None) -> None:
+        settings = settings or get_settings()
         self.store_dir = Path(settings.DATA_PATH) / "web_search"
         self.usage_path = self.store_dir / "tavily_usage.json"
         self.tavily_api_key = settings.TAVILY_API_KEY

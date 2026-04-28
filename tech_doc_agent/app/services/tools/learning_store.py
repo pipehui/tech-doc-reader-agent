@@ -9,26 +9,11 @@ from typing import Optional
 from langchain_core.tools import tool
 
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
+from tech_doc_agent.app.services.resources import get_app_resources
 
-_seed_learning_history = [
-    {
-        "knowledge": "LangGraph StateGraph",
-        "timestamp": "2024-01-01T10:00:00Z",
-        "score": 0.8,
-        "reviewtimes": 1,
-    },
-    {
-        "knowledge": "FastAPI 依赖注入",
-        "timestamp": "2024-01-02T11:00:00Z",
-        "score": 0.9,
-        "reviewtimes": 2,
-    },
-]
 
-_learning_store = LearningStore()
-if not _learning_store.load():
-    _learning_store.records = [dict(record) for record in _seed_learning_history]
-    _learning_store.save()
+def get_learning_store() -> LearningStore:
+    return get_app_resources().learning_store
 
 @tool
 def read_learning_history(query: str) -> str:
@@ -39,7 +24,7 @@ def read_learning_history(query: str) -> str:
     它不包含该知识点的详细技术内容、完整定义、机制说明或代码示例。
     如果需要详细内容，应从文档工具中读取，而不是依赖学习记录。
     """
-    history = _learning_store.read_by_query(query)
+    history = get_learning_store().read_by_query(query)
     return json.dumps(history, ensure_ascii=False)
 
 @tool
@@ -49,7 +34,7 @@ def read_all_learning_history() -> str:
     返回的仍然只是轻量记录，不是详细知识正文。
     如果需要理解某个知识点的具体内容，应再去读取文档。
     """
-    all_history = _learning_store.read_overview()
+    all_history = get_learning_store().read_overview()
     return json.dumps(all_history, ensure_ascii=False)
 
 @tool
@@ -58,6 +43,7 @@ def upsert_learning_history(knowledge: str, timestamp: str, score: Optional[floa
     将学习记录写入本地存储中，如果该知识点已经存在则更新其时间戳和评分，并将复习次数加一。
     这个工具保存的是学习记录，不保存详细的学习内容正文、完整总结或文档内容。
     """
-    message = _learning_store.upsert_record(knowledge, timestamp, score)
-    _learning_store.save()
+    store = get_learning_store()
+    message = store.upsert_record(knowledge, timestamp, score)
+    store.save()
     return message

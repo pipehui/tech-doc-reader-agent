@@ -3,17 +3,20 @@
 '''
 from pydantic import BaseModel, Field
 
+SESSION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+TRACE_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$"
+
 class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-    trace_id: str | None = None
+    session_id: str = Field(min_length=1, max_length=128, pattern=SESSION_ID_PATTERN)
+    message: str = Field(min_length=1, max_length=8000)
+    trace_id: str | None = Field(default=None, min_length=1, max_length=200, pattern=TRACE_ID_PATTERN)
 
 
 class ApproveRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(min_length=1, max_length=128, pattern=SESSION_ID_PATTERN)
     approved: bool
-    feedback: str = ""
-    trace_id: str | None = None
+    feedback: str = Field(default="", max_length=2000)
+    trace_id: str | None = Field(default=None, min_length=1, max_length=200, pattern=TRACE_ID_PATTERN)
 
 class HistoryMessage(BaseModel):
     id: str | None = None

@@ -6,11 +6,12 @@ LearningStore backend:
 """
 import json
 from pathlib import Path
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 
 class LearningStore:
-    def __init__(self) -> None:
-        settings = get_settings()
+    def __init__(self, settings: Settings | None = None) -> None:
+        settings = settings or get_settings()
         self.store_dir = Path(settings.DATA_PATH) / "learning_store"
         self.records_path = self.store_dir / "records.json"
         self.records = []

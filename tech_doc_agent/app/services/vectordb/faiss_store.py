@@ -2,14 +2,20 @@ import json
 import faiss
 import numpy as np
 from pathlib import Path
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.services.embedding import generate_embedding
 from tech_doc_agent.app.services.vectordb.chunkenizer import recursive_character_splitting
 
 
 class FaissStore:
-    def __init__(self, chunk_size: int = 300, chunk_overlap: int = 20):
-        settings = get_settings()
+    def __init__(
+        self,
+        chunk_size: int = 300,
+        chunk_overlap: int = 20,
+        settings: Settings | None = None,
+    ):
+        settings = settings or get_settings()
         self.store_dir = Path(settings.DATA_PATH) / "faiss_store"
         self.index_path = self.store_dir / "index.faiss"
         self.documents_path = self.store_dir / "documents.json"

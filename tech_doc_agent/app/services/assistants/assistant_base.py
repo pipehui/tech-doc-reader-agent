@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable, RunnableConfig
 from pydantic import BaseModel
 
+from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.core.state import State
 
@@ -34,29 +35,64 @@ else:
     backup_llm = None
     llm = primary_llm
 
+def is_empty_assistant_output(result) -> bool:
+    if getattr(result, "tool_calls", None):
+        return False
+
+    content = getattr(result, "content", None)
+    if not content:
+        return True
+
+    if isinstance(content, list):
+        if not content:
+            return True
+
+        return not any(
+            isinstance(item, dict)
+            and str(item.get("text", "")).strip()
+            for item in content
+        )
+
+    if isinstance(content, str):
+        return not content.strip()
+
+    return False
+
 class Assistant:
     def __init__(self, runnable: Runnable, name: str | None = None, max_retries: int = 3):
+        if max_retries < 0:
+            raise ValueError("max_retries must be greater than or equal to 0")
+
         self.runnable = runnable
         self.name = name
         self.max_retries = max_retries
 
     def __call__(self, state: State, config: Optional[RunnableConfig] = None):
         result = None
-        for _ in range(self.max_retries + 1):
+        assistant_name = self.name or "unknown"
+
+        for attempt in range(self.max_retries + 1):
             result = self.runnable.invoke(state, config)
 
-            if not result.tool_calls and (
-                not result.content
-                or isinstance(result.content, list)
-                and (not result.content or not result.content[0].get("text"))
-            ):
+            if is_empty_assistant_output(result):
+                log_event(
+                    "assistant.empty_response",
+                    assistant=assistant_name,
+                    attempt=attempt + 1,
+                    max_attempts=self.max_retries + 1,
+                )
                 messages = state["messages"] + [("user", "Respond with a real output.")]
                 state = {**state, "messages": messages}
             else:
                 break
         else:
+            log_event(
+                "assistant.empty_response.exhausted",
+                assistant=assistant_name,
+                max_attempts=self.max_retries + 1,
+            )
             raise RuntimeError(
-                f"Assistant {self.name or 'unknown'} returned empty output "
+                f"Assistant {assistant_name} returned empty output "
                 f"after {self.max_retries + 1} attempts."
             )
 

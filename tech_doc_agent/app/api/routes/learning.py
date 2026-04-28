@@ -6,7 +6,7 @@ from tech_doc_agent.app.api.schemas import (
     LearningOverviewResponse,
     LearningRecord,
 )
-from tech_doc_agent.app.services.tools.learning_store import _learning_store
+from tech_doc_agent.app.services.tools.learning_store import get_learning_store
 
 
 router = APIRouter()
@@ -37,7 +37,7 @@ def _needs_review(record: LearningRecord, now: datetime) -> bool:
 
 
 def _read_records() -> list[LearningRecord]:
-    return [LearningRecord(**record) for record in _learning_store.read_overview()]
+    return [LearningRecord(**record) for record in get_learning_store().read_overview()]
 
 
 @router.get("/learning/overview", response_model=LearningOverviewResponse)

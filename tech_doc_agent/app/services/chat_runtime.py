@@ -7,6 +7,7 @@ from tech_doc_agent.app.core.langfuse_tracing import (
 )
 from tech_doc_agent.app.core.observability import get_trace_context, log_event, timed_node
 from tech_doc_agent.app.core.settings import get_settings
+from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
@@ -22,19 +23,31 @@ class ChatRuntime:
         self._checkpointer_cm = None
         self.checkpointer = None
         self.graph = None
+        self.resources = None
 
     def __enter__(self):
-        self._checkpointer_cm = RedisSaver.from_conn_string(self.settings.REDIS_URL)
-        self.checkpointer = self._checkpointer_cm.__enter__()
-        self.checkpointer.setup()
-        self.graph = build_multi_agentic_graph(self.checkpointer)
-        return self
+        try:
+            self.resources = AppResources.create(self.settings)
+            set_app_resources(self.resources)
+            self._checkpointer_cm = RedisSaver.from_conn_string(self.settings.REDIS_URL)
+            self.checkpointer = self._checkpointer_cm.__enter__()
+            self.checkpointer.setup()
+            self.graph = build_multi_agentic_graph(self.checkpointer)
+            return self
+        except Exception:
+            if self._checkpointer_cm is not None:
+                self._checkpointer_cm.__exit__(None, None, None)
+            reset_app_resources()
+            raise
 
     def __exit__(self, exc_type, exc, tb):
         shutdown_langfuse(self.settings)
 
-        if self._checkpointer_cm is not None:
-            self._checkpointer_cm.__exit__(exc_type, exc, tb)
+        try:
+            if self._checkpointer_cm is not None:
+                self._checkpointer_cm.__exit__(exc_type, exc, tb)
+        finally:
+            reset_app_resources()
 
     def build_config(
         self,

@@ -9,6 +9,7 @@ from tech_doc_agent.app.api.schemas import (
     HistoryViewResponse,
     SessionStateResponse,
 )
+from tech_doc_agent.app.core.guardrails import record_input_risk
 from tech_doc_agent.app.core.observability import (
     get_trace_context,
     log_event,
@@ -311,6 +312,7 @@ def stream_chat_events(
     session_id: str,
     message: str,
 ) -> Iterable[ServerSentEvent]:
+    record_input_risk(message, source="chat.message")
     snapshot = runtime.get_session_state(session_id)
     yield sse_event("session_snapshot", snapshot)
 
@@ -323,6 +325,9 @@ def stream_approval_events(
     approved: bool,
     feedback: str = "",
 ) -> Iterable[ServerSentEvent]:
+    if feedback:
+        record_input_risk(feedback, source="chat.approval.feedback")
+
     snapshot = runtime.get_session_state(session_id)
     yield sse_event("session_snapshot", snapshot)
 
