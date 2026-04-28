@@ -5,6 +5,8 @@ def test_settings_parses_typed_values():
     settings = Settings(
         TAVILY_DAILY_LIMIT="7",
         ALLOWED_ORIGINS="http://127.0.0.1:5173,http://localhost:5173",
+        LANGFUSE_ENABLED="true",
+        LANGFUSE_FLUSH_ON_REQUEST="true",
     )
 
     assert settings.TAVILY_DAILY_LIMIT == 7
@@ -12,6 +14,8 @@ def test_settings_parses_typed_values():
         "http://127.0.0.1:5173",
         "http://localhost:5173",
     ]
+    assert settings.LANGFUSE_ENABLED is True
+    assert settings.LANGFUSE_FLUSH_ON_REQUEST is True
 
 
 def test_settings_uses_project_data_path_by_default():

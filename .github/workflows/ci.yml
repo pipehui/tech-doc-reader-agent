@@ -20,7 +20,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Ruff
-        run: ruff check tech_doc_agent tests
+        run: ruff check tech_doc_agent tests evals
 
       - name: Mypy
         run: mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py

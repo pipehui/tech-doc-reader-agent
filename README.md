@@ -14,6 +14,7 @@
 - **SSE streaming UI**: FastAPI 通过 SSE 返回 token、tool、plan、agent transition 等事件，前端实时渲染。
 - **HITL approval**: 敏感工具调用前暂停，用户审批后继续执行。
 - **Session recovery**: Redis checkpointer + 状态接口支持刷新后恢复会话。
+- **Traceable runtime**: 内部 `trace_id` 贯穿 SSE / JSON 日志，并可选接入 Langfuse 记录 LangGraph/LangChain 调用链路。
 - **Learning memory**: 学习记录、掌握度和复习次数会沉淀到 learner 视角。
 - **Three product views**: Studio 面向日常对话，Inspector 面向事件可观测性，Learner 面向学习复盘。
 
@@ -22,11 +23,53 @@
 当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查和生产构建：
 
 ```bash
-python -m ruff check tech_doc_agent tests
+python -m ruff check tech_doc_agent tests evals
 python -m mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py
 python -m pytest
 cd frontend && npm run check && npm run build
 ```
+
+## Evaluation
+
+`evals/` 提供在线评测基线，默认只运行单轮可完成的 direct、single-agent 和标准 multi-agent 链路。先启动后端，再运行：
+
+```bash
+python -m evals.run_eval --cases evals/cases.json --timeout 240 --output eval_results/latest.jsonl --report eval_reports/latest.md
+```
+
+评测会自动收集 predicted plan、learning target、最终回答、延迟和工具调用数，并输出 JSONL 原始结果与 Markdown 报告。`enabled=false` 的多轮用例默认跳过，后续会单独用 multi-turn runner 评测。`eval_results/` 和 `eval_reports/` 默认不提交到 Git。
+
+### Baseline
+
+Online single-turn eval before async/runtime/RAG optimization:
+
+| Date | Cases | Done | Error | Plan Match | Keyword | E2E p50 | E2E p95 | Tool Results Avg |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2026-04-28 | 11 | 11 | 0 | 1.00 | 1.00 | 64.67s | 176.01s | 5.64 |
+
+这组 baseline 只覆盖单轮可完成任务，不包含需要第二轮用户回答的总结、测验评估等多轮链路。
+
+## Observability
+
+每次 `/chat` 和 `/chat/approve` 请求都会生成或接收一个 `trace_id`。该 ID 会贯穿：
+
+- SSE 事件 payload
+- 后端结构化 JSON 日志
+- LangGraph config metadata
+- 可选 Langfuse trace metadata
+
+启用 Langfuse tracing：
+
+```bash
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=your_public_key
+LANGFUSE_SECRET_KEY=your_secret_key
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
+
+启用后，`ChatRuntime` 会把 Langfuse `CallbackHandler` 注入 LangGraph/LangChain config，并在日志中输出对应的 `langfuse_trace_url`。本地如果需要请求结束后立即刷新 trace，可设置 `LANGFUSE_FLUSH_ON_REQUEST=true`。
+
+![Langfuse trace view](docs/images/langfuse-trace.png)
 
 ## Frontend
 

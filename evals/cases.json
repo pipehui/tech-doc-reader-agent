@@ -1,0 +1,169 @@
+[
+  {
+    "id": "direct_hello_01",
+    "category": "direct",
+    "input": "你好",
+    "expected_plan": [],
+    "expected_learning_target": null,
+    "must_contain": [],
+    "must_not_contain": ["PlanWorkflow", "parser", "relation"]
+  },
+  {
+    "id": "direct_capability_01",
+    "category": "direct",
+    "input": "你能帮我做什么",
+    "expected_plan": [],
+    "expected_learning_target": null,
+    "must_contain": ["文档", "学习"],
+    "must_not_contain": ["PlanWorkflow"]
+  },
+  {
+    "id": "direct_learning_history_01",
+    "category": "direct",
+    "input": "我之前学过哪些内容",
+    "expected_plan": [],
+    "expected_learning_target": null,
+    "must_contain": ["学习记录"],
+    "must_not_contain": ["PlanWorkflow", "parser", "relation"]
+  },
+  {
+    "id": "direct_learning_review_01",
+    "category": "direct",
+    "input": "看一下我的复习记录",
+    "expected_plan": [],
+    "expected_learning_target": null,
+    "must_contain": ["复习"],
+    "must_not_contain": ["PlanWorkflow"]
+  },
+  {
+    "id": "exam_01",
+    "category": "single_agent_examination",
+    "input": "给我出一道关于 StateGraph 的题",
+    "expected_plan": ["examination"],
+    "acceptable_plans": [[]],
+    "expected_learning_target": "StateGraph",
+    "must_contain": ["StateGraph", "题"],
+    "must_not_contain": []
+  },
+  {
+    "id": "exam_02",
+    "category": "single_agent_examination",
+    "input": "测一下我对 checkpoint 的理解",
+    "expected_plan": ["examination"],
+    "acceptable_plans": [["parser", "examination"]],
+    "expected_learning_target": "checkpoint",
+    "must_contain": ["checkpoint", "理解"],
+    "must_not_contain": []
+  },
+  {
+    "id": "summary_01",
+    "category": "single_agent_summary",
+    "enabled": false,
+    "skip_reason": "Fresh-session summary is not a stable single-turn eval; it needs prior conversation context.",
+    "input": "帮我总结刚才讨论的内容",
+    "expected_plan": ["summary"],
+    "expected_learning_target": null,
+    "must_contain": ["总结"],
+    "must_not_contain": []
+  },
+  {
+    "id": "summary_02",
+    "category": "single_agent_summary",
+    "enabled": false,
+    "skip_reason": "Fresh-session summary is not a stable single-turn eval; it needs prior conversation context.",
+    "input": "梳理一下本轮的学习要点",
+    "expected_plan": ["summary"],
+    "expected_learning_target": null,
+    "must_contain": ["学习", "要点"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_stategraph_01",
+    "category": "multi_agent_standard",
+    "input": "帮我理解 LangGraph 里的 StateGraph 是什么",
+    "expected_plan": ["parser", "relation", "explanation"],
+    "expected_learning_target": "LangGraph StateGraph",
+    "must_contain": ["StateGraph", "LangGraph"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_checkpoint_01",
+    "category": "multi_agent_standard",
+    "input": "什么是 checkpoint 机制，讲讲原理",
+    "expected_plan": ["parser", "relation", "explanation"],
+    "expected_learning_target": "checkpoint",
+    "must_contain": ["checkpoint", "机制"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_function_calling_01",
+    "category": "multi_agent_standard",
+    "input": "Function Calling 是怎么工作的",
+    "expected_plan": ["parser", "relation", "explanation"],
+    "expected_learning_target": "Function Calling",
+    "must_contain": ["Function Calling", "工具"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_reducer_01",
+    "category": "multi_agent_standard",
+    "input": "解释一下 reducer 在状态更新中的作用",
+    "expected_plan": ["parser", "relation", "explanation"],
+    "expected_learning_target": "reducer",
+    "must_contain": ["reducer", "状态"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_interrupt_01",
+    "category": "multi_agent_standard",
+    "input": "interrupt_before 的机制是什么",
+    "expected_plan": ["parser", "relation", "explanation"],
+    "expected_learning_target": "interrupt_before",
+    "must_contain": ["interrupt_before", "中断"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_exam_stategraph_01",
+    "category": "multi_agent_with_examination",
+    "enabled": false,
+    "skip_reason": "Learn-then-exam should be evaluated as a multi-turn flow after the explanation turn completes.",
+    "input": "系统学一下 StateGraph，学完出几道题",
+    "expected_plan": ["parser", "relation", "explanation", "examination"],
+    "expected_learning_target": "StateGraph",
+    "must_contain": ["StateGraph", "题"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_exam_checkpoint_01",
+    "category": "multi_agent_with_examination",
+    "enabled": false,
+    "skip_reason": "Learn-then-exam should be evaluated as a multi-turn flow after the explanation turn completes.",
+    "input": "帮我搞懂 checkpoint，然后测测我",
+    "expected_plan": ["parser", "relation", "explanation", "examination"],
+    "expected_learning_target": "checkpoint",
+    "must_contain": ["checkpoint", "测"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_summary_function_calling_01",
+    "category": "multi_agent_with_summary",
+    "enabled": false,
+    "skip_reason": "Learn-then-summary should be evaluated as a multi-turn flow after the explanation turn completes.",
+    "input": "理解一下 Function Calling，最后归档",
+    "expected_plan": ["parser", "relation", "explanation", "summary"],
+    "expected_learning_target": "Function Calling",
+    "must_contain": ["Function Calling"],
+    "must_not_contain": []
+  },
+  {
+    "id": "chain_summary_reducer_01",
+    "category": "multi_agent_with_summary",
+    "enabled": false,
+    "skip_reason": "Learn-then-summary/update-record should be evaluated as a multi-turn flow after the explanation turn completes and may trigger HITL.",
+    "input": "讲讲 reducer 的作用并更新我的学习记录",
+    "expected_plan": ["parser", "relation", "explanation", "summary"],
+    "expected_learning_target": "reducer",
+    "must_contain": ["reducer", "学习记录"],
+    "must_not_contain": []
+  }
+]

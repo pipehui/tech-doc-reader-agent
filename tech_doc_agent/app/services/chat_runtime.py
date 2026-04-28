@@ -1,8 +1,20 @@
 from tech_doc_agent.app.graph import build_multi_agentic_graph
+from tech_doc_agent.app.core.langfuse_tracing import (
+    build_langfuse_trace,
+    flush_langfuse,
+    langfuse_metadata,
+    shutdown_langfuse,
+)
+from tech_doc_agent.app.core.observability import get_trace_context, log_event, timed_node
 from tech_doc_agent.app.core.settings import get_settings
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
+from time import perf_counter
+
+
+def _elapsed_ms(start: float) -> float:
+    return round((perf_counter() - start) * 1000, 2)
 
 class ChatRuntime:
     def __init__(self) -> None:
@@ -19,15 +31,47 @@ class ChatRuntime:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        shutdown_langfuse(self.settings)
+
         if self._checkpointer_cm is not None:
             self._checkpointer_cm.__exit__(exc_type, exc, tb)
 
-    def build_config(self, session_id: str) -> dict:
-        return {
-             "configurable": {
-                "thread_id": session_id,
-            }
+    def build_config(
+        self,
+        session_id: str,
+        operation: str = "state",
+        with_callbacks: bool = False,
+    ) -> dict:
+        context = get_trace_context()
+        trace_id = context.get("trace_id")
+        langfuse_trace = (
+            build_langfuse_trace(self.settings, trace_id)
+            if with_callbacks and isinstance(trace_id, str)
+            else None
+        )
+        metadata = {
+            "session_id": session_id,
+            **langfuse_metadata(
+                session_id=session_id,
+                operation=operation,
+                external_trace_id=trace_id if isinstance(trace_id, str) else None,
+                langfuse_trace=langfuse_trace,
+            ),
         }
+
+        config = {
+            "configurable": {
+                "thread_id": session_id,
+            },
+            "metadata": metadata,
+            "run_name": f"tech_doc_agent.{operation}",
+            "recursion_limit": self.settings.LANGGRAPH_RECURSION_LIMIT,
+        }
+
+        if langfuse_trace is not None:
+            config["callbacks"] = [langfuse_trace.callback]
+
+        return config
     
     def preload_printed_message_ids(self, session_id: str) -> set[str]:
         printed_message_ids = set()
@@ -43,57 +87,117 @@ class ChatRuntime:
         return printed_message_ids
     
     def stream_user_message(self, session_id: str, user_input: str):
-        # events = self.graph.stream(
-        #     {"messages": [("user", user_input)]}, self.build_config(session_id), stream_mode="messages", version="v2",
-        # )
-        # for event in events:
-        #     messages = event.get("messages", [])
-        #     yield {
-        #         "event": "messages",
-        #         "messages": messages,
-        #     }
-        parts = self.graph.stream(
-            {"messages": [("user", user_input)]},
-            self.build_config(session_id),
-            stream_mode=["messages", "updates"],
-            version="v2",
+        start = perf_counter()
+        log_event(
+            "chat.request.started",
+            session_id=session_id,
+            message_length=len(user_input),
         )
-        for part in parts:
-            yield part
+
+        try:
+            with timed_node("graph.stream", phase="chat"):
+                config = self.build_config(
+                    session_id,
+                    operation="chat",
+                    with_callbacks=True,
+                )
+                parts = self.graph.stream(
+                    {"messages": [("user", user_input)]},
+                    config,
+                    stream_mode=["messages", "updates"],
+                    version="v2",
+                )
+                for part in parts:
+                    yield part
+        except Exception as exc:
+            log_event(
+                "chat.request.error",
+                session_id=session_id,
+                elapsed_ms=_elapsed_ms(start),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
+
+        pending_interrupt = self.has_pending_interrupt(session_id)
+        log_event(
+            "chat.request.interrupted" if pending_interrupt else "chat.request.finished",
+            session_id=session_id,
+            elapsed_ms=_elapsed_ms(start),
+            pending_interrupt=pending_interrupt,
+        )
+        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
+            flush_langfuse(self.settings)
 
     def has_pending_interrupt(self, session_id: str) -> bool:
         snapshot = self.get_snapshot(session_id)
         return bool(snapshot.next)
 
     def stream_approval(self, session_id: str, approved: bool, feedback: str = ""):
-        snapshot = self.get_snapshot(session_id)
+        start = perf_counter()
+        log_event("chat.approval.started", session_id=session_id, approved=approved)
 
-        if not snapshot.next:
-            return
+        try:
+            snapshot = self.get_snapshot(session_id)
 
-        config = self.build_config(session_id)
+            if not snapshot.next:
+                log_event(
+                    "chat.approval.no_pending_interrupt",
+                    session_id=session_id,
+                    elapsed_ms=_elapsed_ms(start),
+                    approved=approved,
+                )
+                return
 
-        if approved:
-            parts = self.graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
-        else:
-            tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
-            feedback = feedback or "用户未提供原因"
-            parts = self.graph.stream(
-                {
-                    "messages": [
-                        ToolMessage(
-                            tool_call_id=tool_call_id,
-                            content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
-                        )
-                    ]
-                },
-                config,
-                stream_mode=["messages", "updates"],
-                version="v2",
+            config = self.build_config(
+                session_id,
+                operation="approval",
+                with_callbacks=True,
             )
 
-        for part in parts:
-                yield part
+            if approved:
+                parts = self.graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
+            else:
+                tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
+                feedback = feedback or "用户未提供原因"
+                parts = self.graph.stream(
+                    {
+                        "messages": [
+                            ToolMessage(
+                                tool_call_id=tool_call_id,
+                                content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
+                            )
+                        ]
+                    },
+                    config,
+                    stream_mode=["messages", "updates"],
+                    version="v2",
+                )
+
+            with timed_node("graph.stream", phase="approval", approved=approved):
+                for part in parts:
+                    yield part
+        except Exception as exc:
+            log_event(
+                "chat.approval.error",
+                session_id=session_id,
+                elapsed_ms=_elapsed_ms(start),
+                approved=approved,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            raise
+
+        pending_interrupt = self.has_pending_interrupt(session_id)
+        log_event(
+            "chat.approval.interrupted" if pending_interrupt else "chat.approval.finished",
+            session_id=session_id,
+            elapsed_ms=_elapsed_ms(start),
+            approved=approved,
+            pending_interrupt=pending_interrupt,
+        )
+        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
+            flush_langfuse(self.settings)
 
     def get_snapshot(self, session_id: str) -> StateSnapshot:
         return self.graph.get_state(self.build_config(session_id))

@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     BACKUP_MODEL: str = ""
 
     REDIS_URL: str = "redis://localhost:6379"
+    LANGGRAPH_RECURSION_LIMIT: int = 80
+
+    LANGFUSE_ENABLED: bool = False
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_BASE_URL: str = ""
+    LANGFUSE_HOST: str = ""
+    LANGFUSE_FLUSH_ON_REQUEST: bool = False
+    LANGFUSE_ENVIRONMENT: str = "local"
+    LANGFUSE_RELEASE: str = ""
 
     ALLOWED_ORIGINS: list[str] = Field(
         default_factory=lambda: [

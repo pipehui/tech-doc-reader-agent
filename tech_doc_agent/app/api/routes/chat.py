@@ -9,6 +9,12 @@ from tech_doc_agent.app.api.schemas import (
     HistoryViewResponse,
     SessionStateResponse,
 )
+from tech_doc_agent.app.core.observability import (
+    get_trace_context,
+    log_event,
+    new_trace_id,
+    trace_context,
+)
 
 
 router = APIRouter()
@@ -31,10 +37,36 @@ def get_runtime(request: Request) -> ChatRuntime:
     return request.app.state.runtime
 
 def sse_event(event: str, data: dict) -> ServerSentEvent:
+    payload = dict(data)
+    context = get_trace_context()
+    for key in ("trace_id", "session_id"):
+        if context.get(key) and key not in payload:
+            payload[key] = context[key]
+
     return ServerSentEvent(
         event=event,
-        data=data,
+        data=payload,
     )
+
+def resolve_trace_id(body_trace_id: str | None, request: Request) -> str:
+    return body_trace_id or request.headers.get("x-trace-id") or new_trace_id()
+
+def iter_with_trace_context(
+    events: Iterable[ServerSentEvent],
+    trace_id: str,
+    session_id: str,
+    operation: str,
+) -> Iterable[ServerSentEvent]:
+    iterator = iter(events)
+
+    while True:
+        with trace_context(trace_id=trace_id, session_id=session_id, operation=operation):
+            try:
+                event = next(iterator)
+            except StopIteration:
+                return
+
+        yield event
 
 def infer_agent_from_metadata(metadata: dict) -> str | None:
     node_name = metadata.get("langgraph_node")
@@ -133,8 +165,27 @@ def _plan_update_payload(node_name: str, node_update: dict) -> dict:
 
     return payload
 
+def _stream_part_type_and_data(part) -> tuple[str | None, object]:
+    if isinstance(part, dict):
+        return part.get("type"), part.get("data")
+
+    if isinstance(part, (tuple, list)) and len(part) == 2:
+        return part[0], part[1]
+
+    return None, None
+
+def _extract_update_data(part) -> dict:
+    if isinstance(part, dict):
+        update_data = part.get("data", part)
+    elif isinstance(part, (tuple, list)) and len(part) == 2:
+        update_data = part[1]
+    else:
+        update_data = {}
+
+    return update_data if isinstance(update_data, dict) else {}
+
 def iter_update_events(part) -> Iterable[ServerSentEvent]:
-    update_data = part.get("data", {})
+    update_data = _extract_update_data(part)
 
     if not isinstance(update_data, dict):
         return
@@ -197,10 +248,10 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
 def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterable[ServerSentEvent]:
     try:
         for part in parts:
-            part_type = part.get("type")
+            part_type, part_data = _stream_part_type_and_data(part)
 
             if part_type == "messages":
-                msg_chunk, metadata = part["data"]
+                msg_chunk, metadata = part_data
                 raw_type = getattr(msg_chunk, "type", None)
 
                 if raw_type != "AIMessageChunk":
@@ -240,6 +291,12 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
         )
 
     except Exception as e:
+        log_event(
+            "sse.stream.error",
+            session_id=session_id,
+            error_type=type(e).__name__,
+            error=str(e),
+        )
         yield sse_event(
             "error",
             {
@@ -249,7 +306,11 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
         )
 
 
-def stream_chat_events(runtime: ChatRuntime, session_id: str, message: str) -> Iterable[ServerSentEvent]:
+def stream_chat_events(
+    runtime: ChatRuntime,
+    session_id: str,
+    message: str,
+) -> Iterable[ServerSentEvent]:
     snapshot = runtime.get_session_state(session_id)
     yield sse_event("session_snapshot", snapshot)
 
@@ -266,6 +327,7 @@ def stream_approval_events(
     yield sse_event("session_snapshot", snapshot)
 
     if not runtime.has_pending_interrupt(session_id):
+        log_event("chat.approval.no_pending_interrupt", approved=approved)
         yield sse_event(
             "no_pending_interrupt",
             {
@@ -273,6 +335,7 @@ def stream_approval_events(
             },
         )
         return
+
     parts = runtime.stream_approval(session_id, approved, feedback)
     yield from stream_parts_as_sse(runtime, session_id, parts)
 
@@ -280,16 +343,23 @@ def stream_approval_events(
 @router.post("/chat", response_class=EventSourceResponse)
 def chat(body: ChatRequest, request: Request):
     runtime = get_runtime(request)
-    return stream_chat_events(runtime, body.session_id, body.message)
+    trace_id = resolve_trace_id(body.trace_id, request)
+    return iter_with_trace_context(
+        stream_chat_events(runtime, body.session_id, body.message),
+        trace_id,
+        body.session_id,
+        "chat",
+    )
 
 @router.post("/chat/approve", response_class=EventSourceResponse)
 def approve(body: ApproveRequest, request: Request):
     runtime = get_runtime(request)
-    return stream_approval_events(
-        runtime,
+    trace_id = resolve_trace_id(body.trace_id, request)
+    return iter_with_trace_context(
+        stream_approval_events(runtime, body.session_id, body.approved, body.feedback),
+        trace_id,
         body.session_id,
-        body.approved,
-        body.feedback,
+        "approval",
     )
 
 @router.get("/sessions/{session_id}/history", response_model=HistoryViewResponse)
