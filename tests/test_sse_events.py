@@ -1,8 +1,15 @@
+import asyncio
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from tech_doc_agent.app.api.routes.chat import (
+    aiter_with_trace_context,
+    astream_parts_as_sse,
     iter_update_events,
     iter_with_trace_context,
+    router,
     sse_event,
     stream_parts_as_sse,
 )
@@ -12,6 +19,32 @@ from tech_doc_agent.app.core.observability import get_trace_context
 class FakeRuntime:
     def has_pending_interrupt(self, session_id: str) -> bool:
         return False
+
+    async def ahas_pending_interrupt(self, session_id: str) -> bool:
+        return False
+
+
+class FakeRouteRuntime(FakeRuntime):
+    async def aget_session_state(self, session_id: str) -> dict:
+        return {
+            "session_id": session_id,
+            "exists": False,
+            "pending_interrupt": False,
+            "learning_target": None,
+            "message_count": 0,
+            "current_agent": "primary",
+            "workflow_plan": [],
+            "plan_index": 0,
+        }
+
+    async def astream_user_message(self, session_id: str, message: str):
+        yield (
+            "messages",
+            (
+                AIMessageChunk(content="hello"),
+                {"langgraph_node": "primary"},
+            ),
+        )
 
 
 def test_iter_update_events_emits_plan_transition_and_tool_events():
@@ -138,3 +171,70 @@ def test_iter_with_trace_context_sets_context_per_next_without_leaking():
     assert second.data["trace_id"] == "trace-test"
     assert second.data["session_id"] == "session-1"
     assert get_trace_context() == {}
+
+
+def test_aiter_with_trace_context_sets_context_per_next_without_leaking():
+    async def collect():
+        async def source():
+            assert get_trace_context()["trace_id"] == "trace-async"
+            yield sse_event("first", {})
+            assert get_trace_context()["trace_id"] == "trace-async"
+            yield sse_event("second", {})
+
+        wrapped = aiter_with_trace_context(
+            source(),
+            trace_id="trace-async",
+            session_id="session-async",
+            operation="chat",
+        )
+
+        events = []
+        async for event in wrapped:
+            events.append(event)
+            assert get_trace_context() == {}
+        return events
+
+    first, second = asyncio.run(collect())
+
+    assert first.data["trace_id"] == "trace-async"
+    assert first.data["session_id"] == "session-async"
+    assert second.data["trace_id"] == "trace-async"
+    assert second.data["session_id"] == "session-async"
+
+
+def test_astream_parts_as_sse_accepts_langgraph_tuple_messages():
+    async def collect():
+        async def parts():
+            yield (
+                "messages",
+                (
+                    AIMessageChunk(content="hello"),
+                    {"langgraph_node": "primary"},
+                ),
+            )
+
+        events = []
+        async for event in astream_parts_as_sse(FakeRuntime(), "session-1", parts()):
+            events.append(event)
+        return events
+
+    events = asyncio.run(collect())
+
+    assert [event.event for event in events] == ["token", "done"]
+
+
+def test_chat_route_returns_async_sse_stream():
+    app = FastAPI()
+    app.state.runtime = FakeRouteRuntime()
+    app.include_router(router)
+
+    response = TestClient(app).post(
+        "/chat",
+        json={"session_id": "session-async-route", "message": "hi", "trace_id": "trace-route"},
+    )
+
+    assert response.status_code == 200
+    assert "event: session_snapshot" in response.text
+    assert "event: token" in response.text
+    assert "event: done" in response.text
+    assert "trace-route" in response.text

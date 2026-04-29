@@ -1,4 +1,5 @@
 from typing import Literal
+from langchain_core.runnables import RunnableLambda
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import tools_condition
 from langchain_core.runnables import RunnableConfig
@@ -47,6 +48,9 @@ from tech_doc_agent.app.services.assistants.summary_assistant import (
     summary_assistant_safe_tools,
     summary_assistant_sensitive_tools,
 )
+
+def assistant_node(assistant):
+    return RunnableLambda(assistant, afunc=assistant.ainvoke, name=assistant.name)
 
 def route_next_step(state: State) -> Literal[
     "enter_parser",
@@ -104,7 +108,7 @@ builder.add_node(
     create_entry_node("Parser Assistant", "parser"),
 )
 
-builder.add_node("parser", parser_assistant)
+builder.add_node("parser", assistant_node(parser_assistant))
 builder.add_edge("enter_parser", "parser")
 builder.add_node(
     "parser_assistant_safe_tools",
@@ -157,7 +161,7 @@ builder.add_node(
     create_entry_node("Explanation Assitant", "explanation"),
 )
 
-builder.add_node("explanation", explanation_assistant)
+builder.add_node("explanation", assistant_node(explanation_assistant))
 builder.add_edge("enter_explanation", "explanation")
 builder.add_node(
     "explanation_assistant_safe_tools",
@@ -202,7 +206,7 @@ builder.add_node(
     create_entry_node("Relation Assitant", "relation"),
 )
 
-builder.add_node("relation", relation_assistant)
+builder.add_node("relation", assistant_node(relation_assistant))
 builder.add_edge("enter_relation", "relation")
 builder.add_node(
     "relation_assistant_safe_tools",
@@ -247,7 +251,7 @@ builder.add_node(
     create_entry_node("Examination Assitant", "examination"),
 )
 
-builder.add_node("examination", examination_assistant)
+builder.add_node("examination", assistant_node(examination_assistant))
 builder.add_edge("enter_examination", "examination")
 builder.add_node(
     "examination_assistant_safe_tools",
@@ -301,7 +305,7 @@ builder.add_node(
     create_entry_node("Summary Assitant", "summary"),
 )
 
-builder.add_node("summary", summary_assistant)
+builder.add_node("summary", assistant_node(summary_assistant))
 builder.add_edge("enter_summary", "summary")
 builder.add_node(
     "summary_assistant_safe_tools",
@@ -350,7 +354,7 @@ builder.add_edge("summary_assistant_sensitive_tools", "summary")
 builder.add_conditional_edges("summary", route_summary)
 
 # Primary Assistant
-builder.add_node("primary_assistant", primary_assistant)
+builder.add_node("primary_assistant", assistant_node(primary_assistant))
 builder.add_node(
   "primary_assistant_tools", create_tool_node_with_fallback(primary_assistant_tools)
 )

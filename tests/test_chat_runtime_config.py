@@ -1,3 +1,4 @@
+import asyncio
 from types import SimpleNamespace
 
 from redis.exceptions import BusyLoadingError
@@ -96,3 +97,39 @@ def test_enter_retries_redis_busy_loading_during_checkpointer_setup(monkeypatch)
 
     assert FakeCheckpointer.setup_calls == 2
     assert FakeCheckpointer.close_calls == 2
+
+
+def test_astream_user_message_bridges_sync_graph_stream_with_trace_context():
+    class FakeGraph:
+        def __init__(self):
+            self.calls = []
+
+        def stream(self, graph_input, config, stream_mode, version):
+            self.calls.append(
+                {
+                    "graph_input": graph_input,
+                    "config": config,
+                    "stream_mode": stream_mode,
+                    "version": version,
+                }
+            )
+            yield ("updates", {"primary_assistant": {}})
+
+        def get_state(self, config):
+            return SimpleNamespace(next=(), values={})
+
+    async def collect(runtime: ChatRuntime):
+        with trace_context(trace_id="trace-async"):
+            return [part async for part in runtime.astream_user_message("session-async", "你好")]
+
+    runtime = ChatRuntime()
+    runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
+    runtime.graph = FakeGraph()
+
+    parts = asyncio.run(collect(runtime))
+
+    assert parts == [("updates", {"primary_assistant": {}})]
+    assert runtime.graph.calls[0]["graph_input"] == {"messages": [("user", "你好")]}
+    assert runtime.graph.calls[0]["config"]["metadata"]["trace_id"] == "trace-async"
+    assert runtime.graph.calls[0]["stream_mode"] == ["messages", "updates"]
+    assert runtime.graph.calls[0]["version"] == "v2"

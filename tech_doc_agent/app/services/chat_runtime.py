@@ -1,3 +1,5 @@
+import asyncio
+from contextlib import suppress
 from tech_doc_agent.app.graph import build_multi_agentic_graph
 from tech_doc_agent.app.core.langfuse_tracing import (
     build_langfuse_trace,
@@ -16,13 +18,43 @@ from time import perf_counter, sleep
 from typing import Any
 
 
+_STREAM_DONE = object()
+
+
 def _elapsed_ms(start: float) -> float:
     return round((perf_counter() - start) * 1000, 2)
+
+
+def _error_message(exc: Exception) -> str:
+    return str(exc) or type(exc).__name__
+
+
+def _next_or_done(iterator):
+    try:
+        return next(iterator)
+    except StopIteration:
+        return _STREAM_DONE
 
 
 def _is_retryable_redis_startup_error(exc: Exception) -> bool:
     message = str(exc).lower()
     return isinstance(exc, BusyLoadingError) or "redis is loading" in message or "loading the dataset" in message
+
+
+async def _aiter_sync_iterator(parts):
+    iterator = iter(parts)
+
+    try:
+        while True:
+            part = await asyncio.to_thread(_next_or_done, iterator)
+            if part is _STREAM_DONE:
+                return
+            yield part
+    finally:
+        close = getattr(iterator, "close", None)
+        if callable(close):
+            with suppress(Exception):
+                await asyncio.to_thread(close)
 
 
 class ChatRuntime:
@@ -170,7 +202,7 @@ class ChatRuntime:
                 session_id=session_id,
                 elapsed_ms=_elapsed_ms(start),
                 error_type=type(exc).__name__,
-                error=str(exc),
+                error=_error_message(exc),
             )
             raise
 
@@ -184,9 +216,61 @@ class ChatRuntime:
         if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
             flush_langfuse(self.settings)
 
+    async def astream_user_message(self, session_id: str, user_input: str):
+        start = perf_counter()
+        log_event(
+            "chat.request.started",
+            session_id=session_id,
+            message_length=len(user_input),
+            async_runtime=True,
+        )
+
+        try:
+            graph = self._require_graph()
+            config = self.build_config(
+                session_id,
+                operation="chat",
+                with_callbacks=True,
+            )
+
+            with timed_node("graph.stream.thread", phase="chat"):
+                async for part in _aiter_sync_iterator(
+                    graph.stream(
+                        {"messages": [("user", user_input)]},
+                        config,
+                        stream_mode=["messages", "updates"],
+                        version="v2",
+                    )
+                ):
+                    yield part
+        except Exception as exc:
+            log_event(
+                "chat.request.error",
+                session_id=session_id,
+                elapsed_ms=_elapsed_ms(start),
+                async_runtime=True,
+                error_type=type(exc).__name__,
+                error=_error_message(exc),
+            )
+            raise
+
+        pending_interrupt = await self.ahas_pending_interrupt(session_id)
+        log_event(
+            "chat.request.interrupted" if pending_interrupt else "chat.request.finished",
+            session_id=session_id,
+            elapsed_ms=_elapsed_ms(start),
+            pending_interrupt=pending_interrupt,
+            async_runtime=True,
+        )
+        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
+            await asyncio.to_thread(flush_langfuse, self.settings)
+
     def has_pending_interrupt(self, session_id: str) -> bool:
         snapshot = self.get_snapshot(session_id)
         return bool(snapshot.next)
+
+    async def ahas_pending_interrupt(self, session_id: str) -> bool:
+        return await asyncio.to_thread(self.has_pending_interrupt, session_id)
 
     def stream_approval(self, session_id: str, approved: bool, feedback: str = ""):
         start = perf_counter()
@@ -241,7 +325,7 @@ class ChatRuntime:
                 elapsed_ms=_elapsed_ms(start),
                 approved=approved,
                 error_type=type(exc).__name__,
-                error=str(exc),
+                error=_error_message(exc),
             )
             raise
 
@@ -256,8 +340,88 @@ class ChatRuntime:
         if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
             flush_langfuse(self.settings)
 
+    async def astream_approval(self, session_id: str, approved: bool, feedback: str = ""):
+        start = perf_counter()
+        log_event(
+            "chat.approval.started",
+            session_id=session_id,
+            approved=approved,
+            async_runtime=True,
+        )
+
+        try:
+            snapshot = await self.aget_snapshot(session_id)
+
+            if not snapshot.next:
+                log_event(
+                    "chat.approval.no_pending_interrupt",
+                    session_id=session_id,
+                    elapsed_ms=_elapsed_ms(start),
+                    approved=approved,
+                    async_runtime=True,
+                )
+                return
+
+            config = self.build_config(
+                session_id,
+                operation="approval",
+                with_callbacks=True,
+            )
+            graph = self._require_graph()
+
+            if approved:
+                graph_input = None
+            else:
+                tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
+                feedback = feedback or "用户未提供原因"
+                graph_input = {
+                    "messages": [
+                        ToolMessage(
+                            tool_call_id=tool_call_id,
+                            content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
+                        )
+                    ]
+                }
+
+            with timed_node("graph.stream.thread", phase="approval", approved=approved):
+                async for part in _aiter_sync_iterator(
+                    graph.stream(
+                        graph_input,
+                        config,
+                        stream_mode=["messages", "updates"],
+                        version="v2",
+                    )
+                ):
+                    yield part
+        except Exception as exc:
+            log_event(
+                "chat.approval.error",
+                session_id=session_id,
+                elapsed_ms=_elapsed_ms(start),
+                approved=approved,
+                async_runtime=True,
+                error_type=type(exc).__name__,
+                error=_error_message(exc),
+            )
+            raise
+
+        pending_interrupt = await self.ahas_pending_interrupt(session_id)
+        log_event(
+            "chat.approval.interrupted" if pending_interrupt else "chat.approval.finished",
+            session_id=session_id,
+            elapsed_ms=_elapsed_ms(start),
+            approved=approved,
+            pending_interrupt=pending_interrupt,
+            async_runtime=True,
+        )
+        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
+            await asyncio.to_thread(flush_langfuse, self.settings)
+
     def get_snapshot(self, session_id: str) -> StateSnapshot:
         return self._require_graph().get_state(self.build_config(session_id))
+
+    async def aget_snapshot(self, session_id: str) -> StateSnapshot:
+        return await asyncio.to_thread(self.get_snapshot, session_id)
     
     def _extract_text_content(self, content) -> str:
         if isinstance(content, str):
@@ -408,3 +572,6 @@ class ChatRuntime:
             "workflow_plan": workflow_plan,
             "plan_index": plan_index,
         }
+
+    async def aget_session_state(self, session_id: str) -> dict:
+        return await asyncio.to_thread(self.get_session_state, session_id)

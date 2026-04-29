@@ -386,6 +386,60 @@ def create_tool_node_with_fallback(tools: list):
         )
         return result
 
-    return RunnableLambda(guarded_tool_node).with_fallbacks(
+    async def aguarded_tool_node(state: State):
+        blocked = maybe_block_parser_tool_budget(state)
+        if blocked is not None:
+            _log_tool_calls(
+                "tool_call.blocked",
+                state,
+                _pending_tool_calls(state),
+                reason="parser_tool_budget",
+            )
+            return blocked
+
+        blocked = maybe_block_repeated_tool_calls(state)
+        if blocked is not None:
+            _log_tool_calls(
+                "tool_call.blocked",
+                state,
+                _pending_tool_calls(state),
+                reason="repeated_tool_call",
+            )
+            return blocked
+
+        tool_calls = _pending_tool_calls(state)
+        start = perf_counter()
+
+        try:
+            with timed_node(
+                "tool_node",
+                agent_node=_current_step(state),
+                tool_count=len(tool_calls),
+                async_runtime=True,
+            ):
+                result = await tool_node.ainvoke(state)
+        except Exception as exc:
+            _log_tool_calls(
+                "tool_call.error",
+                state,
+                tool_calls,
+                elapsed_ms=_elapsed_ms(start),
+                error_type=type(exc).__name__,
+                error=str(exc),
+                async_runtime=True,
+            )
+            raise
+
+        _log_tool_calls(
+            "tool_call.finished",
+            state,
+            tool_calls,
+            elapsed_ms=_elapsed_ms(start),
+            success=True,
+            async_runtime=True,
+        )
+        return result
+
+    return RunnableLambda(guarded_tool_node, afunc=aguarded_tool_node).with_fallbacks(
         [RunnableLambda(handle_tool_error)], exception_key="error"
     )

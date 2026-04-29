@@ -67,6 +67,13 @@ class Assistant:
         self.name = name
         self.max_retries = max_retries
 
+    def _name_result(self, result):
+        if self.name and not getattr(result, "name", None):
+            if hasattr(result, "model_copy"):
+                return result.model_copy(update={"name": self.name})
+            return result.copy(update={"name": self.name})
+        return result
+
     def __call__(self, state: State, config: Optional[RunnableConfig] = None):
         result = None
         assistant_name = self.name or "unknown"
@@ -96,11 +103,41 @@ class Assistant:
                 f"after {self.max_retries + 1} attempts."
             )
 
-        if self.name and not getattr(result, "name", None):
-            if hasattr(result, "model_copy"):
-                result = result.model_copy(update={"name": self.name})
+        result = self._name_result(result)
+        return {"messages": result}
+
+    async def ainvoke(self, state: State, config: Optional[RunnableConfig] = None):
+        result = None
+        assistant_name = self.name or "unknown"
+
+        for attempt in range(self.max_retries + 1):
+            result = await self.runnable.ainvoke(state, config)
+
+            if is_empty_assistant_output(result):
+                log_event(
+                    "assistant.empty_response",
+                    assistant=assistant_name,
+                    attempt=attempt + 1,
+                    max_attempts=self.max_retries + 1,
+                    async_runtime=True,
+                )
+                messages = state["messages"] + [("user", "Respond with a real output.")]
+                state = {**state, "messages": messages}
             else:
-                result = result.copy(update={"name": self.name})
+                break
+        else:
+            log_event(
+                "assistant.empty_response.exhausted",
+                assistant=assistant_name,
+                max_attempts=self.max_retries + 1,
+                async_runtime=True,
+            )
+            raise RuntimeError(
+                f"Assistant {assistant_name} returned empty output "
+                f"after {self.max_retries + 1} attempts."
+            )
+
+        result = self._name_result(result)
         return {"messages": result}
 
 # Define the CompleteOrEscalate tool

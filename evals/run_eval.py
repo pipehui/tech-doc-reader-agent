@@ -20,6 +20,15 @@ from evals.judges import judge_case, normalize_plan
 DEFAULT_API_URL = "http://127.0.0.1:8000/chat"
 DEFAULT_CASES = Path("evals/cases.json")
 DEFAULT_TIMEOUT = 240.0
+DEFAULT_REJECT_FEEDBACK = "评测脚本自动拒绝写入或敏感操作，请不要执行该操作，继续完成当前回答。"
+
+
+def approve_url_for(api_url: str, approve_url: str | None) -> str:
+    if approve_url:
+        return approve_url
+    if api_url.rstrip("/").endswith("/chat"):
+        return f"{api_url.rstrip('/')}/approve"
+    return f"{api_url.rstrip('/')}/chat/approve"
 
 
 async def iter_sse_events(response: httpx.Response) -> AsyncIterator[tuple[str, dict[str, Any]]]:
@@ -67,7 +76,11 @@ async def run_case(
     client: httpx.AsyncClient,
     case: dict[str, Any],
     api_url: str,
+    approve_url: str,
     timeout_s: float,
+    interrupt_policy: str = "reject",
+    max_interrupt_rounds: int = 3,
+    reject_feedback: str = DEFAULT_REJECT_FEEDBACK,
 ) -> dict[str, Any]:
     session_id = f"eval_{case['id']}_{uuid.uuid4().hex[:8]}"
     payload = {
@@ -89,65 +102,115 @@ async def run_case(
     predicted_learning_target: str | None = None
     final_status = "unknown"
     error: str | None = None
+    interrupt_count = 0
+    approval_decisions: list[dict[str, Any]] = []
+
+    async def consume_stream(url: str, stream_payload: dict[str, Any]) -> str:
+        nonlocal t_first_token
+        nonlocal t_done
+        nonlocal token_count
+        nonlocal tool_calls
+        nonlocal tool_results
+        nonlocal events_seen
+        nonlocal predicted_plan
+        nonlocal predicted_learning_target
+        nonlocal final_status
+        nonlocal error
+        nonlocal interrupt_count
+
+        async with client.stream("POST", url, json=stream_payload, timeout=timeout_s) as response:
+            if response.status_code != 200:
+                error = f"HTTP {response.status_code}"
+                final_status = "error"
+                return "error"
+
+            async for event_name, event in iter_sse_events(response):
+                now = time.perf_counter()
+                events_seen += 1
+
+                if event_name == "token":
+                    token_count += 1
+                    if t_first_token is None:
+                        t_first_token = now
+                    text = event.get("text")
+                    if isinstance(text, str):
+                        token_parts.append(text)
+
+                elif event_name == "tool_call":
+                    tool_calls += 1
+                    if event.get("tool") == "PlanWorkflow":
+                        args = event.get("args", {})
+                        if isinstance(args, dict):
+                            predicted_plan = normalize_plan(args.get("steps"))
+                            predicted_learning_target = _string_or_none(args.get("learning_target"))
+
+                elif event_name == "tool_result":
+                    tool_results += 1
+
+                elif event_name == "plan_update":
+                    if "plan" in event:
+                        predicted_plan = normalize_plan(event.get("plan"))
+                    if "learning_target" in event:
+                        predicted_learning_target = _string_or_none(event.get("learning_target"))
+
+                elif event_name == "structured_result":
+                    structured_results.append(event)
+
+                elif event_name == "agent_message":
+                    content = event.get("content")
+                    if isinstance(content, str) and content.strip():
+                        answer_parts.append(content)
+
+                elif event_name == "done":
+                    final_status = "done"
+                    t_done = now
+                    return "done"
+
+                elif event_name == "interrupt_required":
+                    interrupt_count += 1
+                    final_status = "interrupted"
+                    t_done = now
+                    return "interrupt_required"
+
+                elif event_name == "no_pending_interrupt":
+                    final_status = "no_pending_interrupt"
+                    t_done = now
+                    return "no_pending_interrupt"
+
+                elif event_name == "error":
+                    final_status = "error"
+                    error = _string_or_none(event.get("message")) or "unknown error"
+                    t_done = now
+                    return "error"
+
+        final_status = "stream_ended"
+        t_done = time.perf_counter()
+        return "stream_ended"
 
     try:
         async with asyncio.timeout(timeout_s):
-            async with client.stream("POST", api_url, json=payload, timeout=timeout_s) as response:
-                if response.status_code != 200:
-                    return _error_result(case, session_id, t_start, f"HTTP {response.status_code}")
+            status = await consume_stream(api_url, payload)
 
-                async for event_name, event in iter_sse_events(response):
-                    now = time.perf_counter()
-                    events_seen += 1
+            while status == "interrupt_required" and interrupt_policy == "reject":
+                if interrupt_count > max_interrupt_rounds:
+                    final_status = "interrupted"
+                    error = f"interrupt rounds exceeded {max_interrupt_rounds}"
+                    break
 
-                    if event_name == "token":
-                        token_count += 1
-                        if t_first_token is None:
-                            t_first_token = now
-                        text = event.get("text")
-                        if isinstance(text, str):
-                            token_parts.append(text)
-
-                    elif event_name == "tool_call":
-                        tool_calls += 1
-                        if event.get("tool") == "PlanWorkflow":
-                            args = event.get("args", {})
-                            if isinstance(args, dict):
-                                predicted_plan = normalize_plan(args.get("steps"))
-                                predicted_learning_target = _string_or_none(args.get("learning_target"))
-
-                    elif event_name == "tool_result":
-                        tool_results += 1
-
-                    elif event_name == "plan_update":
-                        if "plan" in event:
-                            predicted_plan = normalize_plan(event.get("plan"))
-                        if "learning_target" in event:
-                            predicted_learning_target = _string_or_none(event.get("learning_target"))
-
-                    elif event_name == "structured_result":
-                        structured_results.append(event)
-
-                    elif event_name == "agent_message":
-                        content = event.get("content")
-                        if isinstance(content, str) and content.strip():
-                            answer_parts.append(content)
-
-                    elif event_name == "done":
-                        final_status = "done"
-                        t_done = now
-                        break
-
-                    elif event_name == "interrupt_required":
-                        final_status = "interrupted"
-                        t_done = now
-                        break
-
-                    elif event_name == "error":
-                        final_status = "error"
-                        error = _string_or_none(event.get("message")) or "unknown error"
-                        t_done = now
-                        break
+                approval_decisions.append(
+                    {
+                        "approved": False,
+                        "feedback": reject_feedback,
+                    }
+                )
+                status = await consume_stream(
+                    approve_url,
+                    {
+                        "session_id": session_id,
+                        "approved": False,
+                        "feedback": reject_feedback,
+                    },
+                )
 
     except TimeoutError:
         return _error_result(case, session_id, t_start, f"TimeoutError: exceeded {timeout_s:.0f}s")
@@ -177,6 +240,8 @@ async def run_case(
         "parsed_structured_result_count": sum(
             1 for item in structured_results if item.get("parsed") is True
         ),
+        "interrupt_count": interrupt_count,
+        "approval_decisions": approval_decisions,
         "event_count": events_seen,
         "status": final_status,
         "error": error,
@@ -202,17 +267,29 @@ async def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
         print(f"Skipping {len(skipped)} disabled case(s). Use --include-disabled to run them.")
 
     results: list[dict[str, Any]] = []
+    approve_url = approve_url_for(args.api_url, args.approve_url)
     async with httpx.AsyncClient() as client:
         for index, case in enumerate(cases, start=1):
             print(f"[{index}/{len(cases)}] {case['id']} {case['input'][:60]}")
-            result = await run_case(client, case, args.api_url, args.timeout)
+            result = await run_case(
+                client,
+                case,
+                args.api_url,
+                approve_url,
+                args.timeout,
+                interrupt_policy=args.interrupt_policy,
+                max_interrupt_rounds=args.max_interrupt_rounds,
+                reject_feedback=args.reject_feedback,
+            )
             results.append(result)
             status = result["status"]
             plan = ",".join(result.get("predicted_plan", [])) or "direct"
             plan_score = result.get("scores", {}).get("plan_match")
             e2e = result.get("e2e_s")
             e2e_text = f"{e2e:.2f}s" if isinstance(e2e, int | float) else "N/A"
-            print(f"  status={status} plan={plan} plan_score={plan_score} e2e={e2e_text}")
+            interrupts = result.get("interrupt_count", 0)
+            interrupt_text = f" interrupts={interrupts}" if interrupts else ""
+            print(f"  status={status} plan={plan} plan_score={plan_score} e2e={e2e_text}{interrupt_text}")
             if result.get("error"):
                 print(f"  error={result['error']}")
 
@@ -248,6 +325,7 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         f"| E2E p95 | {format_seconds(summary['e2e_p95'])} |",
         f"| Tool results avg | {format_number(summary['tool_results_avg'])} |",
         f"| Structured results avg | {format_number(summary['structured_results_avg'])} |",
+        f"| Interrupts total | {summary['interrupts_total']} |",
         "",
         "## By Category",
         "",
@@ -269,8 +347,8 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "",
             "## Cases",
             "",
-            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | E2E | Tool Results | Structured Results |",
-            "|---|---|---|---|---|---:|---:|---:|---:|---:|",
+            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | E2E | Interrupts | Tool Results | Structured Results |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|",
         ]
     )
 
@@ -282,7 +360,7 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "| "
             f"{row['id']} | {row['category']} | {row['status']} | {expected} | {predicted} | "
             f"{format_score(scores.get('plan_match'))} | {format_score(scores.get('keyword'))} | "
-            f"{format_seconds(row.get('e2e_s'))} | {row.get('tool_results', 0)} | "
+            f"{format_seconds(row.get('e2e_s'))} | {row.get('interrupt_count', 0)} | {row.get('tool_results', 0)} | "
             f"{row.get('structured_result_count', 0)} |"
         )
 
@@ -305,6 +383,7 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "e2e_p95": _percentile([row["e2e_s"] for row in done if row.get("e2e_s") is not None], 95),
         "tool_results_avg": statistics.mean([row.get("tool_results", 0) for row in done]) if done else None,
         "structured_results_avg": statistics.mean([row.get("structured_result_count", 0) for row in done]) if done else None,
+        "interrupts_total": sum(row.get("interrupt_count", 0) for row in rows),
     }
 
 
@@ -338,9 +417,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run online eval cases against the /chat SSE endpoint.")
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--api-url", default=DEFAULT_API_URL)
+    parser.add_argument("--approve-url", default=None)
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--include-disabled", action="store_true", help="Run cases marked enabled=false.")
+    parser.add_argument(
+        "--interrupt-policy",
+        choices=["reject", "stop"],
+        default="reject",
+        help="How to handle HITL interrupts during eval. reject keeps the chain moving without approving writes.",
+    )
+    parser.add_argument("--max-interrupt-rounds", type=int, default=3)
+    parser.add_argument("--reject-feedback", default=DEFAULT_REJECT_FEEDBACK)
     parser.add_argument("--output", type=Path, default=Path("eval_results/latest.jsonl"))
     parser.add_argument("--report", type=Path, default=Path("eval_reports/latest.md"))
     return parser.parse_args()
@@ -388,6 +476,8 @@ def _error_result(case: dict[str, Any], session_id: str, started_at: float, erro
         "structured_results": [],
         "structured_result_count": 0,
         "parsed_structured_result_count": 0,
+        "interrupt_count": 0,
+        "approval_decisions": [],
         "event_count": 0,
         "status": "error",
         "error": error,

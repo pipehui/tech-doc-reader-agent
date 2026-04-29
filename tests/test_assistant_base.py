@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -17,6 +18,10 @@ class FakeRunnable:
         self.states = []
 
     def invoke(self, state, config=None):
+        self.states.append(state)
+        return self.outputs.pop(0)
+
+    async def ainvoke(self, state, config=None):
         self.states.append(state)
         return self.outputs.pop(0)
 
@@ -117,3 +122,22 @@ def test_assistant_does_not_retry_empty_tool_call_response():
 def test_assistant_rejects_negative_max_retries():
     with pytest.raises(ValueError, match="max_retries"):
         Assistant(FakeRunnable([]), max_retries=-1)
+
+
+def test_assistant_ainvoke_retries_empty_response_and_returns_next_result():
+    async def run():
+        runnable = FakeRunnable(
+            [
+                AIMessage(content=""),
+                AIMessage(content="real async answer"),
+            ]
+        )
+        assistant = Assistant(runnable, name="tester", max_retries=2)
+        return runnable, await assistant.ainvoke({"messages": [("user", "hi")]})
+
+    runnable, result = asyncio.run(run())
+
+    assert result["messages"].content == "real async answer"
+    assert result["messages"].name == "tester"
+    assert len(runnable.states) == 2
+    assert runnable.states[1]["messages"][-1] == ("user", "Respond with a real output.")

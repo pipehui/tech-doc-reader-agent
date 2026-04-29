@@ -7,3 +7,4 @@ def test_graph_compiles_with_memory_checkpointer():
     graph = build_multi_agentic_graph(MemorySaver())
 
     assert graph is not None
+    assert hasattr(graph, "astream")

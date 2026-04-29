@@ -11,7 +11,7 @@
 ## Highlights
 
 - **Multi-agent orchestration**: `primary` 自适应路由，按任务复杂度选择 direct response、single agent 或 parser -> relation -> explanation 链式研读。
-- **SSE streaming UI**: FastAPI 通过 SSE 返回 token、tool、plan、agent transition 等事件，前端实时渲染。
+- **Async SSE streaming UI**: FastAPI 通过异步 SSE 返回 token、tool、plan、agent transition 等事件，前端实时渲染。
 - **HITL approval**: 敏感工具调用前暂停，用户审批后继续执行。
 - **Session recovery**: Redis checkpointer + 状态接口支持刷新后恢复会话。
 - **Traceable runtime**: 内部 `trace_id` 贯穿 SSE / JSON 日志，并可选接入 Langfuse 记录 LangGraph/LangChain 调用链路。
@@ -38,6 +38,20 @@ python -m evals.run_eval --cases evals/cases.json --timeout 240 --output eval_re
 ```
 
 评测会自动收集 predicted plan、learning target、最终回答、延迟和工具调用数，并输出 JSONL 原始结果与 Markdown 报告。`enabled=false` 的多轮用例默认跳过，后续会单独用 multi-turn runner 评测。`eval_results/` 和 `eval_reports/` 默认不提交到 Git。
+
+流式接口支持并发 smoke / latency benchmark。默认复用 `evals/cases.json` 中 `enabled=true` 的 single-turn baseline，并在遇到写入审批时自动拒绝以继续完成链路；建议分别跑 5/10/20 并发观察 p50、p95 和 error rate：
+
+```bash
+python scripts/benchmark_latency.py --runs 1 --concurrency 5 --timeout 240 --output eval_results/bench_c5.jsonl
+python scripts/benchmark_latency.py --runs 1 --concurrency 10 --timeout 240 --output eval_results/bench_c10.jsonl
+python scripts/benchmark_latency.py --runs 1 --concurrency 20 --timeout 240 --output eval_results/bench_c20.jsonl
+```
+
+当前 async SSE concurrency smoke（2026-04-30，11 enabled cases，自动拒绝 HITL 写入审批）：
+
+| Concurrency | Valid | Error Rate | Final Interrupted | Auto-Rejected Interrupts | TTFT p50 | TTFT p95 | E2E p50 | E2E p95 | Tool Events Avg |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10 | 11/11 | 0.0% | 0.0% | 4 | 0.57s | 0.67s | 51.41s | 176.74s | 2.82 |
 
 检索链路提供离线评测，直接调用 Hybrid RAG，不需要启动后端：
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 from fastapi.sse import ServerSentEvent, EventSourceResponse
-from collections.abc import Iterable
+from collections.abc import AsyncIterable, Iterable
 import json
 from tech_doc_agent.app.api.schemas import (
     ChatRequest,
@@ -65,6 +65,23 @@ def iter_with_trace_context(
             try:
                 event = next(iterator)
             except StopIteration:
+                return
+
+        yield event
+
+async def aiter_with_trace_context(
+    events: AsyncIterable[ServerSentEvent],
+    trace_id: str,
+    session_id: str,
+    operation: str,
+) -> AsyncIterable[ServerSentEvent]:
+    iterator = aiter(events)
+
+    while True:
+        with trace_context(trace_id=trace_id, session_id=session_id, operation=operation):
+            try:
+                event = await anext(iterator)
+            except StopAsyncIteration:
                 return
 
         yield event
@@ -201,6 +218,16 @@ def _extract_update_data(part) -> dict:
 
     return update_data if isinstance(update_data, dict) else {}
 
+def _extract_message_part_data(part_data) -> tuple[object, dict] | None:
+    if not isinstance(part_data, (tuple, list)) or len(part_data) != 2:
+        return None
+
+    msg_chunk, metadata = part_data
+    return msg_chunk, metadata if isinstance(metadata, dict) else {}
+
+def _error_message(exc: Exception) -> str:
+    return str(exc) or type(exc).__name__
+
 def iter_update_events(part) -> Iterable[ServerSentEvent]:
     update_data = _extract_update_data(part)
 
@@ -270,7 +297,10 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
             part_type, part_data = _stream_part_type_and_data(part)
 
             if part_type == "messages":
-                msg_chunk, metadata = part_data
+                message_part = _extract_message_part_data(part_data)
+                if message_part is None:
+                    continue
+                msg_chunk, metadata = message_part
                 raw_type = getattr(msg_chunk, "type", None)
 
                 if raw_type != "AIMessageChunk":
@@ -310,16 +340,88 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
         )
 
     except Exception as e:
+        message = _error_message(e)
         log_event(
             "sse.stream.error",
             session_id=session_id,
             error_type=type(e).__name__,
-            error=str(e),
+            error=message,
         )
         yield sse_event(
             "error",
             {
-                "message": str(e),
+                "message": message,
+                "session_id": session_id,
+            },
+        )
+
+
+async def astream_parts_as_sse(
+    runtime: ChatRuntime,
+    session_id: str,
+    parts,
+) -> AsyncIterable[ServerSentEvent]:
+    try:
+        async for part in parts:
+            part_type, part_data = _stream_part_type_and_data(part)
+
+            if part_type == "messages":
+                message_part = _extract_message_part_data(part_data)
+                if message_part is None:
+                    continue
+                msg_chunk, metadata = message_part
+                raw_type = getattr(msg_chunk, "type", None)
+
+                if raw_type != "AIMessageChunk":
+                    continue
+
+                text = extract_text_from_chunk(msg_chunk)
+
+                if not text:
+                    continue
+
+                yield sse_event(
+                    "token",
+                    {
+                        "text": text,
+                        "agent": infer_agent_from_metadata(metadata),
+                    },
+                )
+
+            elif part_type == "updates":
+                for event in iter_update_events(part):
+                    yield event
+
+        if await runtime.ahas_pending_interrupt(session_id):
+            yield sse_event(
+                "interrupt_required",
+                {
+                    "session_id": session_id,
+                    "pending": True,
+                },
+            )
+            return
+
+        yield sse_event(
+            "done",
+            {
+                "session_id": session_id,
+            },
+        )
+
+    except Exception as e:
+        message = _error_message(e)
+        log_event(
+            "sse.stream.error",
+            session_id=session_id,
+            error_type=type(e).__name__,
+            error=message,
+            async_runtime=True,
+        )
+        yield sse_event(
+            "error",
+            {
+                "message": message,
                 "session_id": session_id,
             },
         )
@@ -336,6 +438,19 @@ def stream_chat_events(
 
     parts = runtime.stream_user_message(session_id, message)
     yield from stream_parts_as_sse(runtime, session_id, parts)
+
+async def astream_chat_events(
+    runtime: ChatRuntime,
+    session_id: str,
+    message: str,
+) -> AsyncIterable[ServerSentEvent]:
+    record_input_risk(message, source="chat.message")
+    snapshot = await runtime.aget_session_state(session_id)
+    yield sse_event("session_snapshot", snapshot)
+
+    parts = runtime.astream_user_message(session_id, message)
+    async for event in astream_parts_as_sse(runtime, session_id, parts):
+        yield event
 
 def stream_approval_events(
     runtime: ChatRuntime,
@@ -363,27 +478,56 @@ def stream_approval_events(
     yield from stream_parts_as_sse(runtime, session_id, parts)
 
 
+async def astream_approval_events(
+    runtime: ChatRuntime,
+    session_id: str,
+    approved: bool,
+    feedback: str = "",
+) -> AsyncIterable[ServerSentEvent]:
+    if feedback:
+        record_input_risk(feedback, source="chat.approval.feedback")
+
+    snapshot = await runtime.aget_session_state(session_id)
+    yield sse_event("session_snapshot", snapshot)
+
+    if not await runtime.ahas_pending_interrupt(session_id):
+        log_event("chat.approval.no_pending_interrupt", approved=approved, async_runtime=True)
+        yield sse_event(
+            "no_pending_interrupt",
+            {
+                "session_id": session_id,
+            },
+        )
+        return
+
+    parts = runtime.astream_approval(session_id, approved, feedback)
+    async for event in astream_parts_as_sse(runtime, session_id, parts):
+        yield event
+
+
 @router.post("/chat", response_class=EventSourceResponse)
-def chat(body: ChatRequest, request: Request):
+async def chat(body: ChatRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
-    return iter_with_trace_context(
-        stream_chat_events(runtime, body.session_id, body.message),
+    async for event in aiter_with_trace_context(
+        astream_chat_events(runtime, body.session_id, body.message),
         trace_id,
         body.session_id,
         "chat",
-    )
+    ):
+        yield event
 
 @router.post("/chat/approve", response_class=EventSourceResponse)
-def approve(body: ApproveRequest, request: Request):
+async def approve(body: ApproveRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
-    return iter_with_trace_context(
-        stream_approval_events(runtime, body.session_id, body.approved, body.feedback),
+    async for event in aiter_with_trace_context(
+        astream_approval_events(runtime, body.session_id, body.approved, body.feedback),
         trace_id,
         body.session_id,
         "approval",
-    )
+    ):
+        yield event
 
 @router.get("/sessions/{session_id}/history", response_model=HistoryViewResponse)
 def get_history(
