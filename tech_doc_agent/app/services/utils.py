@@ -5,6 +5,7 @@ from typing import Callable
 from langchain_core.messages import ToolMessage
 from tech_doc_agent.app.core.observability import log_event, timed_node
 from tech_doc_agent.app.core.state import State
+from tech_doc_agent.app.core.structured_outputs import ResultKind, parse_structured_result
 
 
 def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable:
@@ -86,7 +87,10 @@ def extract_last_message_text(state: State) -> str:
     
     return str(content)
 
-def create_finish_node(result_key: str | None = None) -> Callable:
+def create_finish_node(
+    result_key: str | None = None,
+    structured_kind: ResultKind | None = None,
+) -> Callable:
     def finish_node(state: State) -> dict:
         update = {
             "dialog_state": "pop",
@@ -94,7 +98,18 @@ def create_finish_node(result_key: str | None = None) -> Callable:
         }
 
         if result_key is not None:
-            update[result_key] = extract_last_message_text(state)
+            raw_text = extract_last_message_text(state)
+            if structured_kind is not None:
+                result = parse_structured_result(structured_kind, raw_text)
+                log_event(
+                    "assistant.structured_result",
+                    result_key=result_key,
+                    result_kind=structured_kind,
+                    parsed=result.get("parsed", False),
+                )
+                update[result_key] = result
+            else:
+                update[result_key] = raw_text
 
         return update
     return finish_node
@@ -112,8 +127,8 @@ def store_plan(state: State) -> dict:
         ],
         "workflow_plan": args["steps"],
         "plan_index": 0,
-        "parser_result": "",
-        "relation_result": "",
+        "parser_result": {},
+        "relation_result": {},
         "learning_target": args["learning_target"],
     }
 

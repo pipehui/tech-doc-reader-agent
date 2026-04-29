@@ -39,6 +39,61 @@ python -m evals.run_eval --cases evals/cases.json --timeout 240 --output eval_re
 
 评测会自动收集 predicted plan、learning target、最终回答、延迟和工具调用数，并输出 JSONL 原始结果与 Markdown 报告。`enabled=false` 的多轮用例默认跳过，后续会单独用 multi-turn runner 评测。`eval_results/` 和 `eval_reports/` 默认不提交到 Git。
 
+检索链路提供离线评测，直接调用 Hybrid RAG，不需要启动后端：
+
+```bash
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases.json --k 5 --output eval_results/retrieval_latest.jsonl --report eval_reports/retrieval_latest.md
+```
+
+检索报告会统计 Recall@K、MRR、关键词覆盖率、延迟和每个 case 的 top-k 命中文档。
+
+完成知识库初始化后，使用 full cases 跑正式检索评测。建议分别跑 BM25-only、Vector-only 和 Hybrid，对比 Hit@1、MRR：
+
+```bash
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode bm25 --k 5 --output eval_results/retrieval_bm25.jsonl --report eval_reports/retrieval_bm25.md
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode vector --k 5 --output eval_results/retrieval_vector.jsonl --report eval_reports/retrieval_vector.md
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode hybrid --k 5 --output eval_results/retrieval_hybrid.jsonl --report eval_reports/retrieval_hybrid.md
+```
+
+检索 metadata filter 有单独的混淆用例集，用来验证 `category` / `tags` 过滤是否能限制召回范围：
+
+```bash
+python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --mode hybrid --k 5 --output eval_results/retrieval_filter.jsonl --report eval_reports/retrieval_filter.md
+```
+
+当前 full retrieval baseline（2026-04-29，60 cases，Top K=5，未显式使用 metadata filter）：
+
+| Mode | Recall@5 | Hit@1 | MRR | Keyword Coverage | E2E p50 | E2E p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| BM25-only | 0.85 | 0.37 | 0.56 | 0.97 | 0.020s | 0.021s |
+| Vector-only | 0.88 | 0.52 | 0.65 | 0.97 | 0.927s | 1.609s |
+| Hybrid | 0.93 | 0.53 | 0.70 | 0.98 | 1.209s | 2.148s |
+
+这组结果显示 Hybrid 在 Recall@5 和 MRR 上最好；Vector-only 的 Hit@1 接近 Hybrid 且延迟更低；BM25-only 主要作为低成本、低延迟检索基线。
+
+当前 metadata filter eval（2026-04-29，8 filtered-confusable cases，Top K=5，显式传入 category filter）：
+
+| Mode | Recall@5 | Hit@1 | MRR | Keyword Coverage | E2E p50 | E2E p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| Hybrid + metadata filter | 1.00 | 1.00 | 1.00 | 1.00 | 1.145s | 2.833s |
+
+## Knowledge Base Seeding
+
+可以用脚本批量通过 parser 写入文档库。脚本会为每个 topic 创建新 session，等待 `save_docs` 审批请求并自动批准：
+
+```bash
+python scripts/seed_doc_store.py --topics-file scripts/doc_seed_topics.example.txt --api-url http://127.0.0.1:8000/chat --timeout 600
+```
+
+默认只自动批准 `save_docs`，运行前需要先启动后端，并确保 `.env` 里的 embedding 配置可用。
+
+已有文档库可以无损补齐 metadata，不会重新调用 parser 或重新生成 embedding：
+
+```bash
+python scripts/migrate_doc_metadata.py --dry-run
+python scripts/migrate_doc_metadata.py
+```
+
 ### Baseline
 
 Online single-turn eval before async/runtime/RAG optimization:

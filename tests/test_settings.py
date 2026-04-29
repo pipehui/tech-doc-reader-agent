@@ -7,9 +7,17 @@ def test_settings_parses_typed_values():
         ALLOWED_ORIGINS="http://127.0.0.1:5173,http://localhost:5173",
         LANGFUSE_ENABLED="true",
         LANGFUSE_FLUSH_ON_REQUEST="true",
+        HYBRID_RAG_TOP_K="3",
+        SEED_DOC_STORE_ON_EMPTY="true",
+        REDIS_SETUP_MAX_ATTEMPTS="3",
+        REDIS_SETUP_RETRY_SECONDS="0.5",
     )
 
     assert settings.TAVILY_DAILY_LIMIT == 7
+    assert settings.HYBRID_RAG_TOP_K == 3
+    assert settings.SEED_DOC_STORE_ON_EMPTY is True
+    assert settings.REDIS_SETUP_MAX_ATTEMPTS == 3
+    assert settings.REDIS_SETUP_RETRY_SECONDS == 0.5
     assert settings.ALLOWED_ORIGINS == [
         "http://127.0.0.1:5173",
         "http://localhost:5173",

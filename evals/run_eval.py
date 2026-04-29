@@ -84,6 +84,7 @@ async def run_case(
     events_seen = 0
     token_parts: list[str] = []
     answer_parts: list[str] = []
+    structured_results: list[dict[str, Any]] = []
     predicted_plan: list[str] = []
     predicted_learning_target: str | None = None
     final_status = "unknown"
@@ -123,6 +124,9 @@ async def run_case(
                             predicted_plan = normalize_plan(event.get("plan"))
                         if "learning_target" in event:
                             predicted_learning_target = _string_or_none(event.get("learning_target"))
+
+                    elif event_name == "structured_result":
+                        structured_results.append(event)
 
                     elif event_name == "agent_message":
                         content = event.get("content")
@@ -168,6 +172,11 @@ async def run_case(
         "token_events": token_count,
         "tool_calls": tool_calls,
         "tool_results": tool_results,
+        "structured_results": structured_results,
+        "structured_result_count": len(structured_results),
+        "parsed_structured_result_count": sum(
+            1 for item in structured_results if item.get("parsed") is True
+        ),
         "event_count": events_seen,
         "status": final_status,
         "error": error,
@@ -238,11 +247,12 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         f"| E2E p50 | {format_seconds(summary['e2e_p50'])} |",
         f"| E2E p95 | {format_seconds(summary['e2e_p95'])} |",
         f"| Tool results avg | {format_number(summary['tool_results_avg'])} |",
+        f"| Structured results avg | {format_number(summary['structured_results_avg'])} |",
         "",
         "## By Category",
         "",
-        "| Category | Cases | Plan Match | Keyword | E2E p50 | Tool Results Avg |",
-        "|---|---:|---:|---:|---:|---:|",
+        "| Category | Cases | Plan Match | Keyword | E2E p50 | Tool Results Avg | Structured Results Avg |",
+        "|---|---:|---:|---:|---:|---:|---:|",
     ]
 
     for category, stats in summarize_by_category(rows).items():
@@ -250,7 +260,8 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "| "
             f"{category} | {stats['total']} | {format_score(stats['plan_match_avg'])} | "
             f"{format_score(stats['keyword_avg'])} | {format_seconds(stats['e2e_p50'])} | "
-            f"{format_number(stats['tool_results_avg'])} |"
+            f"{format_number(stats['tool_results_avg'])} | "
+            f"{format_number(stats['structured_results_avg'])} |"
         )
 
     lines.extend(
@@ -258,8 +269,8 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "",
             "## Cases",
             "",
-            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | E2E | Tool Results |",
-            "|---|---|---|---|---|---:|---:|---:|---:|",
+            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | E2E | Tool Results | Structured Results |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|",
         ]
     )
 
@@ -271,7 +282,8 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "| "
             f"{row['id']} | {row['category']} | {row['status']} | {expected} | {predicted} | "
             f"{format_score(scores.get('plan_match'))} | {format_score(scores.get('keyword'))} | "
-            f"{format_seconds(row.get('e2e_s'))} | {row.get('tool_results', 0)} |"
+            f"{format_seconds(row.get('e2e_s'))} | {row.get('tool_results', 0)} | "
+            f"{row.get('structured_result_count', 0)} |"
         )
 
     lines.append("")
@@ -292,6 +304,7 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "e2e_p50": _percentile([row["e2e_s"] for row in done if row.get("e2e_s") is not None], 50),
         "e2e_p95": _percentile([row["e2e_s"] for row in done if row.get("e2e_s") is not None], 95),
         "tool_results_avg": statistics.mean([row.get("tool_results", 0) for row in done]) if done else None,
+        "structured_results_avg": statistics.mean([row.get("structured_result_count", 0) for row in done]) if done else None,
     }
 
 
@@ -372,6 +385,9 @@ def _error_result(case: dict[str, Any], session_id: str, started_at: float, erro
         "token_events": 0,
         "tool_calls": 0,
         "tool_results": 0,
+        "structured_results": [],
+        "structured_result_count": 0,
+        "parsed_structured_result_count": 0,
         "event_count": 0,
         "status": "error",
         "error": error,

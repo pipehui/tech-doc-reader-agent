@@ -166,6 +166,22 @@ def _plan_update_payload(node_name: str, node_update: dict) -> dict:
 
     return payload
 
+def _structured_result_events(node_name: str, node_update: dict) -> Iterable[ServerSentEvent]:
+    for result_key in ("parser_result", "relation_result"):
+        result = node_update.get(result_key)
+        if not isinstance(result, dict):
+            continue
+
+        yield sse_event(
+            "structured_result",
+            {
+                "node": node_name,
+                "result_key": result_key,
+                "result": result,
+                "parsed": bool(result.get("parsed")),
+            },
+        )
+
 def _stream_part_type_and_data(part) -> tuple[str | None, object]:
     if isinstance(part, dict):
         return part.get("type"), part.get("data")
@@ -202,6 +218,8 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
         plan_payload = _plan_update_payload(node_name, node_update)
         if plan_payload:
             yield sse_event("plan_update", plan_payload)
+
+        yield from _structured_result_events(node_name, node_update)
 
         messages = node_update.get("messages", [])
         for message in messages:

@@ -11,32 +11,37 @@ from tech_doc_agent.app.services.resources import AppResources, reset_app_resour
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
-from time import perf_counter
+from redis.exceptions import BusyLoadingError
+from time import perf_counter, sleep
+from typing import Any
 
 
 def _elapsed_ms(start: float) -> float:
     return round((perf_counter() - start) * 1000, 2)
 
+
+def _is_retryable_redis_startup_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return isinstance(exc, BusyLoadingError) or "redis is loading" in message or "loading the dataset" in message
+
+
 class ChatRuntime:
     def __init__(self) -> None:
         self.settings = get_settings()
-        self._checkpointer_cm = None
-        self.checkpointer = None
-        self.graph = None
-        self.resources = None
+        self._checkpointer_cm: Any | None = None
+        self.checkpointer: Any | None = None
+        self.graph: Any | None = None
+        self.resources: Any | None = None
 
     def __enter__(self):
         try:
             self.resources = AppResources.create(self.settings)
             set_app_resources(self.resources)
-            self._checkpointer_cm = RedisSaver.from_conn_string(self.settings.REDIS_URL)
-            self.checkpointer = self._checkpointer_cm.__enter__()
-            self.checkpointer.setup()
+            self._setup_checkpointer_with_retry()
             self.graph = build_multi_agentic_graph(self.checkpointer)
             return self
         except Exception:
-            if self._checkpointer_cm is not None:
-                self._checkpointer_cm.__exit__(None, None, None)
+            self._close_checkpointer()
             reset_app_resources()
             raise
 
@@ -44,10 +49,46 @@ class ChatRuntime:
         shutdown_langfuse(self.settings)
 
         try:
-            if self._checkpointer_cm is not None:
-                self._checkpointer_cm.__exit__(exc_type, exc, tb)
+            self._close_checkpointer(exc_type, exc, tb)
         finally:
             reset_app_resources()
+
+    def _setup_checkpointer_with_retry(self) -> None:
+        max_attempts = max(1, int(self.settings.REDIS_SETUP_MAX_ATTEMPTS))
+        retry_seconds = max(0.0, float(self.settings.REDIS_SETUP_RETRY_SECONDS))
+
+        for attempt in range(1, max_attempts + 1):
+            self._checkpointer_cm = RedisSaver.from_conn_string(self.settings.REDIS_URL)
+            try:
+                self.checkpointer = self._checkpointer_cm.__enter__()
+                self.checkpointer.setup()
+                if attempt > 1:
+                    log_event("redis.checkpointer.setup.ready", attempt=attempt)
+                return
+            except Exception as exc:
+                self._close_checkpointer()
+                if attempt >= max_attempts or not _is_retryable_redis_startup_error(exc):
+                    raise
+                log_event(
+                    "redis.checkpointer.setup.retry",
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_seconds=retry_seconds,
+                    error_type=type(exc).__name__,
+                    error=str(exc),
+                )
+                sleep(retry_seconds)
+
+    def _close_checkpointer(self, exc_type=None, exc=None, tb=None) -> None:
+        if self._checkpointer_cm is not None:
+            self._checkpointer_cm.__exit__(exc_type, exc, tb)
+        self._checkpointer_cm = None
+        self.checkpointer = None
+
+    def _require_graph(self) -> Any:
+        if self.graph is None:
+            raise RuntimeError("ChatRuntime graph is not initialized.")
+        return self.graph
 
     def build_config(
         self,
@@ -109,12 +150,13 @@ class ChatRuntime:
 
         try:
             with timed_node("graph.stream", phase="chat"):
+                graph = self._require_graph()
                 config = self.build_config(
                     session_id,
                     operation="chat",
                     with_callbacks=True,
                 )
-                parts = self.graph.stream(
+                parts = graph.stream(
                     {"messages": [("user", user_input)]},
                     config,
                     stream_mode=["messages", "updates"],
@@ -169,11 +211,13 @@ class ChatRuntime:
             )
 
             if approved:
-                parts = self.graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
+                graph = self._require_graph()
+                parts = graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
             else:
+                graph = self._require_graph()
                 tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
                 feedback = feedback or "用户未提供原因"
-                parts = self.graph.stream(
+                parts = graph.stream(
                     {
                         "messages": [
                             ToolMessage(
@@ -213,7 +257,7 @@ class ChatRuntime:
             flush_langfuse(self.settings)
 
     def get_snapshot(self, session_id: str) -> StateSnapshot:
-        return self.graph.get_state(self.build_config(session_id))
+        return self._require_graph().get_state(self.build_config(session_id))
     
     def _extract_text_content(self, content) -> str:
         if isinstance(content, str):

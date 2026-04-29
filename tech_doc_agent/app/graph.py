@@ -116,7 +116,7 @@ builder.add_node(
 )
 builder.add_node("leave_parser", create_exit_node())
 builder.add_edge("leave_parser", "primary_assistant")
-builder.add_node("finish_parser", create_finish_node("parser_result"))
+builder.add_node("finish_parser", create_finish_node("parser_result", structured_kind="parser"))
 builder.add_conditional_edges(
     "finish_parser",
     route_next_step,
@@ -211,7 +211,7 @@ builder.add_node(
 builder.add_node("leave_relation", create_exit_node())
 builder.add_edge("leave_relation", "primary_assistant")
 
-builder.add_node("finish_relation", create_finish_node("relation_result"))
+builder.add_node("finish_relation", create_finish_node("relation_result", structured_kind="relation"))
 builder.add_conditional_edges(
     "finish_relation",
     route_next_step,

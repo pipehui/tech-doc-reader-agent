@@ -1,0 +1,60 @@
+# One topic per line. Blank lines and lines starting with # are ignored.
+# The script sends each line through:
+# 请系统解析并沉淀到文档库：{topic}，由于我只需要存文档库，所以把任务直接交给parser即可，允许parser多次使用websearch。
+
+评测体系中的 agent eval
+评测体系中的 single-turn eval
+评测体系中的 multi-turn eval
+评测体系中的 plan match
+评测体系中的 keyword score
+评测体系中的 latency score
+评测体系中的 tool call count
+评测体系中的 interrupted status
+评测体系中的 baseline
+评测体系中的 regression test
+评测体系中的 golden dataset
+评测体系中的 judge function
+评测体系中的 offline eval
+评测体系中的 online eval
+数据与缓存中的 Redis
+数据与缓存中的 Redis persistence
+数据与缓存中的 RDB
+数据与缓存中的 AOF
+数据与缓存中的 Redis stream
+数据与缓存中的 Redis pub/sub
+数据与缓存中的 cache aside
+数据与缓存中的 TTL
+数据与缓存中的 LRU
+数据与缓存中的 session store
+数据与缓存中的 SQLite
+数据与缓存中的 PostgreSQL
+数据与缓存中的 SQLModel
+数据与缓存中的 SQLAlchemy session
+数据与缓存中的 Alembic migration
+API 与系统设计中的 RESTful API
+API 与系统设计中的 HTTP status code
+API 与系统设计中的 idempotency
+API 与系统设计中的 pagination
+API 与系统设计中的 rate limiting
+API 与系统设计中的 authentication
+API 与系统设计中的 JWT
+API 与系统设计中的 OAuth2
+API 与系统设计中的 RBAC
+API 与系统设计中的 API versioning
+API 与系统设计中的 OpenAPI
+API 与系统设计中的 webhook
+API 与系统设计中的 retry policy
+API 与系统设计中的 circuit breaker
+LLM 应用工程中的 prompt injection
+LLM 应用工程中的 jailbreak
+LLM 应用工程中的 PII redaction
+LLM 应用工程中的 guardrails
+LLM 应用工程中的 model routing
+LLM 应用工程中的 fallback model
+LLM 应用工程中的 cost control
+LLM 应用工程中的 token budget
+LLM 应用工程中的 streaming output
+LLM 应用工程中的 empty response retry
+LLM 应用工程中的 LLM timeout
+LLM 应用工程中的 LLM rate limit
+LLM 应用工程中的 response validation

@@ -1,4 +1,4 @@
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, Any
 from typing_extensions import TypedDict, NotRequired
 from langgraph.graph.message import AnyMessage, add_messages
 
@@ -25,5 +25,5 @@ class State(TypedDict):
     learning_target: str
     workflow_plan: NotRequired[list[WorkflowStep]]
     plan_index: NotRequired[int]
-    parser_result: NotRequired[str]
-    relation_result: NotRequired[str]
+    parser_result: NotRequired[dict[str, Any]]
+    relation_result: NotRequired[dict[str, Any]]

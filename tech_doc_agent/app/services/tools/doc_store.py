@@ -8,6 +8,9 @@ import json
 
 from langchain_core.tools import tool
 
+from tech_doc_agent.app.core.settings import get_settings
+from tech_doc_agent.app.services.retrieval import HybridRetriever
+from tech_doc_agent.app.services.retrieval.metadata import normalize_filter
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
 from tech_doc_agent.app.services.resources import get_app_resources
@@ -20,6 +23,16 @@ def get_faiss_store() -> FaissStore:
 def get_web_search_backend() -> WebSearchBackend:
     return get_app_resources().web_search_backend
 
+
+def get_hybrid_retriever() -> HybridRetriever:
+    resources = get_app_resources()
+    retriever = getattr(resources, "hybrid_retriever", None)
+    if retriever is not None:
+        return retriever
+    settings = getattr(resources, "settings", None) or get_settings()
+    return HybridRetriever(resources.faiss_store, settings=settings)
+
+
 @tool
 def web_search(query: str) -> str:
     """
@@ -29,51 +42,106 @@ def web_search(query: str) -> str:
     results = get_web_search_backend().search(query)
     return json.dumps(results, ensure_ascii=False)
 
-@tool
-def read_docs(query: str) -> str:
-    """当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。"""
-    store = get_faiss_store()
-    documents = store.read_documents(query)
-    if documents:
-        return json.dumps(documents, ensure_ascii=False)
-
-    try:
-        related_chunks = store.search_related(query, k=3)
-    except Exception:
-        related_chunks = []
-
-    related_documents = [
+def _build_filters(
+    *,
+    user_id: str | None = None,
+    namespace: str | None = None,
+    category: str | None = None,
+    tags: list[str] | None = None,
+    source: str | None = None,
+) -> dict:
+    return normalize_filter(
         {
-            "title": item.get("title", ""),
-            "content": item.get("chunk_text", ""),
-            "source": item.get("source", ""),
-            "match_type": "semantic",
-            "distance": item.get("distance"),
+            "user_id": user_id,
+            "namespace": namespace,
+            "category": category,
+            "tags": tags,
+            "source": source,
         }
-        for item in related_chunks
-    ]
-    return json.dumps(related_documents, ensure_ascii=False)
+    )
 
 
 @tool
-def save_docs(title: str, content: str) -> str:
+def read_docs(
+    query: str,
+    category: str | None = None,
+    tags: list[str] | None = None,
+    source: str | None = None,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> str:
+    """
+    当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。
+    可选传入 category、tags、source、user_id 或 namespace 来限制检索范围。
+    """
+    filters = _build_filters(
+        user_id=user_id,
+        namespace=namespace,
+        category=category,
+        tags=tags,
+        source=source,
+    )
+    documents = get_hybrid_retriever().search(query, filters=filters)
+    return json.dumps(documents, ensure_ascii=False)
+
+
+@tool
+def save_docs(
+    title: str,
+    content: str,
+    source: str = "",
+    category: str | None = None,
+    tags: list[str] | None = None,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> str:
     """
     当需要将新的技术文档内容保存到知识库时，使用该工具将文档标题和内容存储起来。
     例如用户提供了一个新的文档标题和内容时，就调用这个工具进行保存。
+    可选传入 category、tags、user_id、namespace 作为文档 metadata。
     """
     store = get_faiss_store()
-    result = store.add_document(title, content)
+    result = store.add_documents(
+        [
+            {
+                "title": title,
+                "content": content,
+                "source": source,
+                "category": category,
+                "tags": tags,
+                "user_id": user_id,
+                "namespace": namespace,
+            }
+        ]
+    )
     store.save()
+    get_hybrid_retriever().refresh()
     return f"Document '{title}' has been saved successfully. Added {result['added_chunks']} chunks."
 
 @tool
-def search_related_docs(query: str, k: int) -> str:
+def search_related_docs(
+    query: str,
+    k: int,
+    category: str | None = None,
+    tags: list[str] | None = None,
+    source: str | None = None,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> str:
     """
     使用向量索引搜索与查询语义相关的文档。
     例如用户问'LangGraph是什么'时，用'LangGraph'作为query进行相似度计算，找出最多k个相关文档。
+    可选传入 category、tags、source、user_id 或 namespace 来过滤结果。
     """
     try:
-        results = get_faiss_store().search_related(query, k)
+        filters = _build_filters(
+            user_id=user_id,
+            namespace=namespace,
+            category=category,
+            tags=tags,
+            source=source,
+        )
+        results = get_hybrid_retriever().search(query, top_k=k, mode="vector", filters=filters)
     except Exception:
         results = []
     return json.dumps(results, ensure_ascii=False)

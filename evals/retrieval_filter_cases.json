@@ -1,0 +1,82 @@
+[
+  {
+    "id": "filter_langgraph_checkpoint_core_01",
+    "category": "langgraph_core",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "checkpoint 如何持久化并恢复图状态",
+    "filters": {"category": "langgraph_core"},
+    "expected_titles": ["LangGraph 核心中的 Checkpoint 机制"],
+    "expected_keywords": ["checkpoint", "状态", "恢复"]
+  },
+  {
+    "id": "filter_langgraph_checkpoint_ns_01",
+    "category": "langgraph_advanced",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "checkpoint namespace 用来隔离什么",
+    "filters": {"category": "langgraph_advanced"},
+    "expected_titles": ["LangGraph Checkpoint Namespace"],
+    "expected_keywords": ["namespace", "checkpoint", "隔离"]
+  },
+  {
+    "id": "filter_streaming_llm_01",
+    "category": "llm_engineering",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "模型回答怎么以 token 流式输出",
+    "filters": {"category": "llm_engineering"},
+    "expected_titles": ["LLM 应用工程中的 Streaming Output"],
+    "expected_keywords": ["streaming", "token", "输出"]
+  },
+  {
+    "id": "filter_sse_fastapi_01",
+    "category": "fastapi",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "后端持续推送 token 到浏览器的单向事件流",
+    "filters": {"category": "fastapi"},
+    "expected_titles": ["FastAPI SSE"],
+    "expected_keywords": ["SSE", "Server-Sent Events", "流"]
+  },
+  {
+    "id": "filter_callback_langchain_01",
+    "category": "langchain",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "callback handler 观察 chain model tool 执行",
+    "filters": {"category": "langchain"},
+    "expected_titles": ["LangChain Callbacks"],
+    "expected_keywords": ["callback", "handler", "LangChain"]
+  },
+  {
+    "id": "filter_callback_observability_01",
+    "category": "observability",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "callback handler 在可观测性里记录调用链路",
+    "filters": {"category": "observability"},
+    "expected_titles": ["Callback Handler"],
+    "expected_keywords": ["callback", "可观测", "trace"]
+  },
+  {
+    "id": "filter_rate_limit_api_01",
+    "category": "api_design",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "限制用户单位时间请求次数防止滥用",
+    "filters": {"category": "api_design"},
+    "expected_titles": ["Rate Limiting"],
+    "expected_keywords": ["rate", "limit", "请求"]
+  },
+  {
+    "id": "filter_rate_limit_llm_01",
+    "category": "llm_engineering",
+    "query_type": "filtered_confusable",
+    "difficulty": "medium",
+    "query": "模型服务速率限制导致调用失败怎么处理",
+    "filters": {"category": "llm_engineering"},
+    "expected_titles": ["LLM Rate Limit"],
+    "expected_keywords": ["LLM", "rate limit", "重试"]
+  }
+]

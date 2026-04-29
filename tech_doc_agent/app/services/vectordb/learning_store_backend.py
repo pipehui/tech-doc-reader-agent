@@ -6,6 +6,8 @@ LearningStore backend:
 """
 import json
 from pathlib import Path
+from typing import Any
+
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 
@@ -14,7 +16,7 @@ class LearningStore:
         settings = settings or get_settings()
         self.store_dir = Path(settings.DATA_PATH) / "learning_store"
         self.records_path = self.store_dir / "records.json"
-        self.records = []
+        self.records: list[dict[str, Any]] = []
 
     def load(self) -> bool:
         if not self.records_path.exists():
@@ -29,7 +31,13 @@ class LearningStore:
             json.dump(self.records, f, ensure_ascii=False, indent=2)
         return True
     
-    def _make_record(self, knowledge: str, timestamp: str, score: float | None, reviewtimes: int = 1) -> dict:
+    def _make_record(
+        self,
+        knowledge: str,
+        timestamp: str,
+        score: float | None,
+        reviewtimes: int = 1,
+    ) -> dict[str, Any]:
         return {
             "knowledge": knowledge,
             "timestamp": timestamp,
@@ -37,7 +45,7 @@ class LearningStore:
             "reviewtimes": reviewtimes,
         }
     
-    def read_by_query(self, query: str) -> list[dict]:
+    def read_by_query(self, query: str) -> list[dict[str, Any]]:
         res = []
         query_lower = query.lower()
         for record in self.records:
@@ -46,7 +54,7 @@ class LearningStore:
 
         return res
 
-    def read_overview(self) -> list[dict]:
+    def read_overview(self) -> list[dict[str, Any]]:
         return [dict(record) for record in self.records]
     
     def upsert_record(self, knowledge: str, timestamp: str, score: float | None = None) -> str:

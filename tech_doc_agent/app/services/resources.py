@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
+from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
@@ -49,15 +50,18 @@ SEED_LEARNING_HISTORY = [
 class AppResources:
     settings: Settings
     faiss_store: FaissStore
+    hybrid_retriever: HybridRetriever
     learning_store: LearningStore
     web_search_backend: WebSearchBackend
 
     @classmethod
     def create(cls, settings: Settings | None = None) -> AppResources:
         settings = settings or get_settings()
+        faiss_store = _initialize_faiss_store(settings)
         return cls(
             settings=settings,
-            faiss_store=_initialize_faiss_store(settings),
+            faiss_store=faiss_store,
+            hybrid_retriever=HybridRetriever(faiss_store, settings=settings),
             learning_store=_initialize_learning_store(settings),
             web_search_backend=WebSearchBackend(settings=settings),
         )
@@ -82,6 +86,10 @@ def _initialize_faiss_store(settings: Settings) -> FaissStore:
     store = FaissStore(settings=settings)
     if store.load():
         log_event("resources.faiss.loaded", documents=len(store.documents))
+        return store
+
+    if not settings.SEED_DOC_STORE_ON_EMPTY:
+        log_event("resources.faiss.empty", reason="seed_disabled")
         return store
 
     if not settings.EMBEDDING_API_KEY or not settings.EMBEDDING_MODEL:

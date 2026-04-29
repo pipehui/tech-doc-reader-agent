@@ -21,6 +21,7 @@ def test_render_markdown_report_contains_summary_and_cases():
             "e2e_s": 1.2,
             "tool_calls": 0,
             "tool_results": 0,
+            "structured_result_count": 0,
             "scores": {"plan_match": 1.0, "keyword": 1.0, "latency": 1.0},
         },
         {
@@ -32,6 +33,7 @@ def test_render_markdown_report_contains_summary_and_cases():
             "e2e_s": 10.0,
             "tool_calls": 2,
             "tool_results": 2,
+            "structured_result_count": 2,
             "scores": {"plan_match": 0.5, "keyword": 0.5, "latency": 0.8},
         },
     ]
@@ -42,6 +44,8 @@ def test_render_markdown_report_contains_summary_and_cases():
     assert "# Agent Eval Report" in report
     assert "case_1" in report
     assert "Tool results avg" in report
+    assert "Structured results avg" in report
     assert summary["total"] == 2
     assert summary["done"] == 2
     assert summary["tool_results_avg"] == 1
+    assert summary["structured_results_avg"] == 1

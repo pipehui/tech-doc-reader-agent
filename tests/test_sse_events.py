@@ -24,6 +24,14 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
                         "plan_index": 0,
                         "learning_target": "LangGraph StateGraph",
                     },
+                    "finish_parser": {
+                        "parser_result": {
+                            "topic": "LangGraph StateGraph",
+                            "raw_text": "## 文档主题\nLangGraph StateGraph",
+                            "parsed": True,
+                        },
+                        "plan_index": 1,
+                    },
                     "enter_parser": {},
                     "parser": {
                         "messages": [
@@ -60,6 +68,12 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert "agent_transition" in event_names
     assert "tool_call" in event_names
     assert "tool_result" in event_names
+    assert "structured_result" in event_names
+
+    structured_event = next(event for event in events if event.event == "structured_result")
+    assert structured_event.data["result_key"] == "parser_result"
+    assert structured_event.data["result"]["topic"] == "LangGraph StateGraph"
+    assert structured_event.data["parsed"] is True
 
 
 def test_iter_update_events_accepts_langgraph_tuple_updates():

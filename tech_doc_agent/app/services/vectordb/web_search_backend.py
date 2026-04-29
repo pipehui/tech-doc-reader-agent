@@ -1,6 +1,8 @@
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Any
+
 from duckduckgo_search import DDGS
 from tavily import TavilyClient
 from tech_doc_agent.app.core.settings import Settings
@@ -13,7 +15,7 @@ class WebSearchBackend:
         self.usage_path = self.store_dir / "tavily_usage.json"
         self.tavily_api_key = settings.TAVILY_API_KEY
         self.tavily_daily_limit = int(settings.TAVILY_DAILY_LIMIT)
-        self.usage_state = {
+        self.usage_state: dict[str, Any] = {
             "date": "",
             "tavily_calls": 0,
         }

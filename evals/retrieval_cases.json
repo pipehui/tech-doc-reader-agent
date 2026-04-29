@@ -1,0 +1,44 @@
+[
+  {
+    "id": "retrieval_stategraph_01",
+    "category": "langgraph",
+    "query": "StateGraph 状态驱动 多Agent 工作流 条件分支",
+    "expected_titles": ["LangGraph StateGraph"],
+    "expected_keywords": ["StateGraph", "状态驱动", "条件分支"]
+  },
+  {
+    "id": "retrieval_stategraph_02",
+    "category": "langgraph",
+    "query": "节点 边 图结构 循环控制 是哪个 LangGraph 组件",
+    "expected_titles": ["LangGraph StateGraph"],
+    "expected_keywords": ["节点", "边", "循环"]
+  },
+  {
+    "id": "retrieval_fastapi_01",
+    "category": "fastapi",
+    "query": "FastAPI Depends 依赖注入 嵌套依赖 生命周期管理",
+    "expected_titles": ["FastAPI 依赖注入"],
+    "expected_keywords": ["Depends", "依赖注入", "生命周期"]
+  },
+  {
+    "id": "retrieval_fastapi_02",
+    "category": "fastapi",
+    "query": "异步处理 嵌套依赖 FastAPI 公共逻辑复用",
+    "expected_titles": ["FastAPI 依赖注入"],
+    "expected_keywords": ["异步", "嵌套依赖", "Depends"]
+  },
+  {
+    "id": "retrieval_rag_01",
+    "category": "rag",
+    "query": "RAG 检索增强生成 知识库 文档片段 上下文",
+    "expected_titles": ["RAG 检索增强生成"],
+    "expected_keywords": ["RAG", "检索", "上下文"]
+  },
+  {
+    "id": "retrieval_rag_02",
+    "category": "rag",
+    "query": "先检索相关资料 再输入 LLM 生成回答 的模式",
+    "expected_titles": ["RAG 检索增强生成"],
+    "expected_keywords": ["检索系统", "生成模型", "LLM"]
+  }
+]

@@ -29,6 +29,7 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
         DATA_PATH=str(tmp_path),
         EMBEDDING_API_KEY="embedding-key",
         EMBEDDING_MODEL="embedding-model",
+        SEED_DOC_STORE_ON_EMPTY=True,
     )
 
     resources = AppResources.create(settings)
@@ -36,6 +37,7 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
     try:
         assert resources.faiss_store.store_dir == tmp_path / "faiss_store"
         assert resources.faiss_store.read_documents("StateGraph")
+        assert resources.hybrid_retriever.search("StateGraph")
         assert resources.learning_store.records
         assert resources.web_search_backend.store_dir == tmp_path / "web_search"
     finally:
@@ -43,13 +45,32 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
 
 
 def test_app_resources_skips_faiss_index_when_embedding_is_not_configured(tmp_path):
-    settings = Settings(DATA_PATH=str(tmp_path), EMBEDDING_API_KEY="", EMBEDDING_MODEL="")
+    settings = Settings(
+        DATA_PATH=str(tmp_path),
+        EMBEDDING_API_KEY="",
+        EMBEDDING_MODEL="",
+        SEED_DOC_STORE_ON_EMPTY=True,
+    )
 
     resources = AppResources.create(settings)
 
     try:
         assert resources.faiss_store.index is None
         assert resources.faiss_store.read_documents("StateGraph")
+        assert resources.hybrid_retriever.search("StateGraph")
+    finally:
+        reset_app_resources()
+
+
+def test_app_resources_keeps_document_store_empty_when_seed_is_disabled(tmp_path):
+    settings = Settings(DATA_PATH=str(tmp_path), SEED_DOC_STORE_ON_EMPTY=False)
+
+    resources = AppResources.create(settings)
+
+    try:
+        assert resources.faiss_store.index is None
+        assert resources.faiss_store.documents == []
+        assert resources.hybrid_retriever.search("StateGraph") == []
     finally:
         reset_app_resources()
 

@@ -6,6 +6,12 @@ services:
       - "6379:6379"
     volumes:
       - ./tech_doc_agent/data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
 
   app:
     build:
@@ -38,6 +44,8 @@ services:
       LANGFUSE_RELEASE: ${LANGFUSE_RELEASE:-}
       PYTHONPATH: /app
       PROXY_URL: ${PROXY_URL:-}
+      REDIS_SETUP_MAX_ATTEMPTS: ${REDIS_SETUP_MAX_ATTEMPTS:-60}
+      REDIS_SETUP_RETRY_SECONDS: ${REDIS_SETUP_RETRY_SECONDS:-1.0}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -46,5 +54,6 @@ services:
       - ./graphs:/app/graphs:ro
       - ./tech_doc_agent/data:/app/tech_doc_agent/data
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     command: uvicorn tech_doc_agent.app.api.server:app --host 0.0.0.0 --port 8000 --reload

@@ -2,9 +2,12 @@ import json
 import faiss
 import numpy as np
 from pathlib import Path
+from typing import Any
+
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.services.embedding import generate_embedding
+from tech_doc_agent.app.services.retrieval.metadata import normalize_chunk_metadata, normalize_document
 from tech_doc_agent.app.services.vectordb.chunkenizer import recursive_character_splitting
 
 
@@ -23,12 +26,12 @@ class FaissStore:
 
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.index = None
-        self.dimension = None
-        self.chunk_metadata = []
-        self.documents = []
+        self.index: Any | None = None
+        self.dimension: int | None = None
+        self.chunk_metadata: list[dict[str, Any]] = []
+        self.documents: list[dict[str, Any]] = []
 
-    def _prepare_chunks(self, docs: list[dict]) -> tuple[list[str], list[dict]]:
+    def _prepare_chunks(self, docs: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
         '''
         批量切块
         输入：文档列表
@@ -42,6 +45,7 @@ class FaissStore:
             title = doc["title"]
             content = doc["content"]
             source = doc.get("source", "")
+            doc_metadata = doc.get("metadata", {})
 
             chunks = recursive_character_splitting(
                 content,
@@ -54,31 +58,42 @@ class FaissStore:
                     continue
 
                 all_chunks.append(chunk)
-                all_metadata.append({
-                    "doc_id": doc_id,
-                    "title": title,
-                    "source": source,
-                    "chunk_text": chunk,
-                    "chunk_index": i,
-                })
+                all_metadata.append(
+                    normalize_chunk_metadata(
+                        {
+                            "doc_id": doc_id,
+                            "title": title,
+                            "source": source,
+                            "chunk_text": chunk,
+                            "chunk_index": i,
+                            "metadata": doc_metadata,
+                        },
+                        doc,
+                    )
+                )
         
         return all_chunks, all_metadata
     
-    def _ensure_index(self, dimension) -> None:
+    def _ensure_index(self, dimension: int) -> None:
         if self.index is not None:
             return
         self.dimension = dimension
         self.index = faiss.IndexFlatL2(self.dimension)
     
-    def add_documents(self, docs: list[dict]) -> dict:
-        new_docs = []
+    def add_documents(self, docs: list[dict[str, Any]]) -> dict:
+        new_docs: list[dict[str, Any]] = []
         for doc in docs:
-            normalized_doc = {
+            raw_doc = {
                 "id": len(self.documents) + len(new_docs) + 1,
                 "title": doc["title"],
                 "content": doc["content"],
-                "source": doc.get("source", "")
+                "source": doc.get("source", ""),
+                "metadata": doc.get("metadata", {}),
             }
+            for key in ("user_id", "namespace", "category", "tags"):
+                if doc.get(key) is not None:
+                    raw_doc[key] = doc[key]
+            normalized_doc = normalize_document(raw_doc)
             new_docs.append(normalized_doc)
         chunks, metadata = self._prepare_chunks(new_docs)
         if not new_docs or not chunks:
@@ -90,6 +105,7 @@ class FaissStore:
         vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
 
         self._ensure_index(vectors.shape[1])
+        assert self.index is not None
         self.index.add(vectors)
         self.documents.extend(new_docs)
         self.chunk_metadata.extend(metadata)
@@ -104,7 +120,7 @@ class FaissStore:
         ])
 
 
-    def build_index(self, docs: list[dict]) -> dict:
+    def build_index(self, docs: list[dict[str, Any]]) -> dict:
         self.index = None
         self.dimension = None
         self.documents = []
@@ -144,6 +160,7 @@ class FaissStore:
     def save(self) -> bool:
         if self.index is None:
             return False
+        self.normalize_metadata()
         
         self.store_dir.mkdir(parents=True, exist_ok=True)
         faiss.write_index(self.index, str(self.index_path))
@@ -162,13 +179,24 @@ class FaissStore:
             and self.metadata_path.exists()
         ):
             return False
-        self.index = faiss.read_index(str(self.index_path))
-        self.dimension = self.index.d
+        index = faiss.read_index(str(self.index_path))
+        self.index = index
+        self.dimension = index.d
         with open(self.documents_path, "r", encoding="utf-8") as f:
             self.documents = json.load(f)
         with open(self.metadata_path, "r", encoding="utf-8") as f:
             self.chunk_metadata = json.load(f)
+        self.normalize_metadata()
         return True
+
+    def normalize_metadata(self) -> None:
+        self.documents = [normalize_document(doc) for doc in self.documents]
+        documents_by_id = {str(doc.get("id")): doc for doc in self.documents}
+        normalized_chunks = []
+        for chunk in self.chunk_metadata:
+            document = documents_by_id.get(str(chunk.get("doc_id")))
+            normalized_chunks.append(normalize_chunk_metadata(chunk, document))
+        self.chunk_metadata = normalized_chunks
 
 
 
