@@ -6,6 +6,13 @@ import { sessionTenant } from "./tenant";
 import type { AgentKey, SessionState, ToolCall } from "./types";
 import { uid } from "./utils";
 
+class FatalStreamError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FatalStreamError";
+  }
+}
+
 interface StreamMeta {
   token_count: number;
   stream_started_at: string;
@@ -28,6 +35,38 @@ function parseData(raw: string) {
     return typeof parsed === "object" && parsed !== null ? parsed as Record<string, unknown> : { value: parsed };
   } catch {
     return { raw, message: raw };
+  }
+}
+
+function formatHttpError(response: Response, payload: unknown) {
+  if (payload && typeof payload === "object") {
+    const data = payload as Record<string, unknown>;
+    if (data.error === "guardrail_blocked") {
+      const findings = Array.isArray(data.findings) ? data.findings.map(String).join(", ") : "";
+      return findings ? `输入被安全策略拦截：${findings}` : "输入被安全策略拦截。";
+    }
+    if (typeof data.message === "string" && data.message.trim()) {
+      return data.message;
+    }
+    if (typeof data.error === "string" && data.error.trim()) {
+      return data.error;
+    }
+  }
+  if (typeof payload === "string" && payload.trim()) {
+    return payload;
+  }
+  return `${response.status} ${response.statusText}`;
+}
+
+async function streamErrorFromResponse(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+  try {
+    if (contentType.includes("application/json")) {
+      return new FatalStreamError(formatHttpError(response, await response.json()));
+    }
+    return new FatalStreamError(formatHttpError(response, await response.text()));
+  } catch {
+    return new FatalStreamError(`${response.status} ${response.statusText}`);
   }
 }
 
@@ -213,8 +252,20 @@ export function useChatStream() {
           namespace: tenant.namespace
         }),
         openWhenHidden: true,
+        async onopen(response) {
+          if (!response.ok) {
+            throw await streamErrorFromResponse(response);
+          }
+          const contentType = response.headers.get("content-type") || "";
+          if (!contentType.includes("text/event-stream")) {
+            throw new FatalStreamError(`后端返回了非 SSE 响应：${contentType || "unknown"}`);
+          }
+        },
         onmessage(message) {
           applySseEvent(message.event || "message", parseData(message.data), context);
+        },
+        onerror(error) {
+          throw error;
         }
       });
       store.finishResponse(context.id);

@@ -390,6 +390,31 @@ async function fetchJson(path) {
   return response.json();
 }
 
+function formatHttpError(response, payload) {
+  if (payload && typeof payload === "object") {
+    if (payload.error === "guardrail_blocked") {
+      const findings = Array.isArray(payload.findings) ? payload.findings.join(", ") : "";
+      return findings ? `输入被安全策略拦截：${findings}` : "输入被安全策略拦截。";
+    }
+    if (typeof payload.message === "string" && payload.message.trim()) return payload.message;
+    if (typeof payload.error === "string" && payload.error.trim()) return payload.error;
+  }
+  if (typeof payload === "string" && payload.trim()) return payload;
+  return `${response.status} ${response.statusText}`;
+}
+
+async function readHttpError(response) {
+  const contentType = response.headers.get("content-type") || "";
+  try {
+    if (contentType.includes("application/json")) {
+      return formatHttpError(response, await response.json());
+    }
+    return formatHttpError(response, await response.text());
+  } catch {
+    return `${response.status} ${response.statusText}`;
+  }
+}
+
 async function postSse(path, body, onEvent) {
   const controller = new AbortController();
   store.stream.abortController = controller;
@@ -404,8 +429,7 @@ async function postSse(path, body, onEvent) {
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `${response.status} ${response.statusText}`);
+    throw new Error(await readHttpError(response));
   }
   if (!response.body) throw new Error("浏览器没有返回可读取的 SSE 响应流。");
 
