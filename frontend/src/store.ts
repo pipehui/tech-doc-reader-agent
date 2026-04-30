@@ -1,13 +1,15 @@
 import { create } from "zustand";
 import { normalizeAgent } from "./agentColors";
-import type { AgentKey, ChatMessage, LearningOverview, SessionState, ToolCall, TraceEvent } from "./types";
+import { normalizeTenant, sameTenant, sessionTenant, tenantKey } from "./tenant";
+import type { AgentKey, ChatMessage, LearningOverview, SessionState, TenantScope, ToolCall, TraceEvent } from "./types";
 import { makeSessionId, uid } from "./utils";
 
-const SESSION_KEY = "tech-doc-agent.session";
-const SESSIONS_KEY = "tech-doc-agent.sessions";
+const LEGACY_SESSION_KEY = "tech-doc-agent.session";
+const CONTEXT_KEY = "tech-doc-agent.context";
+const SESSIONS_KEY = "tech-doc-agent.sessions.v2";
 const THEME_KEY = "tech-doc-agent.theme";
 const TRANSCRIPT_PREFIX = "tech-doc-agent.react.transcript.";
-const TRANSCRIPT_VERSION = 1;
+const TRANSCRIPT_VERSION = 2;
 
 export const EVENT_TYPES = [
   "session_snapshot",
@@ -24,7 +26,13 @@ export const EVENT_TYPES = [
 
 export interface SessionEntry {
   id: string;
+  user_id: string;
+  namespace: string;
   updatedAt: string;
+}
+
+interface StoredContext extends TenantScope {
+  session_id: string;
 }
 
 interface PersistedTranscript {
@@ -54,7 +62,7 @@ interface AppStore {
   expandedToolIds: Set<string>;
   hasNewMessageContent: boolean;
   setSessionId: (sessionId: string) => void;
-  rememberSession: (sessionId: string) => void;
+  rememberSession: (sessionId: string, tenant?: Partial<TenantScope>) => void;
   setSessionState: (state: Partial<SessionState>) => void;
   setMessages: (messages: ChatMessage[]) => void;
   setLearning: (learning: LearningOverview) => void;
@@ -75,9 +83,10 @@ interface AppStore {
   setShowLearnerPlan: (show: boolean) => void;
   toggleToolExpanded: (id: string) => void;
   setHasNewMessageContent: (hasNew: boolean) => void;
-  hydrateTranscript: (sessionId: string) => boolean;
+  hydrateTranscript: (sessionId: string, tenant?: Partial<TenantScope>) => boolean;
   persistTranscript: () => void;
-  deleteSession: (sessionId: string) => void;
+  deleteSession: (sessionId: string, tenant?: Partial<TenantScope>) => void;
+  resetForContext: (sessionId: string, tenant: Partial<TenantScope>) => void;
   resetForSession: (sessionId: string) => void;
   newSession: () => void;
   setTheme: (theme: "dark" | "light") => void;
@@ -93,16 +102,49 @@ function safeJson<T>(raw: string | null, fallback: T): T {
 }
 
 function readSessions() {
-  return safeJson<SessionEntry[]>(localStorage.getItem(SESSIONS_KEY), []);
+  return safeJson<SessionEntry[]>(localStorage.getItem(SESSIONS_KEY), []).flatMap((entry) => {
+    if (!entry || typeof entry.id !== "string" || !entry.id.trim()) return [];
+    const tenant = normalizeTenant(entry);
+    return [{
+      id: entry.id,
+      user_id: tenant.user_id,
+      namespace: tenant.namespace,
+      updatedAt: entry.updatedAt || new Date().toISOString()
+    }];
+  });
 }
 
-function transcriptKey(sessionId: string) {
-  return `${TRANSCRIPT_PREFIX}${sessionId}`;
+function readStoredContext(): StoredContext {
+  const parsed = safeJson<StoredContext | null>(localStorage.getItem(CONTEXT_KEY), null);
+  if (parsed && typeof parsed.session_id === "string" && parsed.session_id.trim()) {
+    return {
+      session_id: parsed.session_id,
+      ...normalizeTenant(parsed)
+    };
+  }
+
+  const legacySessionId = localStorage.getItem(LEGACY_SESSION_KEY) || makeSessionId();
+  return {
+    session_id: legacySessionId,
+    ...normalizeTenant()
+  };
 }
 
-function initialSession(sessionId: string): SessionState {
+function persistStoredContext(context: StoredContext) {
+  localStorage.setItem(CONTEXT_KEY, JSON.stringify(context));
+  localStorage.setItem(LEGACY_SESSION_KEY, context.session_id);
+}
+
+function transcriptKey(sessionId: string, tenant?: Partial<TenantScope>) {
+  return `${TRANSCRIPT_PREFIX}${tenantKey(tenant)}::${sessionId}`;
+}
+
+function initialSession(sessionId: string, tenant?: Partial<TenantScope>): SessionState {
+  const resolved = normalizeTenant(tenant);
   return {
     session_id: sessionId,
+    user_id: resolved.user_id,
+    namespace: resolved.namespace,
     exists: false,
     pending_interrupt: false,
     learning_target: null,
@@ -113,10 +155,10 @@ function initialSession(sessionId: string): SessionState {
   };
 }
 
-const initialId = localStorage.getItem(SESSION_KEY) || makeSessionId();
+const initialContext = readStoredContext();
 
 export const useAppStore = create<AppStore>((set, get) => ({
-  session: initialSession(initialId),
+  session: initialSession(initialContext.session_id, initialContext),
   messages: [],
   events: [],
   toolCalls: {},
@@ -135,17 +177,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
   expandedToolIds: new Set(),
   hasNewMessageContent: false,
 
-  rememberSession(sessionId) {
+  rememberSession(sessionId, tenant) {
+    const resolved = normalizeTenant(tenant || sessionTenant(get().session));
     const now = new Date().toISOString();
-    const next = [{ id: sessionId, updatedAt: now }, ...readSessions().filter((item) => item.id !== sessionId)].slice(0, 16);
+    const next = [
+      { id: sessionId, user_id: resolved.user_id, namespace: resolved.namespace, updatedAt: now },
+      ...readSessions().filter((item) => item.id !== sessionId || !sameTenant(item, resolved))
+    ].slice(0, 32);
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
-    localStorage.setItem(SESSION_KEY, sessionId);
+    persistStoredContext({
+      session_id: sessionId,
+      user_id: resolved.user_id,
+      namespace: resolved.namespace
+    });
     set({ sessions: next });
   },
 
   setSessionId(sessionId) {
-    get().rememberSession(sessionId);
-    set({ session: initialSession(sessionId) });
+    const tenant = sessionTenant(get().session);
+    get().rememberSession(sessionId, tenant);
+    set({ session: initialSession(sessionId, tenant) });
   },
 
   setSessionState(state) {
@@ -154,6 +205,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
         ...current.session,
         ...state,
         session_id: state.session_id || current.session.session_id,
+        ...normalizeTenant({
+          user_id: state.user_id ?? current.session.user_id ?? undefined,
+          namespace: state.namespace ?? current.session.namespace ?? undefined
+        }),
         current_agent: normalizeAgent(state.current_agent || current.session.current_agent),
         workflow_plan: Array.isArray(state.workflow_plan)
           ? state.workflow_plan.map(normalizeAgent)
@@ -333,8 +388,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     set({ hasNewMessageContent });
   },
 
-  hydrateTranscript(sessionId) {
-    const parsed = safeJson<PersistedTranscript | null>(localStorage.getItem(transcriptKey(sessionId)), null);
+  hydrateTranscript(sessionId, tenant) {
+    const parsed = safeJson<PersistedTranscript | null>(localStorage.getItem(transcriptKey(sessionId, tenant || sessionTenant(get().session))), null);
     if (!parsed || parsed.version !== TRANSCRIPT_VERSION) return false;
     set({
       messages: parsed.messages || [],
@@ -352,25 +407,42 @@ export const useAppStore = create<AppStore>((set, get) => ({
       events: state.events,
       toolCalls: state.toolCalls
     };
-    localStorage.setItem(transcriptKey(state.session.session_id), JSON.stringify(payload));
+    localStorage.setItem(
+      transcriptKey(state.session.session_id, sessionTenant(state.session)),
+      JSON.stringify(payload)
+    );
   },
 
-  deleteSession(sessionId) {
-    const next = readSessions().filter((item) => item.id !== sessionId);
+  deleteSession(sessionId, tenant) {
+    const resolved = normalizeTenant(tenant || sessionTenant(get().session));
+    const next = readSessions().filter((item) => item.id !== sessionId || !sameTenant(item, resolved));
     localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
-    localStorage.removeItem(transcriptKey(sessionId));
-    if (localStorage.getItem(SESSION_KEY) === sessionId) {
-      const fallback = next[0]?.id;
-      if (fallback) localStorage.setItem(SESSION_KEY, fallback);
-      else localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(transcriptKey(sessionId, resolved));
+    const current = readStoredContext();
+    if (current.session_id === sessionId && sameTenant(current, resolved)) {
+      const fallback = next.find((item) => sameTenant(item, resolved)) || next[0];
+      if (fallback) {
+        persistStoredContext({
+          session_id: fallback.id,
+          user_id: fallback.user_id,
+          namespace: fallback.namespace
+        });
+      } else {
+        persistStoredContext({
+          session_id: makeSessionId(),
+          user_id: resolved.user_id,
+          namespace: resolved.namespace
+        });
+      }
     }
     set({ sessions: next });
   },
 
-  resetForSession(sessionId) {
-    get().rememberSession(sessionId);
+  resetForContext(sessionId, tenant) {
+    const resolved = normalizeTenant(tenant);
+    get().rememberSession(sessionId, resolved);
     set({
-      session: initialSession(sessionId),
+      session: initialSession(sessionId, resolved),
       messages: [],
       events: [],
       toolCalls: {},
@@ -379,8 +451,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     });
   },
 
+  resetForSession(sessionId) {
+    get().resetForContext(sessionId, sessionTenant(get().session));
+  },
+
   newSession() {
-    get().resetForSession(makeSessionId());
+    get().resetForContext(makeSessionId(), sessionTenant(get().session));
   },
 
   setTheme(theme) {

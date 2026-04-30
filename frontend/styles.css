@@ -106,7 +106,7 @@ svg {
   border-bottom: 1px solid var(--border);
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(220px, 1fr) auto minmax(280px, 1fr);
+  grid-template-columns: minmax(220px, 1fr) auto minmax(420px, 1.45fr);
   min-height: 72px;
   padding: 12px 18px;
   position: relative;
@@ -199,6 +199,7 @@ svg {
 .topbar-actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
   min-width: 0;
@@ -211,8 +212,14 @@ svg {
   border-radius: var(--radius-md);
   display: flex;
   gap: 8px;
-  min-width: 260px;
+  max-width: 320px;
+  min-width: 220px;
   padding: 6px 8px 6px 10px;
+}
+
+.tenant-control {
+  max-width: 220px;
+  min-width: 170px;
 }
 
 .session-control span {

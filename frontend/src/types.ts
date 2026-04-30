@@ -8,8 +8,15 @@ export type AgentKey =
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
 
+export interface TenantScope {
+  user_id: string;
+  namespace: string;
+}
+
 export interface SessionState {
   session_id: string;
+  user_id: string | null;
+  namespace: string | null;
   exists: boolean;
   pending_interrupt: boolean;
   learning_target: string | null;
@@ -57,9 +64,13 @@ export interface LearningRecord {
   timestamp: string;
   score: number;
   reviewtimes: number;
+  user_id?: string | null;
+  namespace?: string | null;
 }
 
 export interface LearningOverview {
+  user_id?: string | null;
+  namespace?: string | null;
   total: number;
   average_score: number;
   needs_review_count: number;
@@ -77,6 +88,8 @@ export interface HistoryItem {
 
 export interface HistoryResponse {
   session_id: string;
+  user_id?: string | null;
+  namespace?: string | null;
   learning_target: string | null;
   pending_interrupt: boolean;
   message_count: number;

@@ -1,8 +1,9 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
-import { API_BASE, getLearningOverview, getSessionState } from "./api";
+import { API_BASE, getLearningOverview, getSessionState, tenantHeaders } from "./api";
 import { normalizeAgent } from "./agentColors";
 import { useAppStore } from "./store";
-import type { AgentKey, ToolCall } from "./types";
+import { sessionTenant } from "./tenant";
+import type { AgentKey, SessionState, ToolCall } from "./types";
 import { uid } from "./utils";
 
 interface StreamMeta {
@@ -53,8 +54,12 @@ function updateTokenMeta(context: StreamContext, agent: AgentKey) {
 
 async function refreshStateAndLearning(sessionId: string) {
   const store = useAppStore.getState();
+  const tenant = sessionTenant(store.session);
   try {
-    const [state, learning] = await Promise.all([getSessionState(sessionId), getLearningOverview()]);
+    const [state, learning] = await Promise.all([
+      getSessionState(sessionId, tenant),
+      getLearningOverview(tenant)
+    ]);
     store.setSessionState(state);
     store.setLearning(learning);
   } catch (error) {
@@ -67,7 +72,7 @@ function applySseEvent(event: string, data: Record<string, unknown>, context: St
 
   if (event === "session_snapshot") {
     store.recordEvent({ type: event, data, agent: normalizeAgent(data.current_agent), responseId: context.id });
-    store.setSessionState(data);
+    store.setSessionState(data as Partial<SessionState>);
     return;
   }
 
@@ -81,10 +86,12 @@ function applySseEvent(event: string, data: Record<string, unknown>, context: St
 
   if (event === "plan_update") {
     store.recordEvent({ type: event, data, agent: context.activeAgent, responseId: context.id });
-    const update: Record<string, unknown> = {};
-    if (Array.isArray(data.plan)) update.workflow_plan = data.plan;
+    const update: Partial<SessionState> = {};
+    if (Array.isArray(data.plan)) update.workflow_plan = data.plan.map(String);
     if (typeof data.plan_index === "number") update.plan_index = data.plan_index;
-    if ("learning_target" in data) update.learning_target = data.learning_target;
+    if (typeof data.learning_target === "string" || data.learning_target === null) {
+      update.learning_target = data.learning_target;
+    }
     store.setSessionState(update);
     return;
   }
@@ -184,6 +191,7 @@ export function useChatStream() {
   async function run(path: "/chat" | "/chat/approve", body: Record<string, unknown>, label: string) {
     const store = useAppStore.getState();
     const sessionId = store.session.session_id;
+    const tenant = sessionTenant(store.session);
     const context: StreamContext = {
       id: uid(),
       activeAgent: normalizeAgent(store.session.current_agent),
@@ -196,9 +204,14 @@ export function useChatStream() {
         method: "POST",
         headers: {
           Accept: "text/event-stream",
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...tenantHeaders(tenant)
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          ...body,
+          user_id: tenant.user_id,
+          namespace: tenant.namespace
+        }),
         openWhenHidden: true,
         onmessage(message) {
           applySseEvent(message.event || "message", parseData(message.data), context);
@@ -221,7 +234,7 @@ export function useChatStream() {
       const store = useAppStore.getState();
       if (store.running || store.session.pending_interrupt) return;
       store.addUserMessage(text);
-      store.rememberSession(store.session.session_id);
+      store.rememberSession(store.session.session_id, sessionTenant(store.session));
       return run("/chat", { session_id: store.session.session_id, message: text }, "生成中");
     },
     approve(approved: boolean, feedback = "") {
