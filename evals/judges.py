@@ -10,6 +10,7 @@ from typing import Any
 class JudgeScores:
     plan_match: float
     keyword: float
+    behavior: float
     latency: float | None
 
 
@@ -80,6 +81,21 @@ def text_keyword_score(
     return round(passed / total, 4)
 
 
+def behavior_check_score(case: dict[str, Any], run: dict[str, Any]) -> float:
+    checks = case.get("behavior_checks", [])
+    if not checks:
+        return 1.0
+    if not isinstance(checks, list):
+        return 0.0
+
+    passed = 0
+    for check in checks:
+        if _behavior_check_passed(check, run):
+            passed += 1
+
+    return round(passed / len(checks), 4)
+
+
 def latency_score(elapsed_s: float | None) -> float | None:
     if elapsed_s is None:
         return None
@@ -105,6 +121,7 @@ def judge_case(case: dict[str, Any], run: dict[str, Any]) -> JudgeScores:
             case.get("must_contain", []),
             case.get("must_not_contain", []),
         ),
+        behavior=behavior_check_score(case, run),
         latency=latency_score(run.get("e2e_s")),
     )
 
@@ -122,3 +139,39 @@ def _longest_common_subsequence_length(left: list[str], right: list[str]) -> int
                 dp[row][col] = max(dp[row - 1][col], dp[row][col - 1])
 
     return dp[-1][-1]
+
+
+def _behavior_check_passed(check: Any, run: dict[str, Any]) -> bool:
+    if not isinstance(check, dict):
+        return False
+
+    check_type = str(check.get("type") or "").strip()
+    answer = str(run.get("answer") or "")
+    answer_lower = answer.casefold()
+
+    if check_type == "contains_any":
+        return any(str(phrase).casefold() in answer_lower for phrase in check.get("phrases", []))
+
+    if check_type == "contains_all":
+        phrases = [str(phrase).casefold() for phrase in check.get("phrases", [])]
+        return bool(phrases) and all(phrase in answer_lower for phrase in phrases)
+
+    if check_type == "not_contains_any":
+        return all(str(phrase).casefold() not in answer_lower for phrase in check.get("phrases", []))
+
+    if check_type == "tool_results_max":
+        return int(run.get("tool_results", 0) or 0) <= int(check.get("value", 0))
+
+    if check_type == "tool_calls_max":
+        return int(run.get("tool_calls", 0) or 0) <= int(check.get("value", 0))
+
+    if check_type == "interrupt_count_max":
+        return int(run.get("interrupt_count", 0) or 0) <= int(check.get("value", 0))
+
+    if check_type == "status_in":
+        return str(run.get("status") or "") in {str(value) for value in check.get("values", [])}
+
+    if check_type == "plan_is_direct":
+        return normalize_plan(run.get("predicted_plan")) == []
+
+    return False

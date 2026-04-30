@@ -5,9 +5,12 @@ from evals.run_eval import approve_url_for, load_cases, render_markdown_report, 
 
 def test_eval_cases_are_valid():
     cases = load_cases(Path("evals/cases.json"))
+    full_cases = load_cases(Path("evals/cases_full.json"))
 
     assert len(cases) >= 15
+    assert len(full_cases) >= 24
     assert {case["category"] for case in cases}
+    assert {case["category"] for case in full_cases}
 
 
 def test_render_markdown_report_contains_summary_and_cases():
@@ -23,7 +26,7 @@ def test_render_markdown_report_contains_summary_and_cases():
             "tool_results": 0,
             "structured_result_count": 0,
             "interrupt_count": 0,
-            "scores": {"plan_match": 1.0, "keyword": 1.0, "latency": 1.0},
+            "scores": {"plan_match": 1.0, "keyword": 1.0, "behavior": 1.0, "latency": 1.0},
         },
         {
             "id": "case_2",
@@ -36,7 +39,7 @@ def test_render_markdown_report_contains_summary_and_cases():
             "tool_results": 2,
             "structured_result_count": 2,
             "interrupt_count": 1,
-            "scores": {"plan_match": 0.5, "keyword": 0.5, "latency": 0.8},
+            "scores": {"plan_match": 0.5, "keyword": 0.5, "behavior": 0.5, "latency": 0.8},
         },
     ]
 
@@ -46,6 +49,7 @@ def test_render_markdown_report_contains_summary_and_cases():
     assert "# Agent Eval Report" in report
     assert "case_1" in report
     assert "Tool results avg" in report
+    assert "Behavior avg" in report
     assert "Structured results avg" in report
     assert "Interrupts total" in report
     assert summary["total"] == 2

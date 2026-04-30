@@ -40,6 +40,22 @@ python -m evals.run_eval --cases evals/cases.json --timeout 240 --output eval_re
 
 评测会自动收集 predicted plan、learning target、最终回答、延迟和工具调用数，并输出 JSONL 原始结果与 Markdown 报告。`enabled=false` 的多轮用例默认跳过，后续会单独用 multi-turn runner 评测。`eval_results/` 和 `eval_reports/` 默认不提交到 Git。
 
+快速 baseline 使用 `evals/cases.json`，适合每次改动后回归。更完整的阶段性评测使用 `evals/cases_full.json`，覆盖更多技术主题、学习状态读取和边界拒绝类问题：
+
+```bash
+python -m evals.run_eval --cases evals/cases_full.json --timeout 240 --output eval_results/full_latest.jsonl --report eval_reports/full_latest.md
+```
+
+边界类 case 不只看普通关键词，还会计算 `Behavior avg`：例如是否明确拒绝泄露系统提示词或密钥、是否避免假装写入、是否没有绕过 HITL 审批、是否没有触发不必要工具调用。
+
+当前 full agent eval（2026-04-30，25 cases，覆盖 direct、学习状态读取、examination、multi-agent 标准链路和 boundary/refusal）：
+
+| Cases | Done | Error | Plan Match | Keyword | Behavior | E2E p50 | E2E p95 | Tool Results Avg | Structured Results Avg | Interrupts |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 25 | 25 | 0 | 0.96 | 0.98 | 0.99 | 14.69s | 226.41s | 3.00 | 1.60 | 6 |
+
+按类别看，boundary/refusal 为 `5/5` done，Plan Match `1.00`，Behavior `0.95`；multi-agent standard 为 `10/10` done，Keyword 和 Behavior 均为 `1.00`。
+
 流式接口支持并发 smoke / latency benchmark。默认复用 `evals/cases.json` 中 `enabled=true` 的 single-turn baseline，并在遇到写入审批时自动拒绝以继续完成链路；建议分别跑 5/10/20 并发观察 p50、p95 和 error rate：
 
 ```bash
@@ -48,11 +64,11 @@ python scripts/benchmark_latency.py --runs 1 --concurrency 10 --timeout 240 --ou
 python scripts/benchmark_latency.py --runs 1 --concurrency 20 --timeout 240 --output eval_results/bench_c20.jsonl
 ```
 
-当前 async SSE concurrency smoke（2026-04-30，11 enabled cases，自动拒绝 HITL 写入审批）：
+当前 async SSE concurrency smoke（2026-04-30，11 enabled cases，10 并发，自动拒绝 HITL 写入审批）：
 
 | Concurrency | Valid | Error Rate | Final Interrupted | Auto-Rejected Interrupts | TTFT p50 | TTFT p95 | E2E p50 | E2E p95 | Tool Events Avg |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 10 | 11/11 | 0.0% | 0.0% | 4 | 0.57s | 0.67s | 51.41s | 176.74s | 2.82 |
+| 10 | 11/11 | 0.0% | 0.0% | 2 | 0.70s | 4.59s | 22.76s | 225.57s | 3.18 |
 
 检索链路提供离线评测，直接调用 Hybrid RAG，不需要启动后端：
 

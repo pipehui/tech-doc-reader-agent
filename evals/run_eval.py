@@ -250,6 +250,7 @@ async def run_case(
     result["scores"] = {
         "plan_match": scores.plan_match,
         "keyword": scores.keyword,
+        "behavior": scores.behavior,
         "latency": scores.latency,
     }
     return result
@@ -321,6 +322,7 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         "|---|---:|",
         f"| Plan match avg | {format_score(summary['plan_match_avg'])} |",
         f"| Keyword avg | {format_score(summary['keyword_avg'])} |",
+        f"| Behavior avg | {format_score(summary['behavior_avg'])} |",
         f"| E2E p50 | {format_seconds(summary['e2e_p50'])} |",
         f"| E2E p95 | {format_seconds(summary['e2e_p95'])} |",
         f"| Tool results avg | {format_number(summary['tool_results_avg'])} |",
@@ -329,15 +331,16 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         "",
         "## By Category",
         "",
-        "| Category | Cases | Plan Match | Keyword | E2E p50 | Tool Results Avg | Structured Results Avg |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Category | Cases | Plan Match | Keyword | Behavior | E2E p50 | Tool Results Avg | Structured Results Avg |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
     for category, stats in summarize_by_category(rows).items():
         lines.append(
             "| "
             f"{category} | {stats['total']} | {format_score(stats['plan_match_avg'])} | "
-            f"{format_score(stats['keyword_avg'])} | {format_seconds(stats['e2e_p50'])} | "
+            f"{format_score(stats['keyword_avg'])} | {format_score(stats['behavior_avg'])} | "
+            f"{format_seconds(stats['e2e_p50'])} | "
             f"{format_number(stats['tool_results_avg'])} | "
             f"{format_number(stats['structured_results_avg'])} |"
         )
@@ -347,8 +350,8 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "",
             "## Cases",
             "",
-            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | E2E | Interrupts | Tool Results | Structured Results |",
-            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|",
+            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | Behavior | E2E | Interrupts | Tool Results | Structured Results |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
 
@@ -360,7 +363,8 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
             "| "
             f"{row['id']} | {row['category']} | {row['status']} | {expected} | {predicted} | "
             f"{format_score(scores.get('plan_match'))} | {format_score(scores.get('keyword'))} | "
-            f"{format_seconds(row.get('e2e_s'))} | {row.get('interrupt_count', 0)} | {row.get('tool_results', 0)} | "
+            f"{format_score(scores.get('behavior'))} | {format_seconds(row.get('e2e_s'))} | "
+            f"{row.get('interrupt_count', 0)} | {row.get('tool_results', 0)} | "
             f"{row.get('structured_result_count', 0)} |"
         )
 
@@ -379,6 +383,7 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "errored": len(errored),
         "plan_match_avg": _mean_score(rows, "plan_match"),
         "keyword_avg": _mean_score(rows, "keyword"),
+        "behavior_avg": _mean_score(rows, "behavior"),
         "e2e_p50": _percentile([row["e2e_s"] for row in done if row.get("e2e_s") is not None], 50),
         "e2e_p95": _percentile([row["e2e_s"] for row in done if row.get("e2e_s") is not None], 95),
         "tool_results_avg": statistics.mean([row.get("tool_results", 0) for row in done]) if done else None,
@@ -486,6 +491,7 @@ def _error_result(case: dict[str, Any], session_id: str, started_at: float, erro
     result["scores"] = {
         "plan_match": scores.plan_match,
         "keyword": scores.keyword,
+        "behavior": scores.behavior,
         "latency": scores.latency,
     }
     return result
