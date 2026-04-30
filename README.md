@@ -17,14 +17,25 @@
 - 学习记录、学习轨迹 memory、长期用户画像分层存储，后续回答可读取用户上下文。
 - `trace_id` 贯穿 SSE、结构化日志和 Langfuse callback，便于定位多 agent 链路问题。
 - Scoped context 隔离子 Agent 可见消息，避免 `primary` 的搜索、审批和中间推理污染 parser / examination。
+- 输入侧 prompt-injection guardrails 分级处置：high-risk 直接阻断，medium-risk 复用 HITL 审批通道确认后再进入 graph。
 
 ## Results
 
 当前 full agent eval（2026-04-30，25 cases，覆盖 direct、学习状态读取、examination、multi-agent 标准链路和 boundary/refusal）：
 
-| Cases | Done | Error | Plan Match | Keyword | Behavior | E2E p50 | E2E p95 | Tool Results Avg | Structured Results Avg | Interrupts |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 25 | 25 | 0 | 0.96 | 0.98 | 0.99 | 14.69s | 226.41s | 3.00 | 1.60 | 6 |
+| Cases | Done | Error | Plan Match | Keyword | Behavior | Tool Results Avg | Structured Results Avg | Interrupts |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 25 | 25 | 0 | 0.96 | 0.98 | 0.99 | 3.00 | 1.60 | 6 |
+
+延迟与任务路径强相关，系统显式区分快速回应和深度研读：
+
+| Path | Cases | E2E p50 | E2E p95 | Tool Results Avg | Structured Results Avg | 设计目标 |
+|---|---:|---:|---:|---:|---:|---|
+| Quick response: direct / 学习状态查询 / boundary | 12 | 5.90s | 13.06s | 0.67 | 0.00 | 闲聊、能力介绍、学习状态读取和边界拒绝 |
+| Single-agent task: examination | 3 | 15.69s | 38.90s | 2.00 | 1.00 | 单 agent 出题和中等复杂度任务 |
+| Multi-agent research chain: parser -> relation -> explanation | 10 | 150.49s | 226.71s | 6.10 | 3.70 | 深度研读，一次完成多轮检索、结构化抽取和长文讲解 |
+
+`multi_agent_standard` 是研读模式而不是聊天模式：典型链路会完成 6-10 次本地/Web 工具结果、parser/relation 结构化输出，以及 explanation 的最终长文生成。后续优化重点是 parser 与 relation 可并行部分、结构化结果流式渲染，以及按 `learning_target` 缓存 parser result。
 
 当前 full retrieval eval（2026-04-29，60 cases，Top K=5）：
 

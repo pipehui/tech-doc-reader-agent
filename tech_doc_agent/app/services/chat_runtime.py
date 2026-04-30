@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import suppress
+from dataclasses import dataclass
 from tech_doc_agent.app.graph import build_multi_agentic_graph
 from tech_doc_agent.app.core.langfuse_tracing import (
     build_langfuse_trace,
@@ -11,7 +12,7 @@ from tech_doc_agent.app.core.observability import get_trace_context, log_event, 
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values, tenant_thread_id
 from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
 from redis.exceptions import BusyLoadingError
@@ -20,6 +21,17 @@ from typing import Any
 
 
 _STREAM_DONE = object()
+
+
+@dataclass(frozen=True)
+class GuardrailApprovalRequest:
+    session_id: str
+    user_input: str
+    user_id: str
+    namespace: str
+    source: str
+    risk_level: str
+    findings: tuple[str, ...]
 
 
 def _elapsed_ms(start: float) -> float:
@@ -79,6 +91,7 @@ class ChatRuntime:
         self.checkpointer: Any | None = None
         self.graph: Any | None = None
         self.resources: Any | None = None
+        self._guardrail_approvals: dict[str, GuardrailApprovalRequest] = {}
 
     def __enter__(self):
         try:
@@ -185,6 +198,110 @@ class ChatRuntime:
             "user_id": tenant.user_id,
             "namespace": tenant.namespace,
         }
+
+    def _guardrail_approval_key(self, session_id: str, tenant: TenantContext) -> str:
+        return tenant_thread_id(session_id, tenant)
+
+    def request_guardrail_approval(
+        self,
+        session_id: str,
+        user_input: str,
+        *,
+        source: str,
+        risk_level: str,
+        findings: list[str] | tuple[str, ...],
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> GuardrailApprovalRequest:
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        request = GuardrailApprovalRequest(
+            session_id=session_id,
+            user_input=user_input,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+            source=source,
+            risk_level=risk_level,
+            findings=tuple(findings),
+        )
+        self._guardrail_approvals[self._guardrail_approval_key(session_id, tenant)] = request
+        log_event(
+            "guardrail.approval.requested",
+            session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+            source=source,
+            risk_level=risk_level,
+            findings=list(findings),
+        )
+        return request
+
+    def get_pending_guardrail_approval(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> GuardrailApprovalRequest | None:
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        return self._guardrail_approvals.get(self._guardrail_approval_key(session_id, tenant))
+
+    def has_pending_guardrail_approval(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> bool:
+        return self.get_pending_guardrail_approval(session_id, user_id=user_id, namespace=namespace) is not None
+
+    def _pop_pending_guardrail_approval(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> GuardrailApprovalRequest | None:
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        return self._guardrail_approvals.pop(self._guardrail_approval_key(session_id, tenant), None)
+
+    def _guardrail_rejection_part(
+        self,
+        pending: GuardrailApprovalRequest,
+        feedback: str,
+    ) -> tuple[str, dict]:
+        reason = feedback or "未提供原因"
+        return (
+            "updates",
+            {
+                "guardrail": {
+                    "messages": [
+                        AIMessage(
+                            content=(
+                                "这条输入被 guardrails 标记为 medium risk，审批未通过，"
+                                f"已停止执行。原因：{reason}"
+                            ),
+                            name="guardrail",
+                        )
+                    ]
+                }
+            },
+        )
+
+    def _log_guardrail_approval_resolved(
+        self,
+        pending: GuardrailApprovalRequest,
+        *,
+        approved: bool,
+        feedback: str,
+    ) -> None:
+        log_event(
+            "guardrail.approval.resolved",
+            session_id=pending.session_id,
+            user_id=pending.user_id,
+            namespace=pending.namespace,
+            source=pending.source,
+            risk_level=pending.risk_level,
+            findings=list(pending.findings),
+            approved=approved,
+            feedback_length=len(feedback),
+        )
     
     def preload_printed_message_ids(
         self,
@@ -337,6 +454,8 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> bool:
+        if self.has_pending_guardrail_approval(session_id, user_id=user_id, namespace=namespace):
+            return True
         snapshot = self.get_snapshot(session_id, user_id=user_id, namespace=namespace)
         return bool(snapshot.next)
 
@@ -372,6 +491,28 @@ class ChatRuntime:
         )
 
         try:
+            pending_guardrail = self._pop_pending_guardrail_approval(
+                session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
+            )
+            if pending_guardrail is not None:
+                self._log_guardrail_approval_resolved(
+                    pending_guardrail,
+                    approved=approved,
+                    feedback=feedback,
+                )
+                if approved:
+                    yield from self.stream_user_message(
+                        session_id,
+                        pending_guardrail.user_input,
+                        user_id=tenant.user_id,
+                        namespace=tenant.namespace,
+                    )
+                else:
+                    yield self._guardrail_rejection_part(pending_guardrail, feedback)
+                return
+
             snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
 
             if not snapshot.next:
@@ -459,6 +600,29 @@ class ChatRuntime:
         )
 
         try:
+            pending_guardrail = self._pop_pending_guardrail_approval(
+                session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
+            )
+            if pending_guardrail is not None:
+                self._log_guardrail_approval_resolved(
+                    pending_guardrail,
+                    approved=approved,
+                    feedback=feedback,
+                )
+                if approved:
+                    async for part in self.astream_user_message(
+                        session_id,
+                        pending_guardrail.user_input,
+                        user_id=tenant.user_id,
+                        namespace=tenant.namespace,
+                    ):
+                        yield part
+                else:
+                    yield self._guardrail_rejection_part(pending_guardrail, feedback)
+                return
+
             snapshot = await self.aget_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
 
             if not snapshot.next:
@@ -597,6 +761,11 @@ class ChatRuntime:
         namespace: str | None = None,
     ) -> dict:
         tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        pending_guardrail = self.has_pending_guardrail_approval(
+            session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
         snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         state_values = getattr(snapshot, "values", None)
 
@@ -610,7 +779,7 @@ class ChatRuntime:
             "user_id": state_values.get("user_id") or tenant.user_id,
             "namespace": state_values.get("namespace") or tenant.namespace,
             "learning_target": state_values.get("learning_target"),
-            "pending_interrupt": bool(snapshot.next),
+            "pending_interrupt": pending_guardrail or bool(snapshot.next),
             "message_count": len(messages),
             "messages": [self._serialize_message(message) for message in messages],
         }
@@ -658,6 +827,11 @@ class ChatRuntime:
         namespace: str | None = None,
     ) -> dict:
         tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        pending_guardrail = self.has_pending_guardrail_approval(
+            session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
         snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         state_values = getattr(snapshot, "values", None)
 
@@ -682,7 +856,7 @@ class ChatRuntime:
             "user_id": state_values.get("user_id") or tenant.user_id,
             "namespace": state_values.get("namespace") or tenant.namespace,
             "learning_target": state_values.get("learning_target"),
-            "pending_interrupt": bool(snapshot.next),
+            "pending_interrupt": pending_guardrail or bool(snapshot.next),
             "message_count": len(items),
             "messages": items,
         }
@@ -694,6 +868,11 @@ class ChatRuntime:
         namespace: str | None = None,
     ) -> dict:
         tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        pending_guardrail = self.has_pending_guardrail_approval(
+            session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
         snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         state_values = getattr(snapshot, "values", None)
 
@@ -703,10 +882,10 @@ class ChatRuntime:
         messages = state_values.get("messages", [])
         learning_target = state_values.get("learning_target")
 
-        exists = bool(messages) or bool(learning_target) or bool(snapshot.next)
+        exists = bool(messages) or bool(learning_target) or bool(snapshot.next) or pending_guardrail
 
         dialog_stack = state_values.get("dialog_state", [])
-        current_agent = dialog_stack[-1] if dialog_stack else "primary"
+        current_agent = "guardrail" if pending_guardrail else dialog_stack[-1] if dialog_stack else "primary"
 
         workflow_plan = state_values.get("workflow_plan", [])
         plan_index = state_values.get("plan_index", 0)
@@ -716,7 +895,7 @@ class ChatRuntime:
             "user_id": state_values.get("user_id") or tenant.user_id,
             "namespace": state_values.get("namespace") or tenant.namespace,
             "exists": exists,
-            "pending_interrupt": bool(snapshot.next),
+            "pending_interrupt": pending_guardrail or bool(snapshot.next),
             "learning_target": learning_target,
             "message_count": len(messages),
             "current_agent": current_agent,

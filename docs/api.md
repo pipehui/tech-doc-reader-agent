@@ -71,6 +71,8 @@
 
 响应：`text/event-stream`。首帧总是 `session_snapshot`，随后可能出现 `token`、`agent_message`、`agent_transition`、`plan_update`、`tool_call`、`tool_result`，最后以 `done`、`interrupt_required` 或 `error` 结束。
 
+如果输入命中 high-risk prompt-injection 规则，会在进入 LangGraph 前返回 `400`，响应体包含 `error=guardrail_blocked`、`risk_level` 和 `findings`，不会触发任何 agent 或工具调用。medium-risk 输入会返回 `interrupt_required`，并等待 `/chat/approve` 显式批准；批准后才继续执行原始用户消息。
+
 ### POST /chat/approve
 
 继续或拒绝一个 pending interrupt。
@@ -80,13 +82,15 @@
 | 字段 | 类型 | 必有 | 说明 |
 |---|---|---|---|
 | `session_id` | `string` | 是 | 会话 ID |
-| `approved` | `boolean` | 是 | 是否批准敏感工具调用 |
+| `approved` | `boolean` | 是 | 是否批准敏感工具调用或 medium-risk 输入 |
 | `feedback` | `string` | 否 | 拒绝原因，默认空字符串 |
 | `trace_id` | `string` | 否 | 外部 trace ID，不传则后端生成 |
 | `user_id` | `string` | 否 | 用户 ID，默认 `default` |
 | `namespace` | `string` | 否 | 命名空间，默认 `tech_docs` |
 
-响应：`text/event-stream`。首帧总是 `session_snapshot`。如果当前没有 pending interrupt，会返回 `no_pending_interrupt` 后结束。
+响应：`text/event-stream`。首帧总是 `session_snapshot`。如果当前没有 pending interrupt，会返回 `no_pending_interrupt` 后结束。对于 medium-risk 输入审批，`approved=true` 会继续执行原始用户消息，`approved=false` 会停止执行并返回 guardrail 说明。
+
+`feedback` 同样会经过输入侧 guardrails。命中 high-risk 规则时返回 `400 guardrail_blocked`，拒绝理由不会写回 LangGraph checkpoint。
 
 ### GET /sessions/{id}/history
 
@@ -343,6 +347,9 @@ AI message 中包含 tool call 时发送。
 |---|---|---|---|
 | `session_id` | `string` | 是 | 会话 ID |
 | `pending` | `boolean` | 是 | 固定为 `true` |
+| `approval_kind` | `string` | 否 | `guardrail_input` 表示 medium-risk 输入审批；敏感工具审批时可为空 |
+| `risk_level` | `string` | 否 | Guardrails 风险级别 |
+| `findings` | `string[]` | 否 | Guardrails 命中的规则名 |
 
 ### no_pending_interrupt
 

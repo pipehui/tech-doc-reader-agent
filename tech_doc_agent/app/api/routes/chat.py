@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, StreamingResponse
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
-from fastapi.sse import ServerSentEvent, EventSourceResponse
+from fastapi.sse import ServerSentEvent
 from collections.abc import AsyncIterable, Iterable
 import json
 from tech_doc_agent.app.api.schemas import (
@@ -9,7 +11,7 @@ from tech_doc_agent.app.api.schemas import (
     HistoryViewResponse,
     SessionStateResponse,
 )
-from tech_doc_agent.app.core.guardrails import record_input_risk
+from tech_doc_agent.app.core.guardrails import InputRisk, record_input_risk
 from tech_doc_agent.app.core.observability import (
     get_trace_context,
     log_event,
@@ -61,6 +63,161 @@ def resolve_tenant(
     return tenant_from_values(
         user_id or request.headers.get("x-user-id"),
         namespace or request.headers.get("x-namespace"),
+    )
+
+def _risk_payload(risk: InputRisk) -> dict:
+    return {
+        "risk_level": risk.level,
+        "findings": [finding.name for finding in risk.findings],
+    }
+
+def _record_guardrail_decision(text: str, *, source: str) -> InputRisk:
+    risk = record_input_risk(text, source=source)
+
+    if risk.level == "medium":
+        log_event(
+            "guardrail.input_warning",
+            source=source,
+            **_risk_payload(risk),
+        )
+    elif risk.level == "high":
+        log_event(
+            "guardrail.input_blocked",
+            source=source,
+            **_risk_payload(risk),
+        )
+
+    return risk
+
+def _guardrail_blocked_response(risk: InputRisk, *, session_id: str, source: str) -> JSONResponse:
+    payload = {
+        "error": "guardrail_blocked",
+        "message": "Input was blocked by prompt-injection guardrails.",
+        "session_id": session_id,
+        "source": source,
+        **_risk_payload(risk),
+    }
+    context = get_trace_context()
+    for key in ("trace_id", "user_id", "namespace"):
+        if context.get(key):
+            payload[key] = context[key]
+
+    return JSONResponse(status_code=400, content=payload)
+
+def _guardrail_blocked_event(risk: InputRisk, *, session_id: str, source: str) -> ServerSentEvent:
+    return sse_event(
+        "guardrail_blocked",
+        {
+            "session_id": session_id,
+            "source": source,
+            **_risk_payload(risk),
+        },
+    )
+
+def _request_guardrail_approval(
+    runtime: ChatRuntime,
+    session_id: str,
+    message: str,
+    risk: InputRisk,
+    *,
+    source: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> None:
+    runtime.request_guardrail_approval(
+        session_id,
+        message,
+        source=source,
+        user_id=user_id,
+        namespace=namespace,
+        **_risk_payload(risk),
+    )
+
+def _guardrail_interrupt_event(risk: InputRisk, *, session_id: str, source: str) -> ServerSentEvent:
+    return sse_event(
+        "interrupt_required",
+        {
+            "session_id": session_id,
+            "pending": True,
+            "approval_kind": "guardrail_input",
+            "source": source,
+            **_risk_payload(risk),
+        },
+    )
+
+def stream_guardrail_approval_events(
+    runtime: ChatRuntime,
+    session_id: str,
+    risk: InputRisk,
+    *,
+    source: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> Iterable[ServerSentEvent]:
+    snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
+    yield sse_event("session_snapshot", snapshot)
+    yield _guardrail_interrupt_event(risk, session_id=session_id, source=source)
+
+async def astream_guardrail_approval_events(
+    runtime: ChatRuntime,
+    session_id: str,
+    risk: InputRisk,
+    *,
+    source: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> AsyncIterable[ServerSentEvent]:
+    snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
+    yield sse_event("session_snapshot", snapshot)
+    yield _guardrail_interrupt_event(risk, session_id=session_id, source=source)
+
+def _append_sse_field(lines: list[str], field: str, value: object) -> None:
+    for line in str(value).splitlines() or [""]:
+        lines.append(f"{field}: {line}\n")
+
+def _encode_sse_event(event: ServerSentEvent) -> bytes:
+    lines: list[str] = []
+
+    if event.comment is not None:
+        for line in str(event.comment).splitlines() or [""]:
+            lines.append(f": {line}\n")
+    if event.id is not None:
+        _append_sse_field(lines, "id", event.id)
+    if event.event is not None:
+        _append_sse_field(lines, "event", event.event)
+    if event.retry is not None:
+        _append_sse_field(lines, "retry", event.retry)
+
+    if event.raw_data is not None:
+        data_str = event.raw_data
+    elif event.data is not None:
+        if hasattr(event.data, "model_dump_json"):
+            data_str = event.data.model_dump_json()
+        else:
+            data_str = json.dumps(jsonable_encoder(event.data), ensure_ascii=False)
+    else:
+        data_str = None
+
+    if data_str is not None:
+        _append_sse_field(lines, "data", data_str)
+
+    lines.append("\n")
+    return "".join(lines).encode("utf-8")
+
+async def _encoded_sse_events(
+    events: AsyncIterable[ServerSentEvent],
+) -> AsyncIterable[bytes]:
+    async for event in events:
+        yield _encode_sse_event(event)
+
+def _event_source_response(events: AsyncIterable[ServerSentEvent]) -> StreamingResponse:
+    return StreamingResponse(
+        _encoded_sse_events(events),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 def iter_with_trace_context(
@@ -470,8 +627,33 @@ def stream_chat_events(
     message: str,
     user_id: str | None = None,
     namespace: str | None = None,
+    guardrail_checked: bool = False,
 ) -> Iterable[ServerSentEvent]:
-    record_input_risk(message, source="chat.message")
+    if not guardrail_checked:
+        risk = _record_guardrail_decision(message, source="chat.message")
+        if risk.level == "high":
+            yield _guardrail_blocked_event(risk, session_id=session_id, source="chat.message")
+            return
+        if risk.level == "medium":
+            _request_guardrail_approval(
+                runtime,
+                session_id,
+                message,
+                risk,
+                source="chat.message",
+                user_id=user_id,
+                namespace=namespace,
+            )
+            yield from stream_guardrail_approval_events(
+                runtime,
+                session_id,
+                risk,
+                source="chat.message",
+                user_id=user_id,
+                namespace=namespace,
+            )
+            return
+
     snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
@@ -484,8 +666,34 @@ async def astream_chat_events(
     message: str,
     user_id: str | None = None,
     namespace: str | None = None,
+    guardrail_checked: bool = False,
 ) -> AsyncIterable[ServerSentEvent]:
-    record_input_risk(message, source="chat.message")
+    if not guardrail_checked:
+        risk = _record_guardrail_decision(message, source="chat.message")
+        if risk.level == "high":
+            yield _guardrail_blocked_event(risk, session_id=session_id, source="chat.message")
+            return
+        if risk.level == "medium":
+            _request_guardrail_approval(
+                runtime,
+                session_id,
+                message,
+                risk,
+                source="chat.message",
+                user_id=user_id,
+                namespace=namespace,
+            )
+            async for event in astream_guardrail_approval_events(
+                runtime,
+                session_id,
+                risk,
+                source="chat.message",
+                user_id=user_id,
+                namespace=namespace,
+            ):
+                yield event
+            return
+
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
@@ -500,9 +708,13 @@ def stream_approval_events(
     feedback: str = "",
     user_id: str | None = None,
     namespace: str | None = None,
+    guardrail_checked: bool = False,
 ) -> Iterable[ServerSentEvent]:
-    if feedback:
-        record_input_risk(feedback, source="chat.approval.feedback")
+    if feedback and not guardrail_checked:
+        risk = _record_guardrail_decision(feedback, source="chat.approval.feedback")
+        if risk.level == "high":
+            yield _guardrail_blocked_event(risk, session_id=session_id, source="chat.approval.feedback")
+            return
 
     snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
@@ -528,9 +740,13 @@ async def astream_approval_events(
     feedback: str = "",
     user_id: str | None = None,
     namespace: str | None = None,
+    guardrail_checked: bool = False,
 ) -> AsyncIterable[ServerSentEvent]:
-    if feedback:
-        record_input_risk(feedback, source="chat.approval.feedback")
+    if feedback and not guardrail_checked:
+        risk = _record_guardrail_decision(feedback, source="chat.approval.feedback")
+        if risk.level == "high":
+            yield _guardrail_blocked_event(risk, session_id=session_id, source="chat.approval.feedback")
+            return
 
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
@@ -550,48 +766,106 @@ async def astream_approval_events(
         yield event
 
 
-@router.post("/chat", response_class=EventSourceResponse)
+@router.post("/chat")
 async def chat(body: ChatRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
     tenant = resolve_tenant(request, body.user_id, body.namespace)
-    async for event in aiter_with_trace_context(
-        astream_chat_events(
-            runtime,
-            body.session_id,
-            body.message,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-        ),
-        trace_id,
-        body.session_id,
-        "chat",
+    with trace_context(
+        trace_id=trace_id,
+        session_id=body.session_id,
         user_id=tenant.user_id,
         namespace=tenant.namespace,
+        operation="chat",
     ):
-        yield event
+        risk = _record_guardrail_decision(body.message, source="chat.message")
+        if risk.level == "high":
+            return _guardrail_blocked_response(risk, session_id=body.session_id, source="chat.message")
+        if risk.level == "medium":
+            _request_guardrail_approval(
+                runtime,
+                body.session_id,
+                body.message,
+                risk,
+                source="chat.message",
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
+            )
+            return _event_source_response(
+                aiter_with_trace_context(
+                    astream_guardrail_approval_events(
+                        runtime,
+                        body.session_id,
+                        risk,
+                        source="chat.message",
+                        user_id=tenant.user_id,
+                        namespace=tenant.namespace,
+                    ),
+                    trace_id,
+                    body.session_id,
+                    "chat",
+                    user_id=tenant.user_id,
+                    namespace=tenant.namespace,
+                )
+            )
 
-@router.post("/chat/approve", response_class=EventSourceResponse)
+    return _event_source_response(
+        aiter_with_trace_context(
+            astream_chat_events(
+                runtime,
+                body.session_id,
+                body.message,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
+                guardrail_checked=True,
+            ),
+            trace_id,
+            body.session_id,
+            "chat",
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
+    )
+
+@router.post("/chat/approve")
 async def approve(body: ApproveRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
     tenant = resolve_tenant(request, body.user_id, body.namespace)
-    async for event in aiter_with_trace_context(
-        astream_approval_events(
-            runtime,
-            body.session_id,
-            body.approved,
-            body.feedback,
+    if body.feedback:
+        with trace_context(
+            trace_id=trace_id,
+            session_id=body.session_id,
             user_id=tenant.user_id,
             namespace=tenant.namespace,
-        ),
-        trace_id,
-        body.session_id,
-        "approval",
-        user_id=tenant.user_id,
-        namespace=tenant.namespace,
-    ):
-        yield event
+            operation="approval",
+        ):
+            risk = _record_guardrail_decision(body.feedback, source="chat.approval.feedback")
+            if risk.level == "high":
+                return _guardrail_blocked_response(
+                    risk,
+                    session_id=body.session_id,
+                    source="chat.approval.feedback",
+                )
+
+    return _event_source_response(
+        aiter_with_trace_context(
+            astream_approval_events(
+                runtime,
+                body.session_id,
+                body.approved,
+                body.feedback,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
+                guardrail_checked=True,
+            ),
+            trace_id,
+            body.session_id,
+            "approval",
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
+    )
 
 @router.get("/sessions/{session_id}/history", response_model=HistoryViewResponse)
 def get_history(
