@@ -67,6 +67,7 @@ def read_docs(
     """
     当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。
     文档库是共享知识库，不按当前用户隔离；可选传入 category、tags 或 source 来限制检索范围。
+    category 只能使用内部标准分类；RAG、LangGraph 这类宽泛主题应使用 tags=["rag"] 或 tags=["langgraph"]，不要作为 category 传入。
     """
     filters = _build_filters(
         category=category,

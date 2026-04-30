@@ -323,6 +323,47 @@ _CATEGORY_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 
+_VALID_CATEGORIES = {category for category, _ in _CATEGORY_RULES}
+
+_CATEGORY_ALIASES = {
+    "langgraph核心": "langgraph_core",
+    "langgraph_core": "langgraph_core",
+    "langgraph进阶": "langgraph_advanced",
+    "langgraph_advanced": "langgraph_advanced",
+    "agent架构": "agent_arch",
+    "agent_arch": "agent_arch",
+    "toolcalling": "tool_calling",
+    "tool_calling": "tool_calling",
+    "functioncalling": "tool_calling",
+    "rag基础": "rag_basic",
+    "rag_basic": "rag_basic",
+    "ragbasic": "rag_basic",
+    "rag进阶": "rag_advanced",
+    "rag_advanced": "rag_advanced",
+    "ragadvanced": "rag_advanced",
+    "向量数据库": "vector_db",
+    "vectordb": "vector_db",
+    "vector_db": "vector_db",
+    "后端工程": "backend",
+    "可观测性": "observability",
+    "评测体系": "eval",
+    "数据与缓存": "data_cache",
+    "data_cache": "data_cache",
+    "api与系统设计": "api_design",
+    "api_design": "api_design",
+    "llm应用工程": "llm_engineering",
+    "llm_engineering": "llm_engineering",
+}
+
+_BROAD_CATEGORY_TAGS = {
+    "rag": ["rag"],
+    "rag相关": ["rag"],
+    "rag有关": ["rag"],
+    "langgraph": ["langgraph"],
+    "langgraph相关": ["langgraph"],
+    "langgraph有关": ["langgraph"],
+}
+
 
 def normalize_document(doc: Mapping[str, Any]) -> dict[str, Any]:
     normalized = dict(doc)
@@ -379,10 +420,39 @@ def normalize_filter(filters: Mapping[str, Any] | None) -> dict[str, Any]:
         if key == "tags":
             tags = normalize_tags(value)
             if tags:
-                normalized["tags"] = tags
+                normalized["tags"] = sorted(set(normalized.get("tags", [])) | set(tags))
+            continue
+        if key == "category":
+            category, tags = normalize_category_filter(value)
+            if category:
+                normalized["category"] = category
+            if tags:
+                normalized["tags"] = sorted(set(normalized.get("tags", [])) | set(tags))
             continue
         normalized[key] = value
     return normalized
+
+
+def normalize_category_filter(value: Any) -> tuple[str, list[str]]:
+    category = _clean_scalar(value)
+    if not category:
+        return "", []
+
+    category_key = _category_alias_key(category)
+    if category_key in _BROAD_CATEGORY_TAGS:
+        return "", _BROAD_CATEGORY_TAGS[category_key]
+
+    if category_key in _CATEGORY_ALIASES:
+        return _CATEGORY_ALIASES[category_key], []
+
+    if category in _VALID_CATEGORIES:
+        return category, []
+
+    inferred = infer_category(title=category, content=category)
+    if inferred != UNCATEGORIZED:
+        return inferred, []
+
+    return category, []
 
 
 def metadata_matches(item: Mapping[str, Any], filters: Mapping[str, Any] | None) -> bool:
@@ -467,6 +537,23 @@ def _clean_scalar(value: Any) -> str:
 
 def _tagify(value: str) -> str:
     return value.strip().casefold().replace(" ", "_").replace("（", "_").replace("）", "").replace("(", "_").replace(")", "")
+
+
+def _category_alias_key(value: str) -> str:
+    return (
+        value.casefold()
+        .replace(" ", "")
+        .replace("_", "")
+        .replace("-", "")
+        .replace("（", "")
+        .replace("）", "")
+        .replace("(", "")
+        .replace(")", "")
+        .replace("相关的内容", "相关")
+        .replace("相关内容", "相关")
+        .replace("有关的内容", "有关")
+        .replace("有关内容", "有关")
+    )
 
 
 def _value_matches(actual: Any, expected: Any) -> bool:

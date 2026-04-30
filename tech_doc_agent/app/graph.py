@@ -12,6 +12,7 @@ from tech_doc_agent.app.services.utils import (
     create_finish_node,
     store_plan,
 )
+from tech_doc_agent.app.services.message_scope import build_scoped_state, should_route_to_examination
 from tech_doc_agent.app.services.assistants.assistant_base import (
     CompleteOrEscalate,
 )
@@ -51,8 +52,16 @@ from tech_doc_agent.app.services.assistants.summary_assistant import (
 )
 from tech_doc_agent.app.services.user_profile import get_user_context_summary
 
-def assistant_node(assistant):
-    return RunnableLambda(assistant, afunc=assistant.ainvoke, name=assistant.name)
+def assistant_node(assistant, scoped_messages: bool = False):
+    def invoke(state: State, config: RunnableConfig | None = None):
+        assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
+        return assistant(assistant_state, config)
+
+    async def ainvoke(state: State, config: RunnableConfig | None = None):
+        assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
+        return await assistant.ainvoke(assistant_state, config)
+
+    return RunnableLambda(invoke, afunc=ainvoke, name=assistant.name)
 
 def route_next_step(state: State) -> Literal[
     "enter_parser",
@@ -82,6 +91,14 @@ def route_next_step(state: State) -> Literal[
         return "enter_summary"
 
     return END
+
+def route_after_user_info(state: State) -> Literal[
+    "enter_examination",
+    "primary_assistant",
+]:
+    if should_route_to_examination(state):
+        return "enter_examination"
+    return "primary_assistant"
 
 # Initialize the graph
 builder = StateGraph(State)
@@ -113,7 +130,7 @@ builder.add_node(
     create_entry_node("Parser Assistant", "parser"),
 )
 
-builder.add_node("parser", assistant_node(parser_assistant))
+builder.add_node("parser", assistant_node(parser_assistant, scoped_messages=True))
 builder.add_edge("enter_parser", "parser")
 builder.add_node(
     "parser_assistant_safe_tools",
@@ -166,7 +183,7 @@ builder.add_node(
     create_entry_node("Explanation Assitant", "explanation"),
 )
 
-builder.add_node("explanation", assistant_node(explanation_assistant))
+builder.add_node("explanation", assistant_node(explanation_assistant, scoped_messages=True))
 builder.add_edge("enter_explanation", "explanation")
 builder.add_node(
     "explanation_assistant_safe_tools",
@@ -211,7 +228,7 @@ builder.add_node(
     create_entry_node("Relation Assitant", "relation"),
 )
 
-builder.add_node("relation", assistant_node(relation_assistant))
+builder.add_node("relation", assistant_node(relation_assistant, scoped_messages=True))
 builder.add_edge("enter_relation", "relation")
 builder.add_node(
     "relation_assistant_safe_tools",
@@ -256,7 +273,7 @@ builder.add_node(
     create_entry_node("Examination Assitant", "examination"),
 )
 
-builder.add_node("examination", assistant_node(examination_assistant))
+builder.add_node("examination", assistant_node(examination_assistant, scoped_messages=True))
 builder.add_edge("enter_examination", "examination")
 builder.add_node(
     "examination_assistant_safe_tools",
@@ -269,7 +286,7 @@ builder.add_node(
 builder.add_node("leave_examination", create_exit_node())
 builder.add_edge("leave_examination", "primary_assistant")
 
-builder.add_node("finish_examination", create_finish_node())
+builder.add_node("finish_examination", create_finish_node("examination_context"))
 builder.add_conditional_edges(
     "finish_examination",
     route_next_step,
@@ -366,8 +383,15 @@ builder.add_node(
 builder.add_node(
   "primary_assistant_sensitive_tools", create_tool_node_with_fallback(primary_assistant_sensitive_tools)
 )
-builder.add_edge("fetch_user_info", "primary_assistant")
 builder.add_node("store_plan", store_plan)
+builder.add_conditional_edges(
+    "fetch_user_info",
+    route_after_user_info,
+    {
+        "enter_examination": "enter_examination",
+        "primary_assistant": "primary_assistant",
+    },
+)
 
 def route_primary_assistant(state: State) -> Literal[
     "store_plan",

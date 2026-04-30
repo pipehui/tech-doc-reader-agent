@@ -7,7 +7,6 @@ from tech_doc_agent.app.services.tools import (
     read_user_memory,
     read_user_profile,
     update_user_profile,
-    web_search,
     upsert_learning_history,
 )
 # from langchain_community.tools.ddg_search.tool import DuckDuckGoSearchResults
@@ -55,8 +54,9 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n\n你的工作原则如下："
             "\n1. 对于涉及文档解析、关系检索、概念解释、学习检测、学习总结中的复杂请求，优先使用 PlanWorkflow 制定一个最小必要的执行计划。"
             "\n2. 计划应尽量简洁，只包含完成当前用户目标所必需的步骤，不要机械地把所有助手都加入计划。"
-            "\n3. 对于简单的外部信息搜索或简单的学习记录查询，你可以直接调用工具处理，而不必生成计划。"
+            "\n3. 对于简单的学习记录、用户画像或学习轨迹查询，你可以直接调用工具处理，而不必生成计划。"
             "\n4. 如果某个子助手因为任务变化、信息不足或不适合继续而退出，你需要重新接管，并判断是重新规划、改写计划，还是直接向用户追问关键缺失信息。"
+            "\n5. 你不负责直接搜索技术资料。凡是需要技术资料、外部资料或文档依据的学习任务，应规划或移交给 parser，由 parser 优先读取本地文档库，必要时再补充外部搜索。"
 
             "\n\n关于学习记录，请明确理解："
             "\n- 学习记录只是轻量记录，用于说明用户学过什么、最近何时学过、掌握分数如何、复习过多少次。"
@@ -89,6 +89,17 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 更新画像时只写有明确依据的字段；不要因为一次对话就夸大用户能力等级。"
             "\n- known_topics 用于记录已经比较熟悉或可减少基础解释的主题；weak_topics 用于记录仍需巩固的主题；resolved_weak_topics 用于移除已经解决的薄弱点。"
             "\n- 不要在同一轮消息里同时调用安全读取工具和 update_user_profile；应先读取依据，等工具返回后再发起画像更新。"
+
+            "\n\n关于学习检测的多轮续接，请严格遵守："
+            "\n- 如果上一轮或最近历史中 examination assistant 已经给出题目、作答要求或评分标准，而用户当前消息是在回答题目、提交代码/思路、选择选项、解释自己的答案、要求评分或要求看哪里错了，你必须把任务交给 examination。"
+            "\n- 这类消息不要由 primary 自己评分、纠错或解释；primary 只负责识别这是上一轮检测的续接，并调用 ToExaminationAssistant。"
+            "\n- 转交时 request 应说明：这是用户对上一轮题目的作答，请结合上一轮题目和评分标准进行评估。"
+            "\n- 如果用户明确切换到新的学习目标、放弃答题或要求总结，再按新目标重新规划。"
+
+            "\n\n关于中断审批后的续接，请严格遵守："
+            "\n- 如果最近的上下文显示某个子助手的敏感工具被用户拒绝，且用户只是提供拒绝理由或修改建议，不要由 primary 抢答完成原任务。"
+            "\n- 你应优先把反馈交还给原子助手继续处理；例如 parser 的 save_docs 被拒绝后，应转回 parser 让它根据反馈修改解析或停止写入。"
+            "\n- 只有当用户的反馈已经明确改变了任务目标，或者原子助手不再适合处理时，才重新规划。"
 
             "\n\n你可以使用的工作流步骤包括："
             "\n- parser：解析技术文档，提取结构化信息"
@@ -154,7 +165,6 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
 # Primary assistant tools
 primary_assistant_tools = [
     # DuckDuckGoSearchResults(max_results=10),
-    web_search,
     read_user_profile,
     read_learning_history,
     read_all_learning_history,

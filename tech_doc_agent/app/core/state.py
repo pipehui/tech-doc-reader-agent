@@ -29,3 +29,4 @@ class State(TypedDict):
     plan_index: NotRequired[int]
     parser_result: NotRequired[dict[str, Any]]
     relation_result: NotRequired[dict[str, Any]]
+    examination_context: NotRequired[str]

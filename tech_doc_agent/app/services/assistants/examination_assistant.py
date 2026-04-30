@@ -29,6 +29,11 @@ examination_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n2. 使用 read_learning_history 查看用户过去学过哪些相关知识、掌握得分如何、哪些内容需要复习。"
             "\n3. 如果仍需要补充当前知识点的技术细节，再使用 read_docs 查找相关资料。"
 
+            "\n\n关于上下文隔离与多轮评估，请严格遵守："
+            "\n- 你看到的是受控任务视图，不是完整对话历史。"
+            "\n- 如果任务上下文中包含 previous_examination_context，它就是上一轮你出的题目、作答要求或评分标准；用户当前 query 通常就是对上一轮题目的回答。"
+            "\n- 在评估模式下，必须结合 previous_examination_context 判断用户答的是哪道题，不要只根据当前答案孤立评分。"
+
             "\n\n在出题模式下，你的目标是："
             "\n- 围绕当前知识点设计由浅入深的检测内容。"
             "\n- 题目应包括基础理解题、联系旧知识的类比题，以及一个简单到中等难度的实战代码任务。"
@@ -53,6 +58,12 @@ examination_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 更新学习记录时，优先使用当前标准学习目标 learning_target 作为 knowledge 名称。"
             "\n- 如果 learning_target 已经明确，必须沿用这个名称，不要自行改写、扩写或添加解释性后缀。"
             "\n- 如果 learning_target 为空或当前目标不明确，不要写入学习记录。"
+
+            "\n\n关于 read_docs 的使用："
+            "\n- 如果需要读取文档，优先用当前标准学习目标 learning_target 作为 query；如果 learning_target 为空，再使用 handoff_request.topic 或用户原始问题中的稳定主题名。"
+            "\n- 不要用“RAG 有关内容”“这个主题”“上面的内容”这类泛泛 query 检索。"
+            "\n- 如果要限制分类，category 只能使用 langgraph_core、langgraph_advanced、agent_arch、tool_calling、rag_basic、rag_advanced、vector_db、langchain、fastapi、backend、observability、eval、data_cache、api_design、llm_engineering。"
+            "\n- 对于 RAG、LangGraph 这类跨多个子分类的宽泛主题，不要传 category='RAG' 或 category='LangGraph'；应不传 category，或使用 tags=['rag'] / tags=['langgraph']。"
 
             "\n\n你的输出尽量使用稳定结构。"
 

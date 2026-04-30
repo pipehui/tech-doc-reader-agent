@@ -1,6 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 
+from langchain_core.messages import AIMessage
 from redis.exceptions import BusyLoadingError
 
 from tech_doc_agent.app.core.observability import trace_context
@@ -156,3 +157,129 @@ def test_astream_user_message_bridges_sync_graph_stream_with_trace_context():
     assert runtime.graph.calls[0]["config"]["metadata"]["trace_id"] == "trace-async"
     assert runtime.graph.calls[0]["stream_mode"] == ["messages", "updates"]
     assert runtime.graph.calls[0]["version"] == "v2"
+
+
+def test_stream_approval_rejection_updates_interrupted_tool_node_before_resuming():
+    class FakeGraph:
+        def __init__(self):
+            self.next = ("parser_assistant_sensitive_tools",)
+            self.update_calls = []
+            self.stream_calls = []
+
+        def get_state(self, config):
+            return SimpleNamespace(
+                next=self.next,
+                values={
+                    "messages": [
+                        AIMessage(
+                            content="",
+                            name="parser",
+                            tool_calls=[
+                                {
+                                    "name": "save_docs",
+                                    "args": {"title": "RAG"},
+                                    "id": "call-save",
+                                }
+                            ],
+                        )
+                    ]
+                },
+            )
+
+        def update_state(self, config, values, as_node=None):
+            self.update_calls.append({"config": config, "values": values, "as_node": as_node})
+            self.next = ("parser",)
+            return {**config, "updated": True}
+
+        def stream(self, graph_input, config, stream_mode, version):
+            self.stream_calls.append(
+                {
+                    "graph_input": graph_input,
+                    "config": config,
+                    "stream_mode": stream_mode,
+                    "version": version,
+                }
+            )
+            self.next = ()
+            yield ("updates", {"parser": {}})
+
+    runtime = ChatRuntime()
+    runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
+    runtime.graph = FakeGraph()
+
+    parts = list(runtime.stream_approval("session-approval", approved=False, feedback="内容重复"))
+
+    assert parts == [("updates", {"parser": {}})]
+    assert runtime.graph.update_calls[0]["as_node"] == "parser_assistant_sensitive_tools"
+    message = runtime.graph.update_calls[0]["values"]["messages"][0]
+    assert message.tool_call_id == "call-save"
+    assert "内容重复" in message.content
+    assert runtime.graph.stream_calls[0]["graph_input"] is None
+
+
+def test_astream_approval_rejection_uses_sync_update_state_bridge():
+    class FakeGraph:
+        def __init__(self):
+            self.next = ("primary_assistant_sensitive_tools",)
+            self.update_calls = []
+            self.stream_calls = []
+
+        def get_state(self, config):
+            return SimpleNamespace(
+                next=self.next,
+                values={
+                    "messages": [
+                        AIMessage(
+                            content="",
+                            name="primary",
+                            tool_calls=[
+                                {
+                                    "name": "upsert_learning_history",
+                                    "args": {"knowledge": "RAG"},
+                                    "id": "call-history",
+                                }
+                            ],
+                        )
+                    ]
+                },
+            )
+
+        def update_state(self, config, values, as_node=None):
+            self.update_calls.append({"config": config, "values": values, "as_node": as_node})
+            self.next = ("primary_assistant",)
+            return {**config, "updated": True}
+
+        def stream(self, graph_input, config, stream_mode, version):
+            self.stream_calls.append(
+                {
+                    "graph_input": graph_input,
+                    "config": config,
+                    "stream_mode": stream_mode,
+                    "version": version,
+                }
+            )
+            self.next = ()
+            yield ("updates", {"primary_assistant": {}})
+
+    async def collect(runtime: ChatRuntime):
+        return [
+            part
+            async for part in runtime.astream_approval(
+                "session-approval",
+                approved=False,
+                feedback="不要更新记录",
+            )
+        ]
+
+    runtime = ChatRuntime()
+    runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
+    runtime.graph = FakeGraph()
+
+    parts = asyncio.run(collect(runtime))
+
+    assert parts == [("updates", {"primary_assistant": {}})]
+    assert runtime.graph.update_calls[0]["as_node"] == "primary_assistant_sensitive_tools"
+    message = runtime.graph.update_calls[0]["values"]["messages"][0]
+    assert message.tool_call_id == "call-history"
+    assert "不要更新记录" in message.content
+    assert runtime.graph.stream_calls[0]["graph_input"] is None

@@ -19,8 +19,9 @@ def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable:
                 ToolMessage(
                     content=(
                         f"You are now acting as the {assistant_name} in a multi-agent technical document learning workflow. "
-                        "Review the conversation and continue the current step using the existing context and any prior intermediate results. "
+                        "Use the current task brief, structured state fields, and your own tool results for this step. "
                         "Follow your own role-specific instructions and use the available tools when needed. "
+                        "Do not rely on hidden primary messages or other agents' raw tool results unless they are included as structured state. "
                         "Do not mention internal routing, workflow planning, or handoff details to the user. "
                         "If the task has changed, the current step is no longer appropriate, or you cannot continue safely, "
                         "call CompleteOrEscalate so the primary assistant can take over."

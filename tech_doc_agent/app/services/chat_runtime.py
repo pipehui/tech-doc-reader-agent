@@ -42,6 +42,20 @@ def _is_retryable_redis_startup_error(exc: Exception) -> bool:
     return isinstance(exc, BusyLoadingError) or "redis is loading" in message or "loading the dataset" in message
 
 
+def _interrupted_node(snapshot: StateSnapshot) -> str | None:
+    next_nodes = getattr(snapshot, "next", ()) or ()
+    return next_nodes[0] if next_nodes else None
+
+
+def _rejection_tool_message(snapshot: StateSnapshot, feedback: str) -> ToolMessage:
+    tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
+    feedback = feedback or "用户未提供原因"
+    return ToolMessage(
+        tool_call_id=tool_call_id,
+        content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
+    )
+
+
 async def _aiter_sync_iterator(parts):
     iterator = iter(parts)
 
@@ -384,17 +398,13 @@ class ChatRuntime:
                 parts = graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
             else:
                 graph = self._require_graph()
-                tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
-                feedback = feedback or "用户未提供原因"
+                config = graph.update_state(
+                    config,
+                    {"messages": [_rejection_tool_message(snapshot, feedback)]},
+                    as_node=_interrupted_node(snapshot),
+                )
                 parts = graph.stream(
-                    {
-                        "messages": [
-                            ToolMessage(
-                                tool_call_id=tool_call_id,
-                                content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
-                            )
-                        ]
-                    },
+                    None,
                     config,
                     stream_mode=["messages", "updates"],
                     version="v2",
@@ -475,16 +485,13 @@ class ChatRuntime:
             if approved:
                 graph_input = None
             else:
-                tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
-                feedback = feedback or "用户未提供原因"
-                graph_input = {
-                    "messages": [
-                        ToolMessage(
-                            tool_call_id=tool_call_id,
-                            content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
-                        )
-                    ]
-                }
+                config = await asyncio.to_thread(
+                    graph.update_state,
+                    config,
+                    {"messages": [_rejection_tool_message(snapshot, feedback)]},
+                    _interrupted_node(snapshot),
+                )
+                graph_input = None
 
             with timed_node("graph.stream.thread", phase="approval", approved=approved):
                 async for part in _aiter_sync_iterator(

@@ -4,6 +4,7 @@ from tech_doc_agent.app.services.retrieval.metadata import (
     metadata_matches,
     normalize_chunk_metadata,
     normalize_document,
+    normalize_filter,
 )
 
 
@@ -53,3 +54,22 @@ def test_metadata_matches_scalar_and_tag_filters():
     assert metadata_matches(document, {"tags": ["stategraph"]})
     assert not metadata_matches(document, {"category": "fastapi"})
     assert not metadata_matches(document, {"tags": ["checkpoint"]})
+
+
+def test_normalize_filter_maps_broad_category_aliases_to_tags():
+    assert normalize_filter({"category": "RAG"}) == {"tags": ["rag"]}
+    assert normalize_filter({"category": "RAG 有关的内容"}) == {"tags": ["rag"]}
+    assert normalize_filter({"category": "LangGraph"}) == {"tags": ["langgraph"]}
+    assert normalize_filter({"category": "RAG 基础"}) == {"category": "rag_basic"}
+
+
+def test_metadata_matches_broad_rag_category_alias_against_rag_tags():
+    document = normalize_document(
+        {
+            "title": "RAG 进阶中的 Recall@K 评估指标详解",
+            "content": "Recall@K evaluates retriever quality.",
+            "metadata": {"category": "rag_advanced", "tags": ["rag", "rag_advanced"]},
+        }
+    )
+
+    assert metadata_matches(document, {"category": "RAG"})
