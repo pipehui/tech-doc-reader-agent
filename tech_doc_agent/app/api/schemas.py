@@ -103,3 +103,17 @@ class LearningMemoryResponse(BaseModel):
     namespace: str | None = None
     total: int
     memories: list[MemoryRecord] = Field(default_factory=list)
+
+class UserProfileResponse(BaseModel):
+    profile_version: int
+    user_id: str | None = None
+    namespace: str | None = None
+    experience_level: str
+    explanation_style: str
+    depth: str
+    language: str
+    known_topics: list[str] = Field(default_factory=list)
+    weak_topics: list[str] = Field(default_factory=list)
+    notes: str = ""
+    last_update_reason: str | None = None
+    updated_at: str | None = None

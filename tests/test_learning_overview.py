@@ -127,3 +127,39 @@ def test_learning_routes_filter_by_tenant_query_params():
     assert memory_payload["user_id"] == "user-a"
     assert memory_payload["total"] == 1
     assert memory_payload["memories"][0]["kind"] == "stuck_point"
+
+
+def test_learning_profile_route_resolves_tenant(monkeypatch):
+    def fake_get_user_profile(user_id: str | None = None, namespace: str | None = None):
+        return {
+            "profile_version": 1,
+            "user_id": user_id,
+            "namespace": namespace,
+            "experience_level": "进阶",
+            "explanation_style": "先看工程实现",
+            "depth": "中等",
+            "language": "中文",
+            "known_topics": ["StateGraph"],
+            "weak_topics": ["Checkpoint"],
+            "notes": "用户主动更新过画像。",
+            "last_update_reason": "测试",
+            "updated_at": "2026-04-30T00:00:00+00:00",
+        }
+
+    monkeypatch.setattr(
+        "tech_doc_agent.app.api.routes.learning.get_user_profile",
+        fake_get_user_profile,
+    )
+
+    app = FastAPI()
+    app.include_router(router)
+    response = TestClient(app).get(
+        "/learning/profile",
+        params={"user_id": "user-a", "namespace": "tenant-docs"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["user_id"] == "user-a"
+    assert payload["namespace"] == "tenant-docs"
+    assert payload["known_topics"] == ["StateGraph"]

@@ -16,7 +16,7 @@
 - **Session recovery**: Redis checkpointer + 状态接口支持刷新后恢复会话。
 - **Tenant baseline**: `user_id + namespace` 隔离 LangGraph thread 和学习记录；文档库作为共享知识库，默认兼容现有 232 条本地资料。
 - **Traceable runtime**: 内部 `trace_id` 贯穿 SSE / JSON 日志，并可选接入 Langfuse 记录 LangGraph/LangChain 调用链路。
-- **Learning memory**: 学习记录、掌握度和复习次数会沉淀到 learner 视角。
+- **Learning state**: 学习记录、学习轨迹 memory 和长期用户画像分层存储，写入类工具通过 HITL 审批。
 - **Three product views**: Studio 面向日常对话，Inspector 面向事件可观测性，Learner 面向学习复盘。
 
 ## Quality Gates
@@ -169,7 +169,24 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 - `primary assistant` 负责用户意图理解、自适应路由和 `PlanWorkflow`。
 - 多 agent 链路主要是 `parser -> relation -> explanation`。
 - `examination` 和 `summary` 处理测验、评估、总结与学习记录更新。
-- 底层共享 FAISS 文档向量库、Learning store、Web search 和 Redis checkpointer。
+- 底层共享 FAISS 文档向量库、Learning store、Memory store、User profile、Web search 和 Redis checkpointer。
+
+## Learning State
+
+系统把用户学习状态拆成三层，避免把“本轮观察”和“长期偏好”混在一起：
+
+| 层级 | 存储位置 | 更新方式 | 用途 |
+|---|---|---|---|
+| 学习记录 | `tech_doc_agent/data/learning_store` | `summary` / `examination` / 用户显式记录请求，经审批写入 | 记录学过什么、最近学习时间、掌握度和复习次数 |
+| 学习轨迹 memory | `tech_doc_agent/data/memory_store` | `summary` 在有明确证据时，经审批写入 | 记录卡点、误解、已掌握点和复习提示，供后续相关问题检索 |
+| 长期用户画像 | `tech_doc_agent/data/user_profiles` | 仅当用户主动要求更新能力或偏好时，由 `primary` 读取学习记录和 memory 后，经审批写入 | 记录经验水平、解释风格、解释深度、熟悉主题和薄弱主题 |
+
+边界约束：
+
+- `summary` 可以沉淀本轮学习记录和学习轨迹 memory，但不会自动修改长期用户画像。
+- `primary` 只有在用户明确提出“更新我的能力信息 / 用户画像 / 解释偏好”时，才会调用 `update_user_profile`。
+- `update_user_profile` 是 sensitive tool，会触发 `interrupt_required`，用户批准后才落盘。
+- 会话、学习记录和 memory 按 `user_id + namespace` 隔离；长期用户画像按 `user_id` 保存，同一个用户在不同 namespace 下共享画像。
 
 ## Agents
 
@@ -192,8 +209,9 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 - `GET /sessions/{id}/state`：获取当前会话状态
 - `GET /learning/overview`：获取学习记录概览
 - `GET /learning/memory`：获取长期学习轨迹记忆
+- `GET /learning/profile`：获取长期用户画像
 
-多租户字段：`/chat`、`/chat/approve` 请求体可传 `user_id`、`namespace`；`/sessions/*` 和 `/learning/*` 可用 query param 或 `x-user-id` / `x-namespace` header。默认值是 `default` / `tech_docs`，LangGraph thread 实际使用 `user_id:namespace:session_id`。会话状态和学习记录按租户隔离，文档库不隔离。
+多租户字段：`/chat`、`/chat/approve` 请求体可传 `user_id`、`namespace`；`/sessions/*` 和 `/learning/*` 可用 query param 或 `x-user-id` / `x-namespace` header。默认值是 `default` / `tech_docs`，LangGraph thread 实际使用 `user_id:namespace:session_id`。会话状态、学习记录和 memory 按租户隔离，长期用户画像按 `user_id` 保存，文档库不隔离。
 
 SSE 事件包括：
 
@@ -314,7 +332,7 @@ tech_doc_agent/
     core/         settings
     services/
       assistants/  LangGraph agent implementations
-      tools/       document, learning and web-search tools
+      tools/       document, learning, profile and web-search tools
       vectordb/    FAISS vector store
   data/           runtime data
 docs/
@@ -334,6 +352,7 @@ scripts/
 - `tech_doc_agent/data/faiss_store`
 - `tech_doc_agent/data/learning_store`
 - `tech_doc_agent/data/memory_store`
+- `tech_doc_agent/data/user_profiles`
 - `tech_doc_agent/data/web_search`
 - `tech_doc_agent/data/redis`
 

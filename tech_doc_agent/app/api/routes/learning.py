@@ -8,7 +8,9 @@ from tech_doc_agent.app.api.schemas import (
     LearningOverviewResponse,
     LearningRecord,
     MemoryRecord,
+    UserProfileResponse,
 )
+from tech_doc_agent.app.services.user_profile import get_user_profile
 from tech_doc_agent.app.services.tools.learning_store import get_learning_store, get_memory_store
 
 
@@ -116,3 +118,13 @@ def get_learning_memory(
         total=len(memories),
         memories=memories,
     )
+
+
+@router.get("/learning/profile", response_model=UserProfileResponse)
+def get_learning_profile(
+    request: Request,
+    user_id: str | None = None,
+    namespace: str | None = None,
+):
+    tenant = _resolve_tenant(request, user_id, namespace)
+    return UserProfileResponse(**get_user_profile(tenant.user_id, tenant.namespace))

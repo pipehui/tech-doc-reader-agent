@@ -221,6 +221,35 @@
 | `created_at` | `string` | 是 | 创建时间 |
 | `updated_at` | `string` | 是 | 更新时间 |
 
+### GET /learning/profile
+
+读取当前用户的长期用户画像，不经过 LangGraph。画像记录的是稳定偏好和能力信息，例如经验水平、解释风格、解释深度、熟悉主题和薄弱主题。
+
+画像不会由 summary 自动更新。只有当用户在对话中明确要求更新能力、偏好或用户画像时，primary 才会调用敏感工具 `update_user_profile`，并等待用户审批。
+
+查询参数：
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `user_id` | `string` | 否 | 用户 ID，默认 `default` |
+| `namespace` | `string` | 否 | 命名空间，默认 `tech_docs` |
+
+响应字段：
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `user_id` | `string \| null` | 否 | 用户 ID |
+| `namespace` | `string \| null` | 否 | 当前命名空间 |
+| `experience_level` | `string` | 是 | 经验水平 |
+| `explanation_style` | `string` | 是 | 解释风格 |
+| `depth` | `string` | 是 | 解释深度 |
+| `language` | `string` | 是 | 语言偏好 |
+| `known_topics` | `string[]` | 是 | 已掌握或熟悉主题 |
+| `weak_topics` | `string[]` | 是 | 仍需巩固主题 |
+| `notes` | `string` | 是 | 其他画像备注 |
+| `last_update_reason` | `string \| null` | 否 | 最近一次更新依据 |
+| `updated_at` | `string \| null` | 否 | 最近更新时间 |
+
 ## SSE 事件
 
 所有 SSE payload 都会自动带上当前 `trace_id`、`session_id`、`user_id` 和 `namespace`。

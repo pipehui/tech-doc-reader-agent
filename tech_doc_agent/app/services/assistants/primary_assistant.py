@@ -2,7 +2,11 @@ from typing import Literal
 from datetime import datetime
 from langchain_core.prompts import ChatPromptTemplate
 from tech_doc_agent.app.services.tools import (
+    read_all_learning_history,
     read_learning_history,
+    read_user_memory,
+    read_user_profile,
+    update_user_profile,
     web_search,
     upsert_learning_history,
 )
@@ -76,6 +80,16 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
             "\n- 在学习记录工具真正返回成功之前，不要对用户说“已更新学习记录”“复习次数已增加”“分数已写入”等已完成表述。"
             "\n- 如果工具尚未执行、正在等待审批、或执行失败，你必须如实说明状态，而不能口头假装更新成功。"
 
+            "\n\n关于“用户主动更新长期用户画像”的处理，请严格遵守："
+            "\n- 长期用户画像用于记录稳定的能力水平、解释偏好、熟悉主题和薄弱主题；它不同于学习记录，也不同于 summary 写入的学习轨迹 memory。"
+            "\n- 只有当用户明确要求“更新我的能力信息”“更新我的用户画像”“调整我的解释偏好”“以后按某种风格讲”“根据最近学习记录更新我的水平”等同等含义时，才允许更新长期用户画像。"
+            "\n- 如果用户只是完成了一次普通学习、总结或复习，不要主动更新长期用户画像；这类信息应交给 summary 写入学习记录或学习轨迹 memory。"
+            "\n- 在更新画像前，应先调用 read_user_profile 查看当前画像；如果用户要求基于最近学习情况判断，还应读取 read_all_learning_history 和 read_user_memory 获取依据。"
+            "\n- update_user_profile 是敏感写入工具，调用后会等待用户审批。在工具真正返回成功之前，不要说画像已经更新。"
+            "\n- 更新画像时只写有明确依据的字段；不要因为一次对话就夸大用户能力等级。"
+            "\n- known_topics 用于记录已经比较熟悉或可减少基础解释的主题；weak_topics 用于记录仍需巩固的主题；resolved_weak_topics 用于移除已经解决的薄弱点。"
+            "\n- 不要在同一轮消息里同时调用安全读取工具和 update_user_profile；应先读取依据，等工具返回后再发起画像更新。"
+
             "\n\n你可以使用的工作流步骤包括："
             "\n- parser：解析技术文档，提取结构化信息"
             "\n- relation：检索适合类比学习的相关知识点"
@@ -141,7 +155,10 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
 primary_assistant_tools = [
     # DuckDuckGoSearchResults(max_results=10),
     web_search,
+    read_user_profile,
     read_learning_history,
+    read_all_learning_history,
+    read_user_memory,
     PlanWorkflow,
     ToDocParserAssistant,
     ToExplanationAssistant,
@@ -149,9 +166,12 @@ primary_assistant_tools = [
     ToExaminationAssistant,
     ToSummaryAssistant,
 ]
-primary_assistant_sensitive_tools = [upsert_learning_history]
+primary_assistant_sensitive_tools = [upsert_learning_history, update_user_profile]
 # Create the primary assistant runnable
-primary_assistant_runnable = primary_assistant_prompt | llm.bind_tools(primary_assistant_tools + primary_assistant_sensitive_tools)
+primary_assistant_runnable = primary_assistant_prompt | llm.bind_tools(
+    primary_assistant_tools + primary_assistant_sensitive_tools,
+    parallel_tool_calls=False,
+)
 
 # Instantiate the primary assistant
 primary_assistant = Assistant(primary_assistant_runnable, name="primary")
