@@ -17,17 +17,34 @@ from tech_doc_agent.app.core.observability import get_trace_context
 
 
 class FakeRuntime:
-    def has_pending_interrupt(self, session_id: str) -> bool:
+    def has_pending_interrupt(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> bool:
         return False
 
-    async def ahas_pending_interrupt(self, session_id: str) -> bool:
+    async def ahas_pending_interrupt(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> bool:
         return False
 
 
 class FakeRouteRuntime(FakeRuntime):
-    async def aget_session_state(self, session_id: str) -> dict:
+    async def aget_session_state(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> dict:
         return {
             "session_id": session_id,
+            "user_id": user_id,
+            "namespace": namespace,
             "exists": False,
             "pending_interrupt": False,
             "learning_target": None,
@@ -37,7 +54,13 @@ class FakeRouteRuntime(FakeRuntime):
             "plan_index": 0,
         }
 
-    async def astream_user_message(self, session_id: str, message: str):
+    async def astream_user_message(
+        self,
+        session_id: str,
+        message: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ):
         yield (
             "messages",
             (
@@ -160,11 +183,15 @@ def test_iter_with_trace_context_sets_context_per_next_without_leaking():
         trace_id="trace-test",
         session_id="session-1",
         operation="chat",
+        user_id="user-a",
+        namespace="tenant-docs",
     )
 
     first = next(wrapped)
     assert first.data["trace_id"] == "trace-test"
     assert first.data["session_id"] == "session-1"
+    assert first.data["user_id"] == "user-a"
+    assert first.data["namespace"] == "tenant-docs"
     assert get_trace_context() == {}
 
     second = next(wrapped)
@@ -186,6 +213,8 @@ def test_aiter_with_trace_context_sets_context_per_next_without_leaking():
             trace_id="trace-async",
             session_id="session-async",
             operation="chat",
+            user_id="user-a",
+            namespace="tenant-docs",
         )
 
         events = []
@@ -198,6 +227,8 @@ def test_aiter_with_trace_context_sets_context_per_next_without_leaking():
 
     assert first.data["trace_id"] == "trace-async"
     assert first.data["session_id"] == "session-async"
+    assert first.data["user_id"] == "user-a"
+    assert first.data["namespace"] == "tenant-docs"
     assert second.data["trace_id"] == "trace-async"
     assert second.data["session_id"] == "session-async"
 
@@ -230,7 +261,13 @@ def test_chat_route_returns_async_sse_stream():
 
     response = TestClient(app).post(
         "/chat",
-        json={"session_id": "session-async-route", "message": "hi", "trace_id": "trace-route"},
+        json={
+            "session_id": "session-async-route",
+            "message": "hi",
+            "trace_id": "trace-route",
+            "user_id": "user-a",
+            "namespace": "tenant-docs",
+        },
     )
 
     assert response.status_code == 200
@@ -238,3 +275,5 @@ def test_chat_route_returns_async_sse_stream():
     assert "event: token" in response.text
     assert "event: done" in response.text
     assert "trace-route" in response.text
+    assert "user-a" in response.text
+    assert "tenant-docs" in response.text

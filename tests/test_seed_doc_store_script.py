@@ -93,12 +93,25 @@ def test_run_topic_auto_approves_save_docs():
         timeout_s=1,
         allowed_approval_tools={"save_docs"},
         max_approval_rounds=2,
+        user_id="user-a",
+        namespace="tenant-docs",
     )
 
     assert row["status"] == "done"
     assert row["approvals"] == 1
     assert row["tool_results"] == 1
-    assert client.requests[1]["json"] == {"session_id": "session-1", "approved": True}
+    assert client.requests[0]["json"] == {
+        "session_id": "session-1",
+        "message": "message",
+        "user_id": "user-a",
+        "namespace": "tenant-docs",
+    }
+    assert client.requests[1]["json"] == {
+        "session_id": "session-1",
+        "approved": True,
+        "user_id": "user-a",
+        "namespace": "tenant-docs",
+    }
 
 
 def test_run_topic_refuses_unexpected_sensitive_tool():

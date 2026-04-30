@@ -20,6 +20,8 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
 
 class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
+    user_id: NotRequired[str]
+    namespace: NotRequired[str]
     user_info: str
     dialog_state: Annotated[list[WorkflowStep | Literal["primary"]], update_dialog_stack]
     learning_target: str

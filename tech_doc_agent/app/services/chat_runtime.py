@@ -9,6 +9,7 @@ from tech_doc_agent.app.core.langfuse_tracing import (
 )
 from tech_doc_agent.app.core.observability import get_trace_context, log_event, timed_node
 from tech_doc_agent.app.core.settings import get_settings
+from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values, tenant_thread_id
 from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
 from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.redis import RedisSaver
@@ -125,9 +126,12 @@ class ChatRuntime:
     def build_config(
         self,
         session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
         operation: str = "state",
         with_callbacks: bool = False,
     ) -> dict:
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
         context = get_trace_context()
         trace_id = context.get("trace_id")
         langfuse_trace = (
@@ -137,6 +141,8 @@ class ChatRuntime:
         )
         metadata = {
             "session_id": session_id,
+            "user_id": tenant.user_id,
+            "namespace": tenant.namespace,
             **langfuse_metadata(
                 session_id=session_id,
                 operation=operation,
@@ -147,7 +153,7 @@ class ChatRuntime:
 
         config = {
             "configurable": {
-                "thread_id": session_id,
+                "thread_id": tenant_thread_id(session_id, tenant),
             },
             "metadata": metadata,
             "run_name": f"tech_doc_agent.{operation}",
@@ -158,11 +164,23 @@ class ChatRuntime:
             config["callbacks"] = [langfuse_trace.callback]
 
         return config
+
+    def _graph_input(self, session_id: str, user_input: str, tenant: TenantContext) -> dict:
+        return {
+            "messages": [("user", user_input)],
+            "user_id": tenant.user_id,
+            "namespace": tenant.namespace,
+        }
     
-    def preload_printed_message_ids(self, session_id: str) -> set[str]:
+    def preload_printed_message_ids(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> set[str]:
         printed_message_ids = set()
 
-        snapshot = self.get_snapshot(session_id)
+        snapshot = self.get_snapshot(session_id, user_id=user_id, namespace=namespace)
         state_value = getattr(snapshot, "values", None)
 
         if state_value and "messages" in state_value:
@@ -172,11 +190,20 @@ class ChatRuntime:
 
         return printed_message_ids
     
-    def stream_user_message(self, session_id: str, user_input: str):
+    def stream_user_message(
+        self,
+        session_id: str,
+        user_input: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ):
         start = perf_counter()
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
         log_event(
             "chat.request.started",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             message_length=len(user_input),
         )
 
@@ -185,11 +212,13 @@ class ChatRuntime:
                 graph = self._require_graph()
                 config = self.build_config(
                     session_id,
+                    user_id=tenant.user_id,
+                    namespace=tenant.namespace,
                     operation="chat",
                     with_callbacks=True,
                 )
                 parts = graph.stream(
-                    {"messages": [("user", user_input)]},
+                    self._graph_input(session_id, user_input, tenant),
                     config,
                     stream_mode=["messages", "updates"],
                     version="v2",
@@ -200,27 +229,40 @@ class ChatRuntime:
             log_event(
                 "chat.request.error",
                 session_id=session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 elapsed_ms=_elapsed_ms(start),
                 error_type=type(exc).__name__,
                 error=_error_message(exc),
             )
             raise
 
-        pending_interrupt = self.has_pending_interrupt(session_id)
+        pending_interrupt = self.has_pending_interrupt(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         log_event(
             "chat.request.interrupted" if pending_interrupt else "chat.request.finished",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             elapsed_ms=_elapsed_ms(start),
             pending_interrupt=pending_interrupt,
         )
         if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
             flush_langfuse(self.settings)
 
-    async def astream_user_message(self, session_id: str, user_input: str):
+    async def astream_user_message(
+        self,
+        session_id: str,
+        user_input: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ):
         start = perf_counter()
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
         log_event(
             "chat.request.started",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             message_length=len(user_input),
             async_runtime=True,
         )
@@ -229,6 +271,8 @@ class ChatRuntime:
             graph = self._require_graph()
             config = self.build_config(
                 session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 operation="chat",
                 with_callbacks=True,
             )
@@ -236,7 +280,7 @@ class ChatRuntime:
             with timed_node("graph.stream.thread", phase="chat"):
                 async for part in _aiter_sync_iterator(
                     graph.stream(
-                        {"messages": [("user", user_input)]},
+                        self._graph_input(session_id, user_input, tenant),
                         config,
                         stream_mode=["messages", "updates"],
                         version="v2",
@@ -247,6 +291,8 @@ class ChatRuntime:
             log_event(
                 "chat.request.error",
                 session_id=session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 elapsed_ms=_elapsed_ms(start),
                 async_runtime=True,
                 error_type=type(exc).__name__,
@@ -254,10 +300,16 @@ class ChatRuntime:
             )
             raise
 
-        pending_interrupt = await self.ahas_pending_interrupt(session_id)
+        pending_interrupt = await self.ahas_pending_interrupt(
+            session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
         log_event(
             "chat.request.interrupted" if pending_interrupt else "chat.request.finished",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             elapsed_ms=_elapsed_ms(start),
             pending_interrupt=pending_interrupt,
             async_runtime=True,
@@ -265,24 +317,55 @@ class ChatRuntime:
         if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
             await asyncio.to_thread(flush_langfuse, self.settings)
 
-    def has_pending_interrupt(self, session_id: str) -> bool:
-        snapshot = self.get_snapshot(session_id)
+    def has_pending_interrupt(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> bool:
+        snapshot = self.get_snapshot(session_id, user_id=user_id, namespace=namespace)
         return bool(snapshot.next)
 
-    async def ahas_pending_interrupt(self, session_id: str) -> bool:
-        return await asyncio.to_thread(self.has_pending_interrupt, session_id)
+    async def ahas_pending_interrupt(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> bool:
+        return await asyncio.to_thread(
+            self.has_pending_interrupt,
+            session_id,
+            user_id,
+            namespace,
+        )
 
-    def stream_approval(self, session_id: str, approved: bool, feedback: str = ""):
+    def stream_approval(
+        self,
+        session_id: str,
+        approved: bool,
+        feedback: str = "",
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ):
         start = perf_counter()
-        log_event("chat.approval.started", session_id=session_id, approved=approved)
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        log_event(
+            "chat.approval.started",
+            session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+            approved=approved,
+        )
 
         try:
-            snapshot = self.get_snapshot(session_id)
+            snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
 
             if not snapshot.next:
                 log_event(
                     "chat.approval.no_pending_interrupt",
                     session_id=session_id,
+                    user_id=tenant.user_id,
+                    namespace=tenant.namespace,
                     elapsed_ms=_elapsed_ms(start),
                     approved=approved,
                 )
@@ -290,6 +373,8 @@ class ChatRuntime:
 
             config = self.build_config(
                 session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 operation="approval",
                 with_callbacks=True,
             )
@@ -322,6 +407,8 @@ class ChatRuntime:
             log_event(
                 "chat.approval.error",
                 session_id=session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 elapsed_ms=_elapsed_ms(start),
                 approved=approved,
                 error_type=type(exc).__name__,
@@ -329,10 +416,12 @@ class ChatRuntime:
             )
             raise
 
-        pending_interrupt = self.has_pending_interrupt(session_id)
+        pending_interrupt = self.has_pending_interrupt(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         log_event(
             "chat.approval.interrupted" if pending_interrupt else "chat.approval.finished",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             elapsed_ms=_elapsed_ms(start),
             approved=approved,
             pending_interrupt=pending_interrupt,
@@ -340,22 +429,34 @@ class ChatRuntime:
         if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
             flush_langfuse(self.settings)
 
-    async def astream_approval(self, session_id: str, approved: bool, feedback: str = ""):
+    async def astream_approval(
+        self,
+        session_id: str,
+        approved: bool,
+        feedback: str = "",
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ):
         start = perf_counter()
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
         log_event(
             "chat.approval.started",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             approved=approved,
             async_runtime=True,
         )
 
         try:
-            snapshot = await self.aget_snapshot(session_id)
+            snapshot = await self.aget_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
 
             if not snapshot.next:
                 log_event(
                     "chat.approval.no_pending_interrupt",
                     session_id=session_id,
+                    user_id=tenant.user_id,
+                    namespace=tenant.namespace,
                     elapsed_ms=_elapsed_ms(start),
                     approved=approved,
                     async_runtime=True,
@@ -364,6 +465,8 @@ class ChatRuntime:
 
             config = self.build_config(
                 session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 operation="approval",
                 with_callbacks=True,
             )
@@ -397,6 +500,8 @@ class ChatRuntime:
             log_event(
                 "chat.approval.error",
                 session_id=session_id,
+                user_id=tenant.user_id,
+                namespace=tenant.namespace,
                 elapsed_ms=_elapsed_ms(start),
                 approved=approved,
                 async_runtime=True,
@@ -405,10 +510,16 @@ class ChatRuntime:
             )
             raise
 
-        pending_interrupt = await self.ahas_pending_interrupt(session_id)
+        pending_interrupt = await self.ahas_pending_interrupt(
+            session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
         log_event(
             "chat.approval.interrupted" if pending_interrupt else "chat.approval.finished",
             session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
             elapsed_ms=_elapsed_ms(start),
             approved=approved,
             pending_interrupt=pending_interrupt,
@@ -417,11 +528,23 @@ class ChatRuntime:
         if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
             await asyncio.to_thread(flush_langfuse, self.settings)
 
-    def get_snapshot(self, session_id: str) -> StateSnapshot:
-        return self._require_graph().get_state(self.build_config(session_id))
+    def get_snapshot(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> StateSnapshot:
+        return self._require_graph().get_state(
+            self.build_config(session_id, user_id=user_id, namespace=namespace)
+        )
 
-    async def aget_snapshot(self, session_id: str) -> StateSnapshot:
-        return await asyncio.to_thread(self.get_snapshot, session_id)
+    async def aget_snapshot(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> StateSnapshot:
+        return await asyncio.to_thread(self.get_snapshot, session_id, user_id, namespace)
     
     def _extract_text_content(self, content) -> str:
         if isinstance(content, str):
@@ -460,8 +583,14 @@ class ChatRuntime:
             "tool_calls": getattr(message, "tool_calls", []) or [],
         }
     
-    def get_history(self, session_id: str) -> dict:
-        snapshot = self.get_snapshot(session_id)
+    def get_history(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> dict:
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         state_values = getattr(snapshot, "values", None)
 
         if not isinstance(state_values, dict):
@@ -471,6 +600,8 @@ class ChatRuntime:
 
         return {
             "session_id": session_id,
+            "user_id": state_values.get("user_id") or tenant.user_id,
+            "namespace": state_values.get("namespace") or tenant.namespace,
             "learning_target": state_values.get("learning_target"),
             "pending_interrupt": bool(snapshot.next),
             "message_count": len(messages),
@@ -516,8 +647,11 @@ class ChatRuntime:
         self,
         session_id: str,
         include_tools: bool = False,
+        user_id: str | None = None,
+        namespace: str | None = None,
     ) -> dict:
-        snapshot = self.get_snapshot(session_id)
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         state_values = getattr(snapshot, "values", None)
 
         if not isinstance(state_values, dict):
@@ -538,14 +672,22 @@ class ChatRuntime:
 
         return {
             "session_id": session_id,
+            "user_id": state_values.get("user_id") or tenant.user_id,
+            "namespace": state_values.get("namespace") or tenant.namespace,
             "learning_target": state_values.get("learning_target"),
             "pending_interrupt": bool(snapshot.next),
             "message_count": len(items),
             "messages": items,
         }
 
-    def get_session_state(self, session_id: str) -> dict:
-        snapshot = self.get_snapshot(session_id)
+    def get_session_state(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> dict:
+        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
         state_values = getattr(snapshot, "values", None)
 
         if not isinstance(state_values, dict):
@@ -564,6 +706,8 @@ class ChatRuntime:
 
         return {
             "session_id": session_id,
+            "user_id": state_values.get("user_id") or tenant.user_id,
+            "namespace": state_values.get("namespace") or tenant.namespace,
             "exists": exists,
             "pending_interrupt": bool(snapshot.next),
             "learning_target": learning_target,
@@ -573,5 +717,10 @@ class ChatRuntime:
             "plan_index": plan_index,
         }
 
-    async def aget_session_state(self, session_id: str) -> dict:
-        return await asyncio.to_thread(self.get_session_state, session_id)
+    async def aget_session_state(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> dict:
+        return await asyncio.to_thread(self.get_session_state, session_id, user_id, namespace)

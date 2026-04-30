@@ -14,6 +14,7 @@
 - **Async SSE streaming UI**: FastAPI 通过异步 SSE 返回 token、tool、plan、agent transition 等事件，前端实时渲染。
 - **HITL approval**: 敏感工具调用前暂停，用户审批后继续执行。
 - **Session recovery**: Redis checkpointer + 状态接口支持刷新后恢复会话。
+- **Tenant baseline**: `user_id + namespace` 隔离 LangGraph thread 和学习记录；文档库作为共享知识库，默认兼容现有 232 条本地资料。
 - **Traceable runtime**: 内部 `trace_id` 贯穿 SSE / JSON 日志，并可选接入 Langfuse 记录 LangGraph/LangChain 调用链路。
 - **Learning memory**: 学习记录、掌握度和复习次数会沉淀到 learner 视角。
 - **Three product views**: Studio 面向日常对话，Inspector 面向事件可观测性，Learner 面向学习复盘。
@@ -99,7 +100,7 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --m
 python scripts/seed_doc_store.py --topics-file scripts/doc_seed_topics.example.txt --api-url http://127.0.0.1:8000/chat --timeout 600
 ```
 
-默认只自动批准 `save_docs`，运行前需要先启动后端，并确保 `.env` 里的 embedding 配置可用。
+默认只自动批准 `save_docs`，运行前需要先启动后端，并确保 `.env` 里的 embedding 配置可用。文档库是共享知识库；如需让批量写入过程使用指定会话租户，可追加 `--user-id user-a --namespace tech_docs`。
 
 已有文档库可以无损补齐 metadata，不会重新调用 parser 或重新生成 embedding：
 
@@ -183,11 +184,16 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 常用接口：
 
+- `GET /health`：进程存活探针
+- `GET /ready`：运行依赖就绪探针，失败时返回 503 和检查项明细
 - `POST /chat`：发送用户消息，返回 SSE 流
 - `POST /chat/approve`：批准或拒绝待审批工具调用
 - `GET /sessions/{id}/history`：获取前端友好的会话历史
 - `GET /sessions/{id}/state`：获取当前会话状态
 - `GET /learning/overview`：获取学习记录概览
+- `GET /learning/memory`：获取长期学习轨迹记忆
+
+多租户字段：`/chat`、`/chat/approve` 请求体可传 `user_id`、`namespace`；`/sessions/*` 和 `/learning/*` 可用 query param 或 `x-user-id` / `x-namespace` header。默认值是 `default` / `tech_docs`，LangGraph thread 实际使用 `user_id:namespace:session_id`。会话状态和学习记录按租户隔离，文档库不隔离。
 
 SSE 事件包括：
 
@@ -290,6 +296,13 @@ docker compose up --build
 http://127.0.0.1:8000/
 ```
 
+Compose 会先等待 Redis healthy，再启动后端；后端容器使用 `/ready` 做 healthcheck。可手动检查：
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
+```
+
 注意：`docker compose up --build` 不会启动 Vite dev server，所以不会开放 `5173`。开发时如果需要 `5173`，请另开终端执行 `cd frontend && npm run dev`。
 
 ## Project Structure
@@ -320,6 +333,7 @@ scripts/
 
 - `tech_doc_agent/data/faiss_store`
 - `tech_doc_agent/data/learning_store`
+- `tech_doc_agent/data/memory_store`
 - `tech_doc_agent/data/web_search`
 - `tech_doc_agent/data/redis`
 

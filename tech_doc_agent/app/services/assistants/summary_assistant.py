@@ -2,12 +2,12 @@
 职责：总结用户的对话中的学习过程，形成一个笔记文档，帮助用户回顾和巩固所学内容。
 输入：用户的对话内容，可能包括用户的问题、系统的回答、用户的反馈等。
 输出：一个笔记文档，概括用户在对话中学到的内容和关键点，帮助用户回顾和巩固所学内容。
-safe: read_learning_history   sensitive: upsert_learning_history
+safe: read_learning_history, read_user_memory   sensitive: upsert_learning_state
 """
 
 from datetime import datetime
 from langchain_core.prompts import ChatPromptTemplate
-from tech_doc_agent.app.services.tools import read_learning_history, upsert_learning_history
+from tech_doc_agent.app.services.tools import read_learning_history, read_user_memory, upsert_learning_state
 from tech_doc_agent.app.services.assistants.assistant_base import Assistant, CompleteOrEscalate, llm
 
 # 1. 总结助手prompt（告诉LLM你是谁、能做什么、什么时候该退出）
@@ -29,17 +29,24 @@ summary_assistant_prompt = ChatPromptTemplate.from_messages(
 
             "\n\n你可以使用 read_learning_history 查看用户过去学过什么，以及哪些内容已经复习过。"
             "\n这样做的目的是帮助你判断这次学习是在学习新知识，还是在复习旧知识。"
+            "\n你也可以使用 read_user_memory 查看用户过去学习过程中的卡点、误解和复习提示。"
+            "\n这些 memory 只是学习轨迹观察，不是稳定用户偏好或能力画像。"
 
-            "\n\n关于 upsert_learning_history："
+            "\n\n关于 upsert_learning_state："
             "\n- 你不需要保存整份总结笔记。"
             "\n- 笔记内容应直接返回给用户，由用户自行保存。"
-            "\n- 你只需要在合适时使用 upsert_learning_history 更新相关知识点的复习时间和复习次数。"
+            "\n- 你只需要在合适时使用 upsert_learning_state 更新相关知识点的复习时间和复习次数。"
             "\n- 如果这次总结明确体现了用户对某个知识点有新的理解，也可以酌情更新掌握分数。"
             "\n- 如果一次总结涉及多个知识点，应只选择 1 到 3 个最关键的知识点更新，而不是机械更新所有提到的术语。"
-            "\n- 只有在你已经完成总结并识别出明确的核心复习知识点后，才考虑调用 upsert_learning_history。"
+            "\n- 只有在你已经完成总结并识别出明确的核心复习知识点后，才考虑调用 upsert_learning_state。"
             "\n- 更新学习记录时，优先使用当前标准学习目标 learning_target 作为 knowledge 名称。"
             "\n- 如果 learning_target 已经明确，必须沿用这个名称，不要自行改写、扩写或添加解释性后缀。"
             "\n- 如果 learning_target 为空或当前目标不明确，不要写入学习记录。"
+            "\n- 如果本轮能明确观察到用户的卡点、误解、已掌握内容或后续复习建议，可以在同一次 upsert_learning_state 中写入一条 memory。"
+            "\n- memory_kind 只能使用 learned、stuck_point、misconception、review_hint 中最贴近的一项。"
+            "\n- memory_content 必须是具体、可验证、对后续学习有帮助的观察，不要写空泛评价。"
+            "\n- 不要把 memory 用作长期偏好更新；不要写“用户现在偏好某种解释风格”“用户能力等级已经改变”这类 profile 信息。"
+            "\n- 如果没有足够证据形成有用 memory，可以只更新 learning record，不写 memory。"
 
             "\n\n你的输出尽量使用稳定结构："
             "\n- 本次学习主题"
@@ -79,8 +86,8 @@ summary_assistant_prompt = ChatPromptTemplate.from_messages(
 ).partial(time=datetime.now())
 
 # 2. 总结助手工具
-summary_assistant_safe_tools = [read_learning_history]
-summary_assistant_sensitive_tools = [upsert_learning_history]
+summary_assistant_safe_tools = [read_learning_history, read_user_memory]
+summary_assistant_sensitive_tools = [upsert_learning_state]
 summary_assistant_tools = summary_assistant_safe_tools + summary_assistant_sensitive_tools
 
 # 3. 创建总结助手的可运行对象

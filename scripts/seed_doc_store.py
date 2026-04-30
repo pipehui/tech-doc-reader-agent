@@ -110,6 +110,8 @@ def run_topic(
     timeout_s: float,
     allowed_approval_tools: set[str],
     max_approval_rounds: int,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "topic": topic,
@@ -121,7 +123,11 @@ def run_topic(
         "error": None,
     }
 
-    payload = {"session_id": session_id, "message": message}
+    payload = _request_payload(
+        {"session_id": session_id, "message": message},
+        user_id=user_id,
+        namespace=namespace,
+    )
     status, last_tool_name = _stream_until_terminal(
         client,
         url=api_url,
@@ -142,7 +148,11 @@ def run_topic(
             return result
 
         result["approvals"] += 1
-        approve_payload = {"session_id": session_id, "approved": True}
+        approve_payload = _request_payload(
+            {"session_id": session_id, "approved": True},
+            user_id=user_id,
+            namespace=namespace,
+        )
         status, last_tool_name = _stream_until_terminal(
             client,
             url=approve_url,
@@ -153,6 +163,20 @@ def run_topic(
 
     result["status"] = status
     return result
+
+
+def _request_payload(
+    base: dict[str, Any],
+    *,
+    user_id: str | None,
+    namespace: str | None,
+) -> dict[str, Any]:
+    payload = dict(base)
+    if user_id:
+        payload["user_id"] = user_id
+    if namespace:
+        payload["namespace"] = namespace
+    return payload
 
 
 def _stream_until_terminal(
@@ -220,6 +244,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delay", type=float, default=0.0, help="Seconds to sleep between topics.")
     parser.add_argument("--limit", type=int, default=None, help="Only process the first N topics.")
     parser.add_argument("--max-approval-rounds", type=int, default=3)
+    parser.add_argument("--user-id", default=None, help="Optional user_id passed to /chat and /chat/approve.")
+    parser.add_argument("--namespace", default=None, help="Optional namespace passed to /chat and /chat/approve.")
     parser.add_argument(
         "--allowed-approval-tool",
         action="append",
@@ -246,7 +272,16 @@ def main() -> int:
     if args.dry_run:
         for index, topic in enumerate(topics, start=1):
             session_id = build_session_id(args.session_prefix, index, topic)
-            print(json.dumps({"session_id": session_id, "message": build_message(topic, args.template)}, ensure_ascii=False))
+            print(
+                json.dumps(
+                    _request_payload(
+                        {"session_id": session_id, "message": build_message(topic, args.template)},
+                        user_id=args.user_id,
+                        namespace=args.namespace,
+                    ),
+                    ensure_ascii=False,
+                )
+            )
         return 0
 
     with httpx.Client() as client:
@@ -265,6 +300,8 @@ def main() -> int:
                 timeout_s=args.timeout,
                 allowed_approval_tools=allowed_approval_tools,
                 max_approval_rounds=args.max_approval_rounds,
+                user_id=args.user_id,
+                namespace=args.namespace,
             )
             row["elapsed_s"] = time.perf_counter() - started_at
             append_jsonl(args.output, row)

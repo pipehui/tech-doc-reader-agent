@@ -4,6 +4,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import tools_condition
 from langchain_core.runnables import RunnableConfig
 from tech_doc_agent.app.core.state import State
+from tech_doc_agent.app.core.tenant import tenant_from_values
 from tech_doc_agent.app.services.utils import (
     create_tool_node_with_fallback,
     create_entry_node,
@@ -48,6 +49,7 @@ from tech_doc_agent.app.services.assistants.summary_assistant import (
     summary_assistant_safe_tools,
     summary_assistant_sensitive_tools,
 )
+from tech_doc_agent.app.services.user_profile import get_user_context_summary
 
 def assistant_node(assistant):
     return RunnableLambda(assistant, afunc=assistant.ainvoke, name=assistant.name)
@@ -85,17 +87,20 @@ def route_next_step(state: State) -> Literal[
 builder = StateGraph(State)
 
 def user_info(state: State, config: RunnableConfig):
-    # Fetch user learning info
-    # 先模拟一个获取用户学习倾向的程序，之后再详细实现
-    info_str = (
-        "用户学习偏好：\n"
-        "- 经验水平：初学者\n"
-        "- 解释风格：先讲原理再看代码\n"
-        "- 解释深度：详细，多举例\n"
-        "- 语言偏好：中文为主，技术术语保留英文"
+    metadata = (config or {}).get("metadata", {}) if isinstance(config, dict) else {}
+    tenant = tenant_from_values(
+        state.get("user_id") or metadata.get("user_id"),
+        state.get("namespace") or metadata.get("namespace"),
+    )
+    info_str = get_user_context_summary(
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
+        memory_query=state.get("learning_target", ""),
     )
     return {
         "user_info": info_str,
+        "user_id": tenant.user_id,
+        "namespace": tenant.namespace,
         "learning_target": state.get("learning_target", ""),
     }
 

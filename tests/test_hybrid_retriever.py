@@ -151,6 +151,39 @@ def test_hybrid_retriever_filters_bm25_candidates_by_category():
     assert results[0]["metadata"]["category"] == "langgraph_advanced"
 
 
+def test_hybrid_retriever_filters_bm25_candidates_by_user_and_namespace():
+    store = SimpleNamespace(
+        documents=[
+            {
+                "id": 1,
+                "title": "Tenant A StateGraph",
+                "content": "StateGraph tenant scoped content",
+                "source": "seed",
+                "metadata": {"user_id": "user-a", "namespace": "tenant-docs"},
+            },
+            {
+                "id": 2,
+                "title": "Tenant B StateGraph",
+                "content": "StateGraph tenant scoped content",
+                "source": "seed",
+                "metadata": {"user_id": "user-b", "namespace": "tenant-docs"},
+            },
+        ],
+        search_related=lambda query, k: [],
+    )
+    retriever = HybridRetriever(store, settings=_settings(HYBRID_RAG_VECTOR_TOP_K=0))
+
+    results = retriever.search(
+        "StateGraph tenant",
+        mode="bm25",
+        filters={"user_id": "user-a", "namespace": "tenant-docs"},
+    )
+
+    assert [item["title"] for item in results] == ["Tenant A StateGraph"]
+    assert results[0]["metadata"]["user_id"] == "user-a"
+    assert results[0]["metadata"]["namespace"] == "tenant-docs"
+
+
 def test_hybrid_retriever_filters_vector_candidates_after_semantic_search():
     store = FakeStore()
     store.documents[0]["metadata"] = {"category": "langgraph_core", "tags": ["stategraph"]}

@@ -16,6 +16,7 @@ from tech_doc_agent.app.core.observability import (
     new_trace_id,
     trace_context,
 )
+from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
 
 
 router = APIRouter()
@@ -40,7 +41,7 @@ def get_runtime(request: Request) -> ChatRuntime:
 def sse_event(event: str, data: dict) -> ServerSentEvent:
     payload = dict(data)
     context = get_trace_context()
-    for key in ("trace_id", "session_id"):
+    for key in ("trace_id", "session_id", "user_id", "namespace"):
         if context.get(key) and key not in payload:
             payload[key] = context[key]
 
@@ -52,16 +53,34 @@ def sse_event(event: str, data: dict) -> ServerSentEvent:
 def resolve_trace_id(body_trace_id: str | None, request: Request) -> str:
     return body_trace_id or request.headers.get("x-trace-id") or new_trace_id()
 
+def resolve_tenant(
+    request: Request,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> TenantContext:
+    return tenant_from_values(
+        user_id or request.headers.get("x-user-id"),
+        namespace or request.headers.get("x-namespace"),
+    )
+
 def iter_with_trace_context(
     events: Iterable[ServerSentEvent],
     trace_id: str,
     session_id: str,
     operation: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> Iterable[ServerSentEvent]:
     iterator = iter(events)
 
     while True:
-        with trace_context(trace_id=trace_id, session_id=session_id, operation=operation):
+        with trace_context(
+            trace_id=trace_id,
+            session_id=session_id,
+            user_id=user_id,
+            namespace=namespace,
+            operation=operation,
+        ):
             try:
                 event = next(iterator)
             except StopIteration:
@@ -74,11 +93,19 @@ async def aiter_with_trace_context(
     trace_id: str,
     session_id: str,
     operation: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
     iterator = aiter(events)
 
     while True:
-        with trace_context(trace_id=trace_id, session_id=session_id, operation=operation):
+        with trace_context(
+            trace_id=trace_id,
+            session_id=session_id,
+            user_id=user_id,
+            namespace=namespace,
+            operation=operation,
+        ):
             try:
                 event = await anext(iterator)
             except StopAsyncIteration:
@@ -291,7 +318,14 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
                     },
                 )
 
-def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterable[ServerSentEvent]:
+def stream_parts_as_sse(
+    runtime: ChatRuntime,
+    session_id: str,
+    parts,
+    *,
+    user_id: str | None = None,
+    namespace: str | None = None,
+) -> Iterable[ServerSentEvent]:
     try:
         for part in parts:
             part_type, part_data = _stream_part_type_and_data(part)
@@ -322,7 +356,7 @@ def stream_parts_as_sse(runtime: ChatRuntime, session_id: str, parts) -> Iterabl
             elif part_type == "updates":
                 yield from iter_update_events(part)
 
-        if runtime.has_pending_interrupt(session_id):
+        if runtime.has_pending_interrupt(session_id, user_id=user_id, namespace=namespace):
             yield sse_event(
                 "interrupt_required",
                 {
@@ -360,6 +394,9 @@ async def astream_parts_as_sse(
     runtime: ChatRuntime,
     session_id: str,
     parts,
+    *,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
     try:
         async for part in parts:
@@ -392,7 +429,7 @@ async def astream_parts_as_sse(
                 for event in iter_update_events(part):
                     yield event
 
-        if await runtime.ahas_pending_interrupt(session_id):
+        if await runtime.ahas_pending_interrupt(session_id, user_id=user_id, namespace=namespace):
             yield sse_event(
                 "interrupt_required",
                 {
@@ -431,25 +468,29 @@ def stream_chat_events(
     runtime: ChatRuntime,
     session_id: str,
     message: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> Iterable[ServerSentEvent]:
     record_input_risk(message, source="chat.message")
-    snapshot = runtime.get_session_state(session_id)
+    snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
-    parts = runtime.stream_user_message(session_id, message)
-    yield from stream_parts_as_sse(runtime, session_id, parts)
+    parts = runtime.stream_user_message(session_id, message, user_id=user_id, namespace=namespace)
+    yield from stream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace)
 
 async def astream_chat_events(
     runtime: ChatRuntime,
     session_id: str,
     message: str,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
     record_input_risk(message, source="chat.message")
-    snapshot = await runtime.aget_session_state(session_id)
+    snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
-    parts = runtime.astream_user_message(session_id, message)
-    async for event in astream_parts_as_sse(runtime, session_id, parts):
+    parts = runtime.astream_user_message(session_id, message, user_id=user_id, namespace=namespace)
+    async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
         yield event
 
 def stream_approval_events(
@@ -457,14 +498,16 @@ def stream_approval_events(
     session_id: str,
     approved: bool,
     feedback: str = "",
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> Iterable[ServerSentEvent]:
     if feedback:
         record_input_risk(feedback, source="chat.approval.feedback")
 
-    snapshot = runtime.get_session_state(session_id)
+    snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
-    if not runtime.has_pending_interrupt(session_id):
+    if not runtime.has_pending_interrupt(session_id, user_id=user_id, namespace=namespace):
         log_event("chat.approval.no_pending_interrupt", approved=approved)
         yield sse_event(
             "no_pending_interrupt",
@@ -474,8 +517,8 @@ def stream_approval_events(
         )
         return
 
-    parts = runtime.stream_approval(session_id, approved, feedback)
-    yield from stream_parts_as_sse(runtime, session_id, parts)
+    parts = runtime.stream_approval(session_id, approved, feedback, user_id=user_id, namespace=namespace)
+    yield from stream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace)
 
 
 async def astream_approval_events(
@@ -483,14 +526,16 @@ async def astream_approval_events(
     session_id: str,
     approved: bool,
     feedback: str = "",
+    user_id: str | None = None,
+    namespace: str | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
     if feedback:
         record_input_risk(feedback, source="chat.approval.feedback")
 
-    snapshot = await runtime.aget_session_state(session_id)
+    snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
-    if not await runtime.ahas_pending_interrupt(session_id):
+    if not await runtime.ahas_pending_interrupt(session_id, user_id=user_id, namespace=namespace):
         log_event("chat.approval.no_pending_interrupt", approved=approved, async_runtime=True)
         yield sse_event(
             "no_pending_interrupt",
@@ -500,8 +545,8 @@ async def astream_approval_events(
         )
         return
 
-    parts = runtime.astream_approval(session_id, approved, feedback)
-    async for event in astream_parts_as_sse(runtime, session_id, parts):
+    parts = runtime.astream_approval(session_id, approved, feedback, user_id=user_id, namespace=namespace)
+    async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
         yield event
 
 
@@ -509,11 +554,20 @@ async def astream_approval_events(
 async def chat(body: ChatRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
+    tenant = resolve_tenant(request, body.user_id, body.namespace)
     async for event in aiter_with_trace_context(
-        astream_chat_events(runtime, body.session_id, body.message),
+        astream_chat_events(
+            runtime,
+            body.session_id,
+            body.message,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        ),
         trace_id,
         body.session_id,
         "chat",
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
     ):
         yield event
 
@@ -521,11 +575,21 @@ async def chat(body: ChatRequest, request: Request):
 async def approve(body: ApproveRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
+    tenant = resolve_tenant(request, body.user_id, body.namespace)
     async for event in aiter_with_trace_context(
-        astream_approval_events(runtime, body.session_id, body.approved, body.feedback),
+        astream_approval_events(
+            runtime,
+            body.session_id,
+            body.approved,
+            body.feedback,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        ),
         trace_id,
         body.session_id,
         "approval",
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
     ):
         yield event
 
@@ -534,16 +598,31 @@ def get_history(
     session_id: str,
     request: Request,
     include_tools: bool = False,
+    user_id: str | None = None,
+    namespace: str | None = None,
 ):
     runtime = get_runtime(request)
+    tenant = resolve_tenant(request, user_id, namespace)
     history = runtime.get_history_view(
         session_id,
         include_tools=include_tools,
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
     )
     return HistoryViewResponse(**history)
 
 @router.get("/sessions/{session_id}/state", response_model=SessionStateResponse)
-def get_session_state(session_id: str, request: Request):
+def get_session_state(
+    session_id: str,
+    request: Request,
+    user_id: str | None = None,
+    namespace: str | None = None,
+):
     runtime = get_runtime(request)
-    state = runtime.get_session_state(session_id)
+    tenant = resolve_tenant(request, user_id, namespace)
+    state = runtime.get_session_state(
+        session_id,
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
+    )
     return SessionStateResponse(**state)

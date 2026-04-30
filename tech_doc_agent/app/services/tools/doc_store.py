@@ -44,16 +44,12 @@ def web_search(query: str) -> str:
 
 def _build_filters(
     *,
-    user_id: str | None = None,
-    namespace: str | None = None,
     category: str | None = None,
     tags: list[str] | None = None,
     source: str | None = None,
 ) -> dict:
     return normalize_filter(
         {
-            "user_id": user_id,
-            "namespace": namespace,
             "category": category,
             "tags": tags,
             "source": source,
@@ -67,16 +63,12 @@ def read_docs(
     category: str | None = None,
     tags: list[str] | None = None,
     source: str | None = None,
-    user_id: str | None = None,
-    namespace: str | None = None,
 ) -> str:
     """
     当需要查找已存储的技术文档内容时，根据关键词从知识库中检索匹配的文档。
-    可选传入 category、tags、source、user_id 或 namespace 来限制检索范围。
+    文档库是共享知识库，不按当前用户隔离；可选传入 category、tags 或 source 来限制检索范围。
     """
     filters = _build_filters(
-        user_id=user_id,
-        namespace=namespace,
         category=category,
         tags=tags,
         source=source,
@@ -92,13 +84,11 @@ def save_docs(
     source: str = "",
     category: str | None = None,
     tags: list[str] | None = None,
-    user_id: str | None = None,
-    namespace: str | None = None,
 ) -> str:
     """
     当需要将新的技术文档内容保存到知识库时，使用该工具将文档标题和内容存储起来。
     例如用户提供了一个新的文档标题和内容时，就调用这个工具进行保存。
-    可选传入 category、tags、user_id、namespace 作为文档 metadata。
+    文档库是共享知识库，不按当前用户隔离；可选传入 category、tags 作为文档 metadata。
     """
     store = get_faiss_store()
     result = store.add_documents(
@@ -109,8 +99,6 @@ def save_docs(
                 "source": source,
                 "category": category,
                 "tags": tags,
-                "user_id": user_id,
-                "namespace": namespace,
             }
         ]
     )
@@ -125,18 +113,14 @@ def search_related_docs(
     category: str | None = None,
     tags: list[str] | None = None,
     source: str | None = None,
-    user_id: str | None = None,
-    namespace: str | None = None,
 ) -> str:
     """
     使用向量索引搜索与查询语义相关的文档。
     例如用户问'LangGraph是什么'时，用'LangGraph'作为query进行相似度计算，找出最多k个相关文档。
-    可选传入 category、tags、source、user_id 或 namespace 来过滤结果。
+    文档库是共享知识库，不按当前用户隔离；可选传入 category、tags 或 source 来过滤结果。
     """
     try:
         filters = _build_filters(
-            user_id=user_id,
-            namespace=namespace,
             category=category,
             tags=tags,
             source=source,

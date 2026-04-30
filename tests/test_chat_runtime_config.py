@@ -51,8 +51,26 @@ def test_build_config_omits_callbacks_for_state_reads():
     config = runtime.build_config("session-1")
 
     assert "callbacks" not in config
+    assert config["configurable"]["thread_id"] == "default:tech_docs:session-1"
+    assert config["metadata"]["user_id"] == "default"
+    assert config["metadata"]["namespace"] == "tech_docs"
     assert config["metadata"]["langfuse_session_id"] == "session-1"
     assert config["run_name"] == "tech_doc_agent.state"
+
+
+def test_build_config_namespaces_thread_by_tenant():
+    runtime = ChatRuntime()
+    runtime.settings = Settings()
+
+    config = runtime.build_config(
+        "session-1",
+        user_id="user-a",
+        namespace="tenant-docs",
+    )
+
+    assert config["configurable"]["thread_id"] == "user-a:tenant-docs:session-1"
+    assert config["metadata"]["user_id"] == "user-a"
+    assert config["metadata"]["namespace"] == "tenant-docs"
 
 
 def test_enter_retries_redis_busy_loading_during_checkpointer_setup(monkeypatch):
@@ -129,7 +147,12 @@ def test_astream_user_message_bridges_sync_graph_stream_with_trace_context():
     parts = asyncio.run(collect(runtime))
 
     assert parts == [("updates", {"primary_assistant": {}})]
-    assert runtime.graph.calls[0]["graph_input"] == {"messages": [("user", "你好")]}
+    assert runtime.graph.calls[0]["graph_input"] == {
+        "messages": [("user", "你好")],
+        "user_id": "default",
+        "namespace": "tech_docs",
+    }
+    assert runtime.graph.calls[0]["config"]["configurable"]["thread_id"] == "default:tech_docs:session-async"
     assert runtime.graph.calls[0]["config"]["metadata"]["trace_id"] == "trace-async"
     assert runtime.graph.calls[0]["stream_mode"] == ["messages", "updates"]
     assert runtime.graph.calls[0]["version"] == "v2"

@@ -9,6 +9,7 @@ from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
+from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
 
 
@@ -52,6 +53,7 @@ class AppResources:
     faiss_store: FaissStore
     hybrid_retriever: HybridRetriever
     learning_store: LearningStore
+    memory_store: MemoryStore
     web_search_backend: WebSearchBackend
 
     @classmethod
@@ -63,6 +65,7 @@ class AppResources:
             faiss_store=faiss_store,
             hybrid_retriever=HybridRetriever(faiss_store, settings=settings),
             learning_store=_initialize_learning_store(settings),
+            memory_store=_initialize_memory_store(settings),
             web_search_backend=WebSearchBackend(settings=settings),
         )
 
@@ -130,6 +133,17 @@ def _initialize_learning_store(settings: Settings) -> LearningStore:
     store.records = [dict(record) for record in SEED_LEARNING_HISTORY]
     store.save()
     log_event("resources.learning_store.seeded", records=len(store.records))
+    return store
+
+
+def _initialize_memory_store(settings: Settings) -> MemoryStore:
+    store = MemoryStore(settings=settings)
+    if store.load():
+        log_event("resources.memory_store.loaded", memories=len(store.memories))
+        return store
+
+    store.save()
+    log_event("resources.memory_store.initialized", memories=len(store.memories))
     return store
 
 
