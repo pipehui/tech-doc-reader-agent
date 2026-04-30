@@ -16,7 +16,7 @@
 - 本地文档库使用 BM25 + Vector + RRF 的 Hybrid RAG，并提供检索 eval。
 - 学习记录、学习轨迹 memory、长期用户画像分层存储，后续回答可读取用户上下文。
 - `trace_id` 贯穿 SSE、结构化日志和 Langfuse callback，便于定位多 agent 链路问题。
-- CI 覆盖 lint、基础类型检查、pytest 和前端构建。
+- Scoped context 隔离子 Agent 可见消息，避免 `primary` 的搜索、审批和中间推理污染 parser / examination。
 
 ## Results
 
