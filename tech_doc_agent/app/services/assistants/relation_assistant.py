@@ -89,7 +89,7 @@ relation_assistant_prompt = ChatPromptTemplate.from_messages(
         ),
         ("placeholder", "{messages}"),
     ]
-).partial(time=datetime.now())
+).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 # 2. 关系助手工具
 relation_assistant_safe_tools = [read_all_learning_history, search_related_docs, read_docs]
@@ -98,7 +98,8 @@ relation_assistant_tools = relation_assistant_safe_tools + relation_assistant_se
 
 # 3. 创建关系助手的可运行对象
 relation_assistant_runnable = relation_assistant_prompt | llm.bind_tools(
-    relation_assistant_tools + [CompleteOrEscalate]
+    relation_assistant_tools + [CompleteOrEscalate],
+    parallel_tool_calls=False,
 )
 
 # 4. 实例化关系助手

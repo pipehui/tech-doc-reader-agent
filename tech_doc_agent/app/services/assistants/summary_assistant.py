@@ -83,7 +83,7 @@ summary_assistant_prompt = ChatPromptTemplate.from_messages(
         ),
         ("placeholder", "{messages}"),
     ]
-).partial(time=datetime.now())
+).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 # 2. 总结助手工具
 summary_assistant_safe_tools = [read_learning_history, read_user_memory]
@@ -92,7 +92,8 @@ summary_assistant_tools = summary_assistant_safe_tools + summary_assistant_sensi
 
 # 3. 创建总结助手的可运行对象
 summary_assistant_runnable = summary_assistant_prompt | llm.bind_tools(
-    summary_assistant_tools + [CompleteOrEscalate]
+    summary_assistant_tools + [CompleteOrEscalate],
+    parallel_tool_calls=False,
 )
 
 # 4. 实例化总结助手

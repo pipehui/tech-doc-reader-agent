@@ -99,7 +99,7 @@ parser_assistant_prompt = ChatPromptTemplate.from_messages(
         ),
         ("placeholder", "{messages}"),
     ]
-).partial(time=datetime.now())
+).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 # 2. 文档解析工具
 parser_assistant_safe_tools = [read_docs, web_search]
@@ -108,7 +108,8 @@ parser_assistant_tools = parser_assistant_safe_tools + parser_assistant_sensitiv
 
 # 3. 创建文档解析助手的可运行对象
 parser_assistant_runnable = parser_assistant_prompt | llm.bind_tools(
-    parser_assistant_tools + [CompleteOrEscalate]
+    parser_assistant_tools + [CompleteOrEscalate],
+    parallel_tool_calls=False,
 )
 
 # 4. 实例化文档解析助手

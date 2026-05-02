@@ -104,7 +104,7 @@ examination_assistant_prompt = ChatPromptTemplate.from_messages(
         ),
         ("placeholder", "{messages}"),
     ]
-).partial(time=datetime.now())
+).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 # 2. 检测助手工具
 examination_assistant_safe_tools = [read_learning_history, read_docs]
@@ -113,7 +113,8 @@ examination_assistant_tools = examination_assistant_safe_tools + examination_ass
 
 # 3. 创建检测助手的可运行对象
 examination_assistant_runnable = examination_assistant_prompt | llm.bind_tools(
-    examination_assistant_tools + [CompleteOrEscalate]
+    examination_assistant_tools + [CompleteOrEscalate],
+    parallel_tool_calls=False,
 )
 
 # 4. 实例化检测助手

@@ -159,7 +159,7 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
         ),
         ("placeholder", "{messages}"),
     ]
-).partial(time=datetime.now())
+).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 
 # Primary assistant tools

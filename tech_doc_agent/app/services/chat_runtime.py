@@ -302,25 +302,7 @@ class ChatRuntime:
             approved=approved,
             feedback_length=len(feedback),
         )
-    
-    def preload_printed_message_ids(
-        self,
-        session_id: str,
-        user_id: str | None = None,
-        namespace: str | None = None,
-    ) -> set[str]:
-        printed_message_ids = set()
 
-        snapshot = self.get_snapshot(session_id, user_id=user_id, namespace=namespace)
-        state_value = getattr(snapshot, "values", None)
-
-        if state_value and "messages" in state_value:
-            for message in state_value["messages"]:
-                if getattr(message, "id", None):
-                    printed_message_ids.add(message.id)
-
-        return printed_message_ids
-    
     def stream_user_message(
         self,
         session_id: str,

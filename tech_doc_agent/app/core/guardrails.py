@@ -63,12 +63,6 @@ _PROMPT_INJECTION_PATTERNS: tuple[tuple[str, RiskLevel, re.Pattern[str]], ...] =
     ),
 )
 
-_EMAIL_RE = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}(?![\w.-])")
-_CHINA_MOBILE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
-_CREDIT_CARD_RE = re.compile(r"(?<!\d)(?:\d[ -]*?){13,19}(?!\d)")
-_SECRET_RE = re.compile(r"\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}\b")
-
-
 def _max_risk_level(findings: list[GuardrailFinding]) -> RiskLevel:
     if any(finding.severity == "high" for finding in findings):
         return "high"
@@ -101,10 +95,3 @@ def record_input_risk(text: str, *, source: str, input_length: int | None = None
         )
 
     return risk
-
-
-def redact_pii(text: str) -> str:
-    redacted = _EMAIL_RE.sub("[REDACTED_EMAIL]", text)
-    redacted = _CHINA_MOBILE_RE.sub("[REDACTED_PHONE]", redacted)
-    redacted = _CREDIT_CARD_RE.sub("[REDACTED_CARD]", redacted)
-    return _SECRET_RE.sub("[REDACTED_SECRET]", redacted)

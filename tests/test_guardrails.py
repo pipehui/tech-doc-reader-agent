@@ -5,7 +5,6 @@ from tech_doc_agent.app.core import observability
 from tech_doc_agent.app.core.guardrails import (
     detect_prompt_injection,
     record_input_risk,
-    redact_pii,
 )
 from tech_doc_agent.app.core.observability import trace_context
 
@@ -56,15 +55,3 @@ def test_record_input_risk_logs_metadata_without_raw_text():
     assert payload["source"] == "chat.message"
     assert payload["risk_level"] == "high"
     assert "raw_text" not in payload
-
-
-def test_redact_pii_masks_common_identifiers():
-    text = (
-        "email me at alice@example.com, call 13800138000, "
-        "card 4111 1111 1111 1111, secret sk-testsecretvalue123"
-    )
-
-    assert redact_pii(text) == (
-        "email me at [REDACTED_EMAIL], call [REDACTED_PHONE], "
-        "card [REDACTED_CARD], secret [REDACTED_SECRET]"
-    )

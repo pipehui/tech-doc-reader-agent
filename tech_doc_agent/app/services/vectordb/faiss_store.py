@@ -1,4 +1,6 @@
 import json
+import threading
+
 import faiss
 import numpy as np
 from pathlib import Path
@@ -30,6 +32,7 @@ class FaissStore:
         self.dimension: int | None = None
         self.chunk_metadata: list[dict[str, Any]] = []
         self.documents: list[dict[str, Any]] = []
+        self._write_lock = threading.Lock()
 
     def _prepare_chunks(self, docs: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
         '''
@@ -80,39 +83,51 @@ class FaissStore:
         self.dimension = dimension
         self.index = faiss.IndexFlatL2(self.dimension)
     
-    def add_documents(self, docs: list[dict[str, Any]]) -> dict:
-        new_docs: list[dict[str, Any]] = []
-        for doc in docs:
-            raw_doc = {
-                "id": len(self.documents) + len(new_docs) + 1,
-                "title": doc["title"],
-                "content": doc["content"],
-                "source": doc.get("source", ""),
-                "metadata": doc.get("metadata", {}),
-            }
-            for key in ("user_id", "namespace", "category", "tags"):
-                if doc.get(key) is not None:
-                    raw_doc[key] = doc[key]
-            normalized_doc = normalize_document(raw_doc)
-            new_docs.append(normalized_doc)
-        chunks, metadata = self._prepare_chunks(new_docs)
-        if not new_docs or not chunks:
-            return {
-                "added_documents": 0,
-                "added_chunks": 0,
-            }
-        embeddings = generate_embedding(chunks)
-        vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
+    def _next_doc_id(self) -> int:
+        max_id = 0
+        for doc in self.documents:
+            doc_id = doc.get("id")
+            if isinstance(doc_id, int):
+                max_id = max(max_id, doc_id)
+            elif isinstance(doc_id, str) and doc_id.isdigit():
+                max_id = max(max_id, int(doc_id))
+        return max_id + 1
 
-        self._ensure_index(vectors.shape[1])
-        assert self.index is not None
-        self.index.add(vectors)
-        self.documents.extend(new_docs)
-        self.chunk_metadata.extend(metadata)
-        return {
-            "added_documents": len(new_docs),
-            "added_chunks": len(metadata),
-        }
+    def add_documents(self, docs: list[dict[str, Any]]) -> dict:
+        with self._write_lock:
+            new_docs: list[dict[str, Any]] = []
+            next_id = self._next_doc_id()
+            for offset, doc in enumerate(docs):
+                raw_doc = {
+                    "id": next_id + offset,
+                    "title": doc["title"],
+                    "content": doc["content"],
+                    "source": doc.get("source", ""),
+                    "metadata": doc.get("metadata", {}),
+                }
+                for key in ("user_id", "namespace", "category", "tags"):
+                    if doc.get(key) is not None:
+                        raw_doc[key] = doc[key]
+                normalized_doc = normalize_document(raw_doc)
+                new_docs.append(normalized_doc)
+            chunks, metadata = self._prepare_chunks(new_docs)
+            if not new_docs or not chunks:
+                return {
+                    "added_documents": 0,
+                    "added_chunks": 0,
+                }
+            embeddings = generate_embedding(chunks)
+            vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
+
+            self._ensure_index(vectors.shape[1])
+            assert self.index is not None
+            self.index.add(vectors)
+            self.documents.extend(new_docs)
+            self.chunk_metadata.extend(metadata)
+            return {
+                "added_documents": len(new_docs),
+                "added_chunks": len(metadata),
+            }
     
     def add_document(self, title: str, content: str, source: str = "") -> dict:
         return self.add_documents([
@@ -158,19 +173,20 @@ class FaissStore:
         return res
 
     def save(self) -> bool:
-        if self.index is None:
-            return False
-        self.normalize_metadata()
-        
-        self.store_dir.mkdir(parents=True, exist_ok=True)
-        faiss.write_index(self.index, str(self.index_path))
-        with open(self.documents_path, "w", encoding="utf-8") as f:
-            json.dump(self.documents, f, ensure_ascii=False, indent=2)
-        
-        with open(self.metadata_path, "w", encoding="utf-8") as f:
-            json.dump(self.chunk_metadata, f, ensure_ascii=False, indent=2)
+        with self._write_lock:
+            if self.index is None:
+                return False
+            self.normalize_metadata()
 
-        return True
+            self.store_dir.mkdir(parents=True, exist_ok=True)
+            faiss.write_index(self.index, str(self.index_path))
+            with open(self.documents_path, "w", encoding="utf-8") as f:
+                json.dump(self.documents, f, ensure_ascii=False, indent=2)
+
+            with open(self.metadata_path, "w", encoding="utf-8") as f:
+                json.dump(self.chunk_metadata, f, ensure_ascii=False, indent=2)
+
+            return True
 
     def load(self) -> bool:
         if not (

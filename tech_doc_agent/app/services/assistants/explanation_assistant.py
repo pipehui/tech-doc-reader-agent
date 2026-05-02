@@ -64,7 +64,7 @@ explanation_assistant_prompt = ChatPromptTemplate.from_messages(
         ),
         ("placeholder", "{messages}"),
     ]
-).partial(time=datetime.now())
+).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 # 2. 解释助手工具
 explanation_assistant_safe_tools = [read_docs]
@@ -73,7 +73,8 @@ explanation_assistant_tools = explanation_assistant_safe_tools + explanation_ass
 
 # 3. 创建解释助手的可运行对象
 explanation_assistant_runnable = explanation_assistant_prompt | llm.bind_tools(
-    explanation_assistant_tools + [CompleteOrEscalate]
+    explanation_assistant_tools + [CompleteOrEscalate],
+    parallel_tool_calls=False,
 )
 
 # 4. 实例化解释助手

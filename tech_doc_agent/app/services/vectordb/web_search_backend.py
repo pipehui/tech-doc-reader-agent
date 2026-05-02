@@ -1,4 +1,6 @@
 import json
+import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,7 @@ class WebSearchBackend:
             "tavily_calls": 0,
         }
         self.proxy_url = settings.PROXY_URL
+        self._usage_lock = threading.Lock()
         self.load_usage_state()
     
     def load_usage_state(self) -> bool:
@@ -31,25 +34,31 @@ class WebSearchBackend:
     
     def save_usage_state(self) -> bool:
         self.store_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.usage_path, 'w', encoding="utf-8") as f:
+        tmp_path = self.usage_path.with_suffix(".json.tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(self.usage_state, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, self.usage_path)
         return True
-    
+
     def sync_today_usage(self) -> None:
         today = datetime.now().strftime("%Y-%m-%d")
-        if self.usage_state["date"] != today:
-            self.usage_state["date"] = today
-            self.usage_state["tavily_calls"] = 0
-            self.save_usage_state()
+        with self._usage_lock:
+            if self.usage_state["date"] != today:
+                self.usage_state["date"] = today
+                self.usage_state["tavily_calls"] = 0
+                self.save_usage_state()
 
     def can_use_tavily(self) -> bool:
         if self.tavily_api_key != "" and self.usage_state["tavily_calls"] < self.tavily_daily_limit:
             return True
         return False
-    
+
     def consume_tavily_quota(self) -> bool:
-        self.usage_state["tavily_calls"] += 1
-        return self.save_usage_state()
+        with self._usage_lock:
+            self.usage_state["tavily_calls"] += 1
+            return self.save_usage_state()
 
     def _clean_text(self, text: str, max_length: int = 300) -> str:
         if not text:

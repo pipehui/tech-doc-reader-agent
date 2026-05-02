@@ -114,12 +114,24 @@ def user_info(state: State, config: RunnableConfig):
         namespace=tenant.namespace,
         memory_query=state.get("learning_target", ""),
     )
-    return {
+    update = {
         "user_info": info_str,
         "user_id": tenant.user_id,
         "namespace": tenant.namespace,
         "learning_target": state.get("learning_target", ""),
     }
+
+    if state.get("examination_context") and not _last_ai_was_examination(state):
+        update["examination_context"] = ""
+
+    return update
+
+
+def _last_ai_was_examination(state: State) -> bool:
+    for message in reversed(state.get("messages", [])):
+        if getattr(message, "type", None) == "ai":
+            return getattr(message, "name", None) == "examination"
+    return False
 
 builder.add_node("fetch_user_info", user_info)
 builder.add_edge(START, "fetch_user_info")
