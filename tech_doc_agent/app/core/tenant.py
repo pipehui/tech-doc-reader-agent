@@ -62,5 +62,48 @@ def current_tenant(
     )
 
 
+def tenant_from_config(config: Any) -> TenantContext:
+    """Resolve tenant from a LangGraph RunnableConfig metadata.
+
+    Priority: config["metadata"]["user_id"] / namespace > ContextVar > DEFAULT.
+
+    Tools should call this helper instead of `current_tenant()` so that the
+    tenant is carried explicitly through LangGraph's config plumbing rather
+    than relying on the implicit ContextVar copy across threads.
+    """
+    metadata: dict[str, Any] = {}
+    if isinstance(config, dict):
+        raw_metadata = config.get("metadata")
+        if isinstance(raw_metadata, dict):
+            metadata = raw_metadata
+
+    context = get_trace_context()
+    user_id = metadata.get("user_id") or context.get("user_id")
+    namespace = metadata.get("namespace") or context.get("namespace")
+
+    return tenant_from_values(user_id, namespace)
+
+
+def session_id_from_config(config: Any) -> str | None:
+    """Resolve session_id from a LangGraph RunnableConfig metadata.
+
+    Falls back to the trace ContextVar so legacy code paths keep working.
+    """
+    metadata: dict[str, Any] = {}
+    if isinstance(config, dict):
+        raw_metadata = config.get("metadata")
+        if isinstance(raw_metadata, dict):
+            metadata = raw_metadata
+
+    candidate = metadata.get("session_id")
+    if candidate is None:
+        candidate = get_trace_context().get("session_id")
+
+    if candidate is None:
+        return None
+    text = str(candidate).strip()
+    return text or None
+
+
 def tenant_thread_id(session_id: str, tenant: TenantContext) -> str:
     return f"{tenant.thread_prefix}:{session_id}"

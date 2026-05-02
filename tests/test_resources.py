@@ -296,3 +296,32 @@ def test_learning_tools_use_trace_context_tenant():
 
     assert learning_store.records[-1]["user_id"] == "user-a"
     assert learning_store.records[-1]["namespace"] == "tenant-docs"
+
+
+def test_learning_tools_prefer_runnable_config_over_trace_context():
+    """When LangGraph injects config, tools should use it instead of the ambient ContextVar."""
+    learning_store = FakeLearningStore()
+    memory_store = FakeMemoryStore()
+    test_resources = SimpleNamespace(
+        faiss_store=None,
+        learning_store=learning_store,
+        memory_store=memory_store,
+        web_search_backend=None,
+    )
+
+    config = {"metadata": {"user_id": "config-user", "namespace": "config-ns"}}
+
+    with override_app_resources(test_resources):
+        # ContextVar 设的是 ctx-user，但 config metadata 是 config-user，期望工具用 config-user
+        with trace_context(user_id="ctx-user", namespace="ctx-ns"):
+            upsert_learning_history.invoke(
+                {
+                    "knowledge": "Config Wins",
+                    "timestamp": "2026-04-28T00:00:00Z",
+                    "score": 0.5,
+                },
+                config=config,
+            )
+
+    assert learning_store.records[-1]["user_id"] == "config-user"
+    assert learning_store.records[-1]["namespace"] == "config-ns"
