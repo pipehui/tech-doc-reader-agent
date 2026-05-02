@@ -116,3 +116,22 @@ http://127.0.0.1:5173
 - Observability: structured logs, SSE event stream, Langfuse callback
 - Frontend: React, Vite, TypeScript
 - Quality: pytest, ruff, mypy, online eval, retrieval eval, concurrency benchmark
+
+## Limitations
+
+当前版本的已知取舍，记录在此以便后续迭代：
+
+- **多租户隔离来自请求 user_id / namespace 字段，未做真实鉴权**。生产部署需要在网关或 FastAPI middleware 中接入 JWT / Session，再把校验后的 user_id 注入到 RunnableConfig，而不是直接信任前端。
+- **输入侧 guardrails 基于正则 + HITL 审批兜底**，没有输出侧检测，也没有引入 ML / LLM 判别。可被全角字符、Unicode 同形、拆词改写或 Base64 编码绕过。
+- **parser / relation 的结构化输出依赖 markdown headings + 正则解析**，而不是 function calling / JSON schema。优先了输出长度和自然语言连贯性，但格式稳定性会随模型版本和 prompt 变化波动；解析失败时回退到 raw_text。
+- **FAISS 索引使用 IndexFlatL2 穷举搜索**，文档量超过万级会出现明显延迟。当前规模下召回率 100%、部署简单，规模上去需要切换 HNSW / IVF。
+- **examination 续答判定基于中文关键词列表，而不是由 primary 在 LLM 层判断意图**。最初尝试让 primary 自己识别"用户当前在答题"再 handoff 给 examination，但实际运行中 primary 经常直接代替 examination 给用户解答、纠错或给参考答案，绕过了 examination 的评估职责；改用硬约束 + 关键词白名单是规避 primary 越权抢答的妥协。
+
+## Roadmap
+
+下一步规划的能力升级方向，按"现有数据已经具备的价值"和"工程闭环度"排序：
+
+- **个性化学习路径推荐**：基于 learning_store 的掌握分数、复习次数和 user_profile 的薄弱主题，由专门的 planner agent 生成"下一步学什么"序列；结合遗忘曲线（基于 timestamp + score）主动推送复习提醒。把现有学习记录从"被动查询"提升到"驱动决策"。
+- **学习关系图谱可视化**：把 relation agent 多次产出的类比 / 差异 / 边界沉淀为知识图（concept 为节点，类比 / 包含 / 对比为边），前端 Learner 视图可视化"我学过的概念网络"。Relation agent 从一次性输出升级为长期沉淀。
+- **代码沙箱评测**：examination agent 的代码任务从"基于用户描述判断"升级为沙箱运行（subprocess + resource limit + pytest 框架），自动判分。提升评测真实性，同时给 score 字段提供更可靠的依据。
+- **多模态文档支持**：parser 扩展支持 PDF 表格、架构图（OCR + VLM 描述）、代码片段（独立 code embedding 通道）；Hybrid RAG 增加 code 检索路径，对技术文档场景的覆盖度有显著提升。
