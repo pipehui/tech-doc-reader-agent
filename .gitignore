@@ -180,7 +180,6 @@ customer_support_chat/data/
 bench_results*.jsonl
 eval_results/
 eval_reports/
-生产级改造清单*.md
 
 # Frontend dependencies and TypeScript build cache
 node_modules/

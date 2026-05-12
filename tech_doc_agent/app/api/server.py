@@ -5,16 +5,16 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 from tech_doc_agent.app.api.routes.chat import router as chat_router
 from tech_doc_agent.app.api.routes.health import router as health_router
 from tech_doc_agent.app.api.routes.learning import router as learning_router
-from fastapi.middleware.cors import CORSMiddleware
-
 from tech_doc_agent.app.core.settings import get_settings
 
 
