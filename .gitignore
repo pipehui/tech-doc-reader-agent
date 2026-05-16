@@ -180,6 +180,7 @@ customer_support_chat/data/
 bench_results*.jsonl
 eval_results/
 eval_reports/
+docs/production-refactor-plan.md
 
 # Frontend dependencies and TypeScript build cache
 node_modules/
