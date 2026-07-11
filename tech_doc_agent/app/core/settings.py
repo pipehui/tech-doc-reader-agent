@@ -1,7 +1,9 @@
+import json
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -51,7 +53,7 @@ class Settings(BaseSettings):
     LANGFUSE_ENVIRONMENT: str = "local"
     LANGFUSE_RELEASE: str = ""
 
-    ALLOWED_ORIGINS: list[str] = Field(
+    ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://127.0.0.1:5173",
             "http://localhost:5173",
@@ -62,6 +64,9 @@ class Settings(BaseSettings):
     @classmethod
     def parse_allowed_origins(cls, value):
         if isinstance(value, str):
+            value = value.strip()
+            if value.startswith("["):
+                return json.loads(value)
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 

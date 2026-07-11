@@ -30,3 +30,19 @@ def test_settings_uses_project_data_path_by_default():
     settings = Settings()
 
     assert settings.DATA_PATH == "./tech_doc_agent/data"
+
+
+def test_settings_parses_allowed_origins_from_dotenv(tmp_path, monkeypatch):
+    monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        "ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173\n",
+        encoding="utf-8",
+    )
+
+    settings = Settings()
+
+    assert settings.ALLOWED_ORIGINS == [
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ]
