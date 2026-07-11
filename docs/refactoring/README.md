@@ -35,6 +35,7 @@
 | 2026-07-12 | Phase 3：AppRouter 与 Landing/Studio/Chat/Approval/Learner/Inspector feature 边界 | 完成，根 App 收敛为 6 行 facade | [2026-07-12-frontend-feature-boundaries.md](2026-07-12-frontend-feature-boundaries.md) |
 | 2026-07-12 | Phase 3：shared REST client、运行时 response decoder 与 FastAPI schema 漂移门禁 | 完成，F4 API/session bootstrap 收敛完成 | [2026-07-12-frontend-rest-api-boundary.md](2026-07-12-frontend-rest-api-boundary.md) |
 | 2026-07-12 | Phase 3：ToolMessage -> SSE -> reducer/Inspector 显式 success/error 协议 | 完成，删除自然语言错误启发式 | [2026-07-12-explicit-tool-result-status.md](2026-07-12-explicit-tool-result-status.md) |
+| 2026-07-12 | Phase 3：React component、tenant router 与 fake SSE/HITL integration 测试层 | 完成，F5 六层测试门禁完成 | [2026-07-12-frontend-component-integration-tests.md](2026-07-12-frontend-component-integration-tests.md) |
 
 ## 本地任务单策略
 

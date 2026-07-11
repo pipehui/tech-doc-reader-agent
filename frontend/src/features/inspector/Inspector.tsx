@@ -31,7 +31,7 @@ export function Inspector() {
 }
 
 
-function InspectorToolbar() {
+export function InspectorToolbar() {
   const recording = useAppStore((state) => state.recording);
   const inspectorPaused = useAppStore((state) => state.inspectorPaused);
   const filters = useAppStore((state) => state.filters);

@@ -7,6 +7,7 @@ from tech_doc_agent.app.api.sse.contract import SSE_EVENT_NAMES, TOOL_RESULT_STA
 FRONTEND_CONTRACT = Path(__file__).resolve().parents[1] / "frontend" / "src" / "sseContract.ts"
 FRONTEND_STREAMING_DIR = FRONTEND_CONTRACT.parent / "streaming"
 FRONTEND_TRANSPORT = FRONTEND_CONTRACT.parent / "useChatStream.ts"
+FRONTEND_STREAM_ORCHESTRATOR = FRONTEND_STREAMING_DIR / "chatStream.ts"
 FRONTEND_INSPECTOR_MODEL = (
     FRONTEND_CONTRACT.parent / "features" / "inspector" / "inspectorModel.ts"
 )
@@ -43,16 +44,24 @@ def test_frontend_sse_parser_and_reducer_are_store_and_browser_independent():
 
 
 def test_frontend_stream_transport_delegates_event_semantics():
-    source = FRONTEND_TRANSPORT.read_text(encoding="utf-8")
+    composition = FRONTEND_TRANSPORT.read_text(encoding="utf-8")
+    source = FRONTEND_STREAM_ORCHESTRATOR.read_text(encoding="utf-8")
 
     assert "parseSseMessage" in source
     assert "reduceSseMessage" in source
     assert "dispatchStreamActions" in source
+    assert "useAppStore" not in source
     assert "applySseEvent" not in source
     assert ".recordEvent(" not in source
     assert ".updateStreamingMessage(" not in source
     assert ".addToolCall(" not in source
     assert ".updateToolResult(" not in source
+
+    assert "createChatStream" in composition
+    assert "fetchEventSource" in composition
+    assert "refreshSessionContext" in composition
+    assert "parseSseMessage" not in composition
+    assert len(composition.splitlines()) < 50
 
 
 def test_frontend_tool_errors_use_protocol_status_not_content_heuristics():

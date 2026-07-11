@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 
@@ -34,6 +35,9 @@ API_DIR = FRONTEND_SRC / "shared" / "api"
 API_CLIENT_SOURCE = (API_DIR / "client.ts").read_text(encoding="utf-8")
 API_CONTRACT_SOURCE = (API_DIR / "contracts.ts").read_text(encoding="utf-8")
 SESSION_API_SOURCE = (API_DIR / "sessionApi.ts").read_text(encoding="utf-8")
+FRONTEND_PACKAGE = json.loads(
+    (FRONTEND_SRC.parent / "package.json").read_text(encoding="utf-8")
+)
 
 
 def test_zustand_store_uses_storage_port_instead_of_browser_global():
@@ -124,7 +128,7 @@ def test_app_is_a_thin_facade_over_the_router_shell():
 
 def test_features_do_not_import_the_root_app_or_reverse_page_dependencies():
     features_dir = FRONTEND_SRC / "features"
-    assert sorted(path.name for path in features_dir.iterdir()) == [
+    assert sorted(path.name for path in features_dir.iterdir() if path.is_dir()) == [
         "approval",
         "chat",
         "inspector",
@@ -241,3 +245,47 @@ def test_rest_transport_and_endpoint_contracts_have_one_shared_boundary():
         assert 'from "../../api"' not in source, path
         if path != API_DIR / "client.ts":
             assert not re.search(r"\bfetch\(", source), path
+
+
+def test_component_and_stream_integration_layers_are_first_class_test_gates():
+    dev_dependencies = FRONTEND_PACKAGE["devDependencies"]
+    for dependency in (
+        "@testing-library/dom",
+        "@testing-library/react",
+        "@types/react-dom",
+        "jsdom",
+        "vitest",
+    ):
+        assert dependency in dev_dependencies
+    assert FRONTEND_PACKAGE["scripts"]["test"] == "vitest run"
+
+    component_test = (
+        FRONTEND_SRC / "features" / "componentBoundaries.test.tsx"
+    ).read_text(encoding="utf-8")
+    for component in (
+        "ApprovalDrawer",
+        "PlanStepper",
+        "MessageBubble",
+        "InspectorToolbar",
+    ):
+        assert component in component_test
+
+    integration_test = (
+        FRONTEND_SRC / "streaming" / "chatStream.integration.test.ts"
+    ).read_text(encoding="utf-8")
+    for event in (
+        '"tool_call"',
+        '"tool_result"',
+        '"interrupt_required"',
+        '"agent_message"',
+        '"done"',
+    ):
+        assert event in integration_test
+    assert "chat.approve(true)" in integration_test
+
+    router_test = (
+        FRONTEND_SRC / "app" / "sessionRouting.component.test.tsx"
+    ).read_text(encoding="utf-8")
+    assert "tenant-a-cache" in router_test
+    assert "tenant-b-cache" in router_test
+    assert "server-history-should-not-replace-cache" in router_test
