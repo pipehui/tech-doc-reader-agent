@@ -32,6 +32,7 @@
 | 2026-07-11 | Phase 3：前端 session/preference repositories | 完成，Store raw storage policy 清零 | [2026-07-11-frontend-session-preference-repositories.md](2026-07-11-frontend-session-preference-repositories.md) |
 | 2026-07-11 | Phase 3：前端 Zustand session/transcript/trace/learning/ui slices | 完成，根 Store 收敛为 composition facade | [2026-07-11-frontend-store-slices.md](2026-07-11-frontend-store-slices.md) |
 | 2026-07-12 | Phase 3：前端可取消 session bootstrap、路由模型与 Topbar 边界 | 完成，App feature components 继续拆分 | [2026-07-12-frontend-session-bootstrap.md](2026-07-12-frontend-session-bootstrap.md) |
+| 2026-07-12 | Phase 3：AppRouter 与 Landing/Studio/Chat/Approval/Learner/Inspector feature 边界 | 完成，根 App 收敛为 6 行 facade | [2026-07-12-frontend-feature-boundaries.md](2026-07-12-frontend-feature-boundaries.md) |
 
 ## 本地任务单策略
 

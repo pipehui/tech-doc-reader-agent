@@ -2,6 +2,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { normalizeAgent } from "./agentColors";
 import { API_BASE, getLearningOverview, getSessionState, tenantHeaders } from "./api";
 import { useAppStore } from "./store";
+import { refreshSessionContext } from "./features/session/refreshSessionContext";
 import {
   createStreamReducerState,
   reduceSseMessage
@@ -65,18 +66,12 @@ async function streamErrorFromResponse(response: Response) {
 async function refreshStateAndLearning(sessionId: string) {
   const store = useAppStore.getState();
   const tenant = sessionTenant(store.session);
-  try {
-    const [state, learning] = await Promise.all([
-      getSessionState(sessionId, tenant),
-      getLearningOverview(tenant)
-    ]);
-    store.setSessionState(state);
-    store.setLearning(learning);
-  } catch (error) {
-    store.addSystemMessage(
-      `状态刷新失败：${error instanceof Error ? error.message : String(error)}`
-    );
-  }
+  await refreshSessionContext({
+    sessionId,
+    tenant,
+    api: { getSessionState, getLearningOverview },
+    store
+  });
 }
 
 

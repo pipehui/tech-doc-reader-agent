@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Activity,
   BookOpen,
@@ -12,71 +11,34 @@ import {
   Sun
 } from "lucide-react";
 import { useAppStore } from "../store";
-import {
-  applyTenantSearchParams,
-  normalizeTenant,
-  sessionTenant
-} from "../tenant";
+import { useSessionControls } from "../features/session/useSessionControls";
 import { makeSessionId } from "../utils";
 import {
-  experiencePath,
   GITHUB_URL,
-  type AppView,
-  type ExperienceView
+  type AppView
 } from "./routing";
 
 
 export function Topbar({ view }: { view: AppView }) {
   const navigate = useNavigate();
-  const location = useLocation();
   const isLanding = view === "landing";
-  const session = useAppStore((state) => state.session);
   const running = useAppStore((state) => state.running);
   const runLabel = useAppStore((state) => state.runLabel);
   const error = useAppStore((state) => state.error);
   const theme = useAppStore((state) => state.theme);
   const setTheme = useAppStore((state) => state.setTheme);
-  const resetForContext = useAppStore((state) => state.resetForContext);
-  const tenant = useMemo(
-    () => sessionTenant(session),
-    [session.user_id, session.namespace]
-  );
-  const [draft, setDraft] = useState(session.session_id);
-  const [userDraft, setUserDraft] = useState(tenant.user_id);
-  const [namespaceDraft, setNamespaceDraft] = useState(tenant.namespace);
-
-  useEffect(() => setDraft(session.session_id), [session.session_id]);
-  useEffect(() => setUserDraft(tenant.user_id), [tenant.user_id]);
-  useEffect(() => setNamespaceDraft(tenant.namespace), [tenant.namespace]);
-
-  function go(next: ExperienceView) {
-    const nextSession = isLanding ? makeSessionId() : session.session_id;
-    navigate(experiencePath(next, tenant, nextSession));
-  }
-
-  function switchSession(nextSession: string) {
-    if (!nextSession.trim()) return;
-    const id = nextSession.trim();
-    const params = new URLSearchParams(location.search);
-    params.set("session", id);
-    applyTenantSearchParams(params, tenant);
-    params.delete("prompt");
-    resetForContext(id, tenant);
-    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
-  }
-
-  function switchTenant(nextUserId: string, nextNamespace: string) {
-    const nextTenant = normalizeTenant({
-      user_id: nextUserId,
-      namespace: nextNamespace
-    });
-    const params = new URLSearchParams(location.search);
-    params.set("session", session.session_id);
-    applyTenantSearchParams(params, nextTenant);
-    params.delete("prompt");
-    resetForContext(session.session_id, nextTenant);
-    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
-  }
+  const {
+    session,
+    draft,
+    setDraft,
+    userDraft,
+    setUserDraft,
+    namespaceDraft,
+    setNamespaceDraft,
+    go,
+    switchSession,
+    switchTenant
+  } = useSessionControls(isLanding);
 
   return (
     <header className={`topbar ${isLanding ? "landing-topbar" : ""}`}>
