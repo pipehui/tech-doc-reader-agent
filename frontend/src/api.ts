@@ -3,6 +3,10 @@ import type { HistoryResponse, LearningOverview, SessionState, TenantScope } fro
 
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+export interface FetchJsonOptions {
+  signal?: AbortSignal;
+}
+
 function buildTenantPath(path: string, tenant?: Partial<TenantScope>) {
   const [pathname, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
@@ -21,12 +25,17 @@ export function tenantHeaders(tenant?: Partial<TenantScope>) {
   };
 }
 
-export async function fetchJson<T>(path: string, tenant?: Partial<TenantScope>): Promise<T> {
+export async function fetchJson<T>(
+  path: string,
+  tenant?: Partial<TenantScope>,
+  options: FetchJsonOptions = {}
+): Promise<T> {
   const response = await fetch(buildTenantPath(path, tenant), {
     headers: {
       Accept: "application/json",
       ...tenantHeaders(tenant)
-    }
+    },
+    signal: options.signal
   });
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`);
@@ -34,14 +43,33 @@ export async function fetchJson<T>(path: string, tenant?: Partial<TenantScope>):
   return response.json() as Promise<T>;
 }
 
-export function getSessionState(sessionId: string, tenant?: Partial<TenantScope>) {
-  return fetchJson<SessionState>(`/sessions/${encodeURIComponent(sessionId)}/state`, tenant);
+export function getSessionState(
+  sessionId: string,
+  tenant?: Partial<TenantScope>,
+  options?: FetchJsonOptions
+) {
+  return fetchJson<SessionState>(
+    `/sessions/${encodeURIComponent(sessionId)}/state`,
+    tenant,
+    options
+  );
 }
 
-export function getSessionHistory(sessionId: string, tenant?: Partial<TenantScope>) {
-  return fetchJson<HistoryResponse>(`/sessions/${encodeURIComponent(sessionId)}/history?include_tools=true`, tenant);
+export function getSessionHistory(
+  sessionId: string,
+  tenant?: Partial<TenantScope>,
+  options?: FetchJsonOptions
+) {
+  return fetchJson<HistoryResponse>(
+    `/sessions/${encodeURIComponent(sessionId)}/history?include_tools=true`,
+    tenant,
+    options
+  );
 }
 
-export function getLearningOverview(tenant?: Partial<TenantScope>) {
-  return fetchJson<LearningOverview>("/learning/overview", tenant);
+export function getLearningOverview(
+  tenant?: Partial<TenantScope>,
+  options?: FetchJsonOptions
+) {
+  return fetchJson<LearningOverview>("/learning/overview", tenant, options);
 }

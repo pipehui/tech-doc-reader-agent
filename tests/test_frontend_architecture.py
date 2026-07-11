@@ -10,6 +10,17 @@ TRANSCRIPT_SLICE_SOURCE = (STORE_DIR / "transcriptSlice.ts").read_text(
     encoding="utf-8"
 )
 UI_SLICE_SOURCE = (STORE_DIR / "uiSlice.ts").read_text(encoding="utf-8")
+APP_SOURCE = (FRONTEND_SRC / "App.tsx").read_text(encoding="utf-8")
+TOPBAR_SOURCE = (FRONTEND_SRC / "app" / "Topbar.tsx").read_text(
+    encoding="utf-8"
+)
+SESSION_FEATURE_DIR = FRONTEND_SRC / "features" / "session"
+SESSION_BOOTSTRAP_SOURCE = (
+    SESSION_FEATURE_DIR / "sessionBootstrap.ts"
+).read_text(encoding="utf-8")
+SESSION_HOOK_SOURCE = (
+    SESSION_FEATURE_DIR / "useSessionBootstrap.ts"
+).read_text(encoding="utf-8")
 
 
 def test_zustand_store_uses_storage_port_instead_of_browser_global():
@@ -79,3 +90,42 @@ def test_zustand_slice_action_chaining_stays_on_explicit_allowlist():
         source = (STORE_DIR / filename).read_text(encoding="utf-8")
         calls = set(re.findall(r"get\(\)\.([A-Za-z]+)\(", source))
         assert calls == expected
+
+
+def test_app_delegates_session_bootstrap_and_topbar_boundaries():
+    assert "useSessionBootstrap(!isLanding)" in APP_SOURCE
+    assert "<Topbar view={view} />" in APP_SOURCE
+    assert "function Topbar" not in APP_SOURCE
+    assert "getSessionHistory" not in APP_SOURCE
+    assert "resetForContext" not in APP_SOURCE
+    assert len(APP_SOURCE.splitlines()) < 1000
+
+
+def test_session_bootstrap_use_case_stays_framework_independent():
+    forbidden = (
+        'from "react"',
+        'from "react-router-dom"',
+        'from "../../api"',
+        "useAppStore",
+        "window.",
+        "localStorage",
+    )
+    for fragment in forbidden:
+        assert fragment not in SESSION_BOOTSTRAP_SOURCE
+
+    assert "AbortSignal" in SESSION_BOOTSTRAP_SOURCE
+    assert 'if (signal.aborted) return "aborted"' in SESSION_BOOTSTRAP_SOURCE
+    assert "historyToMessages" in SESSION_BOOTSTRAP_SOURCE
+
+
+def test_session_hook_owns_url_sync_and_cancellable_hydration():
+    assert "new AbortController()" in SESSION_HOOK_SOURCE
+    assert "controller.abort()" in SESSION_HOOK_SOURCE
+    assert "loadSessionContext" in SESSION_HOOK_SOURCE
+    assert "rememberSession" in SESSION_HOOK_SOURCE
+    assert "resetForContext" in SESSION_HOOK_SOURCE
+    assert "getSessionHistory" in SESSION_HOOK_SOURCE
+    assert "localStorage" not in SESSION_HOOK_SOURCE
+
+    assert "useSessionBootstrap" not in TOPBAR_SOURCE
+    assert "getSessionState" not in TOPBAR_SOURCE

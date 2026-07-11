@@ -8,19 +8,14 @@ import {
   Copy,
   Download,
   ExternalLink,
-  GitBranch,
-  Home,
   Layers,
   MessageSquare,
-  Moon,
   Pause,
   Play,
-  Plus,
   RefreshCcw,
   RotateCcw,
   Send,
   ShieldCheck,
-  Sun,
   ToolCase,
   Trash2,
   Zap,
@@ -29,133 +24,31 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { agentMeta, agentStyle, normalizeAgent } from "./agentColors";
-import { getLearningOverview, getSessionHistory, getSessionState } from "./api";
+import { getLearningOverview, getSessionState } from "./api";
+import { experiencePath, GITHUB_URL, routeName } from "./app/routing";
+import { Topbar } from "./app/Topbar";
+import { useSessionBootstrap } from "./features/session/useSessionBootstrap";
 import { EVENT_TYPES, useAppStore } from "./store";
-import { applyTenantSearchParams, normalizeTenant, sameTenant, sessionTenant, tenantFromSearchParams } from "./tenant";
+import { sameTenant, sessionTenant } from "./tenant";
 import { useChatStream } from "./useChatStream";
 import type { CSSProperties } from "react";
 import type { AgentKey, ChatMessage, LearningRecord, SessionState, TenantScope, ToolCall, TraceEvent } from "./types";
 import { daysSince, formatTime, makeSessionId, pretty, relativeTime, scoreTone, uid } from "./utils";
 
-const GITHUB_URL = "https://github.com/pipehui/tech-doc-reader-agent";
-
 function isAtBottom(el: HTMLElement) {
   return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
 }
 
-function routeName(pathname: string) {
-  const name = pathname.replace(/^\/+/, "").split("/")[0];
-  if (!name) return "landing";
-  return ["studio", "inspector", "learner"].includes(name) ? name : "landing";
-}
-
-function experiencePath(
-  view: "studio" | "inspector" | "learner",
-  tenant?: Partial<TenantScope>,
-  sessionId = makeSessionId(),
-  prompt?: string
-) {
-  const params = new URLSearchParams({ session: sessionId });
-  applyTenantSearchParams(params, tenant);
-  if (prompt) params.set("prompt", prompt);
-  return `/${view}?${params.toString()}`;
-}
-
-function toMessages(history: Awaited<ReturnType<typeof getSessionHistory>>, state: SessionState): ChatMessage[] {
-  return (history.messages || []).map((item) => ({
-    id: item.id || uid(),
-    role: item.role,
-    agent: normalizeAgent(item.name || state.current_agent || "primary"),
-    content: item.content || "",
-    streaming: false,
-    toolCallIds: [],
-    createdAt: new Date().toISOString()
-  }));
-}
-
 export default function App() {
   const location = useLocation();
-  const navigate = useNavigate();
   const view = routeName(location.pathname);
   const isLanding = view === "landing";
-  const session = useAppStore((state) => state.session);
   const theme = useAppStore((state) => state.theme);
-  const hydrateTranscript = useAppStore((state) => state.hydrateTranscript);
-  const setSessionState = useAppStore((state) => state.setSessionState);
-  const setMessages = useAppStore((state) => state.setMessages);
-  const setLearning = useAppStore((state) => state.setLearning);
-  const addSystemMessage = useAppStore((state) => state.addSystemMessage);
-  const rememberSession = useAppStore((state) => state.rememberSession);
-  const resetForContext = useAppStore((state) => state.resetForContext);
-  const tenant = useMemo(() => sessionTenant(session), [session.user_id, session.namespace]);
+  useSessionBootstrap(!isLanding);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
-
-  useEffect(() => {
-    if (isLanding) return;
-    const params = new URLSearchParams(location.search);
-    const urlSession = params.get("session");
-    if (!urlSession) return;
-    const urlTenant = tenantFromSearchParams(params);
-    if (urlSession !== session.session_id || !sameTenant(urlTenant, tenant)) {
-      resetForContext(urlSession, urlTenant);
-    }
-  }, [isLanding, location.search, session.session_id, tenant.user_id, tenant.namespace]);
-
-  useEffect(() => {
-    if (isLanding) return;
-    const params = new URLSearchParams(location.search);
-    const urlSession = params.get("session");
-    const urlTenant = tenantFromSearchParams(params);
-    if (urlSession && (urlSession !== session.session_id || !sameTenant(urlTenant, tenant))) {
-      return;
-    }
-    let changed = false;
-    if (!urlSession) {
-      params.set("session", session.session_id);
-      changed = true;
-    }
-    if (params.get("user_id") !== tenant.user_id || params.get("namespace") !== tenant.namespace) {
-      applyTenantSearchParams(params, tenant);
-      changed = true;
-    }
-    if (changed) {
-      navigate(`${location.pathname}?${params.toString()}`, { replace: true });
-      return;
-    }
-    rememberSession(session.session_id, tenant);
-  }, [isLanding, location.pathname, location.search, session.session_id, tenant.user_id, tenant.namespace]);
-
-  useEffect(() => {
-    if (isLanding) return;
-    const params = new URLSearchParams(location.search);
-    const urlSession = params.get("session");
-    const urlTenant = tenantFromSearchParams(params);
-    if (urlSession && (urlSession !== session.session_id || !sameTenant(urlTenant, tenant))) return;
-    let cancelled = false;
-    async function load() {
-      const cached = hydrateTranscript(session.session_id, tenant);
-      try {
-        const [state, history, learning] = await Promise.all([
-          getSessionState(session.session_id, tenant),
-          getSessionHistory(session.session_id, tenant),
-          getLearningOverview(tenant)
-        ]);
-        if (cancelled) return;
-        setSessionState(state);
-        if (!cached) setMessages(toMessages(history, state));
-        setLearning(learning);
-      } catch (error) {
-        if (!cancelled) addSystemMessage(`会话恢复失败：${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [isLanding, location.search, session.session_id, tenant.user_id, tenant.namespace]);
 
   return (
     <div className={`app-shell ${isLanding ? "landing-shell" : ""}`}>
@@ -171,140 +64,6 @@ export default function App() {
       </main>
       <ToastHost />
     </div>
-  );
-}
-
-function Topbar({ view }: { view: string }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const isLanding = view === "landing";
-  const session = useAppStore((state) => state.session);
-  const running = useAppStore((state) => state.running);
-  const runLabel = useAppStore((state) => state.runLabel);
-  const error = useAppStore((state) => state.error);
-  const theme = useAppStore((state) => state.theme);
-  const setTheme = useAppStore((state) => state.setTheme);
-  const resetForContext = useAppStore((state) => state.resetForContext);
-  const tenant = useMemo(() => sessionTenant(session), [session.user_id, session.namespace]);
-  const [draft, setDraft] = useState(session.session_id);
-  const [userDraft, setUserDraft] = useState(tenant.user_id);
-  const [namespaceDraft, setNamespaceDraft] = useState(tenant.namespace);
-
-  useEffect(() => setDraft(session.session_id), [session.session_id]);
-  useEffect(() => setUserDraft(tenant.user_id), [tenant.user_id]);
-  useEffect(() => setNamespaceDraft(tenant.namespace), [tenant.namespace]);
-
-  function go(next: string) {
-    const nextSession = isLanding ? makeSessionId() : session.session_id;
-    navigate(experiencePath(next as "studio" | "inspector" | "learner", tenant, nextSession));
-  }
-
-  function switchSession(nextSession: string) {
-    if (!nextSession.trim()) return;
-    const id = nextSession.trim();
-    const params = new URLSearchParams(location.search);
-    params.set("session", id);
-    applyTenantSearchParams(params, tenant);
-    params.delete("prompt");
-    resetForContext(id, tenant);
-    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
-  }
-
-  function switchTenant(nextUserId: string, nextNamespace: string) {
-    const nextTenant = normalizeTenant({
-      user_id: nextUserId,
-      namespace: nextNamespace
-    });
-    const params = new URLSearchParams(location.search);
-    params.set("session", session.session_id);
-    applyTenantSearchParams(params, nextTenant);
-    params.delete("prompt");
-    resetForContext(session.session_id, nextTenant);
-    navigate(`${location.pathname}?${params.toString()}`, { replace: true });
-  }
-
-  return (
-    <header className={`topbar ${isLanding ? "landing-topbar" : ""}`}>
-      <button className="brand brand-button" type="button" onClick={() => navigate("/")} title="回到首页">
-        <div className="brand-mark">TD</div>
-        <div>
-          <p className="eyebrow">LangGraph Agent</p>
-          <h1 className="brand-title">技术文档研读助手</h1>
-        </div>
-      </button>
-
-      <nav className="view-switcher">
-        {([
-          ["studio", "Studio", Layers],
-          ["inspector", "Inspector", Activity],
-          ["learner", "Learner", BookOpen]
-        ] as const).map(([key, label, Icon]) => (
-          <button key={String(key)} className={`view-tab ${!isLanding && view === key ? "active" : ""}`} type="button" onClick={() => go(String(key))}>
-            <Icon size={16} />
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      <div className="topbar-actions">
-        {!isLanding && (
-          <>
-            <label className="session-control">
-              <span>Session</span>
-              <input
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onBlur={() => switchSession(draft)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.currentTarget.blur();
-                }}
-              />
-            </label>
-            <label className="session-control tenant-control">
-              <span>User</span>
-              <input
-                value={userDraft}
-                onChange={(event) => setUserDraft(event.target.value)}
-                onBlur={() => switchTenant(userDraft, namespaceDraft)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.currentTarget.blur();
-                }}
-              />
-            </label>
-            <label className="session-control tenant-control">
-              <span>Namespace</span>
-              <input
-                value={namespaceDraft}
-                onChange={(event) => setNamespaceDraft(event.target.value)}
-                onBlur={() => switchTenant(userDraft, namespaceDraft)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.currentTarget.blur();
-                }}
-              />
-            </label>
-            <button className="icon-button" type="button" title="复制 session id" onClick={() => navigator.clipboard.writeText(session.session_id)}>
-              <Copy size={16} />
-            </button>
-            <button className="icon-button" type="button" title="新建会话" onClick={() => switchSession(makeSessionId())}>
-              <Plus size={16} />
-            </button>
-          </>
-        )}
-        <button className="icon-button" type="button" title="切换主题" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
-        <a className={`github-link ${isLanding ? "prominent" : ""}`} href={GITHUB_URL} target="_blank" rel="noreferrer">
-          <GitBranch size={16} />
-          GitHub
-        </a>
-        {!isLanding && (
-          <button className="icon-button" type="button" title="回到首页" onClick={() => navigate("/")}>
-            <Home size={16} />
-          </button>
-        )}
-        {!isLanding && <span className={`status-pill ${error ? "error" : running ? "running" : ""}`}>{error ? "错误" : runLabel}</span>}
-      </div>
-    </header>
   );
 }
 
