@@ -32,7 +32,7 @@ interface PersistedTranscript {
   toolCalls: Record<string, ToolCall>;
 }
 
-interface AppStore {
+export interface AppStore {
   session: SessionState;
   messages: ChatMessage[];
   events: TraceEvent[];

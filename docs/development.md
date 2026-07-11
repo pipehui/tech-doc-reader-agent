@@ -2,13 +2,13 @@
 
 ## Quality Gates
 
-当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查、生产构建和 FastAPI dist/asset smoke：
+当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查、Vitest 单元测试、生产构建和 FastAPI dist/asset smoke：
 
 ```bash
 python -m ruff check tech_doc_agent tests evals
 python -m mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py
 python -m pytest
-cd frontend && npm run check && npm run build
+cd frontend && npm run check && npm run test && npm run build
 python -m pytest tests/test_frontend_static.py -q
 ```
 

@@ -4,11 +4,15 @@
   "description": "Tech document reader agent frontend",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^20.0.0 || ^22.0.0 || >=24.0.0"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "check": "tsc -b"
+    "check": "tsc -b",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -20,7 +24,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0",
-    "react-router-dom": "^6.30.3",
+    "react-router-dom": "^6.30.4",
     "remark-gfm": "^4.0.1",
     "zustand": "^5.0.12"
   },
@@ -30,6 +34,7 @@
     "postcss": "^8.5.12",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
-    "vite": "^5.4.21"
+    "vite": "^6.4.3",
+    "vitest": "4.1.10"
   }
 }
