@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -8,6 +7,7 @@ from uuid import uuid4
 
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
 from tech_doc_agent.app.services.vectordb.text_match import query_matches
 
 
@@ -29,17 +29,14 @@ class MemoryStore:
     def load(self) -> bool:
         if not self.memories_path.exists():
             return False
-        with self.memories_path.open("r", encoding="utf-8") as file:
-            loaded = json.load(file)
+        loaded = read_json(self.memories_path)
         self.memories = loaded if isinstance(loaded, list) else []
         self.normalize_memories()
         return True
 
     def save(self) -> bool:
         self.normalize_memories()
-        self.store_dir.mkdir(parents=True, exist_ok=True)
-        with self.memories_path.open("w", encoding="utf-8") as file:
-            json.dump(self.memories, file, ensure_ascii=False, indent=2)
+        write_json_atomic(self.memories_path, self.memories)
         return True
 
     def normalize_memories(self) -> None:

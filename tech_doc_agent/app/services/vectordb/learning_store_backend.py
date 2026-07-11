@@ -4,13 +4,13 @@ LearningStore backend:
 - 不暴露 @tool
 - tool 层在 learning_store.py
 """
-import json
 from pathlib import Path
 from typing import Any
 
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
 from tech_doc_agent.app.services.vectordb.text_match import query_matches
 
 class LearningStore:
@@ -23,16 +23,13 @@ class LearningStore:
     def load(self) -> bool:
         if not self.records_path.exists():
             return False
-        with open(self.records_path, "r", encoding="utf-8") as f:
-            self.records = json.load(f)
+        self.records = read_json(self.records_path)
         self.normalize_records()
         return True
     
     def save(self) -> bool:
         self.normalize_records()
-        self.store_dir.mkdir(parents=True, exist_ok=True)
-        with open(self.records_path, "w", encoding="utf-8") as f:
-            json.dump(self.records, f, ensure_ascii=False, indent=2)
+        write_json_atomic(self.records_path, self.records)
         return True
     
     def _make_record(

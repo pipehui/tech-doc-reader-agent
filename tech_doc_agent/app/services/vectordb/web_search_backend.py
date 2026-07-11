@@ -1,5 +1,3 @@
-import json
-import os
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +7,7 @@ from duckduckgo_search import DDGS
 from tavily import TavilyClient
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
+from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
 
 class WebSearchBackend:
     def __init__(self, settings: Settings | None = None) -> None:
@@ -28,18 +27,11 @@ class WebSearchBackend:
     def load_usage_state(self) -> bool:
         if not self.usage_path.exists():
             return False
-        with open(self.usage_path, 'r', encoding="utf-8") as f:
-            self.usage_state = json.load(f)
+        self.usage_state = read_json(self.usage_path)
         return True
     
     def save_usage_state(self) -> bool:
-        self.store_dir.mkdir(parents=True, exist_ok=True)
-        tmp_path = self.usage_path.with_suffix(".json.tmp")
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(self.usage_state, f, ensure_ascii=False, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, self.usage_path)
+        write_json_atomic(self.usage_path, self.usage_state)
         return True
 
     def sync_today_usage(self) -> None:

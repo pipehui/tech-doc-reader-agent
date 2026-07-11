@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+from json import JSONDecodeError
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, TenantContext, tenant_from_values
+from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
 
 
 DEFAULT_PROFILE = {
@@ -179,9 +180,8 @@ def _load_user_profile(
         return {}
 
     try:
-        with path.open("r", encoding="utf-8") as file:
-            loaded = json.load(file)
-    except (OSError, json.JSONDecodeError):
+        loaded = read_json(path)
+    except (OSError, JSONDecodeError):
         return {}
 
     return loaded if isinstance(loaded, dict) else {}
@@ -198,8 +198,7 @@ def _save_user_profile(
     cleaned = dict(profile)
     cleaned.pop("namespace", None)
     cleaned.pop("status", None)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(cleaned, file, ensure_ascii=False, indent=2)
+    write_json_atomic(path, cleaned)
 
 
 def _profile_path(tenant: TenantContext, *, settings: Settings) -> Path:
