@@ -5,9 +5,10 @@ import re
 from typing import Any
 
 from tech_doc_agent.app.core.observability import get_trace_context
-from tech_doc_agent.app.services.retrieval.metadata import DEFAULT_NAMESPACE, DEFAULT_USER_ID
 
 
+DEFAULT_USER_ID = "default"
+DEFAULT_NAMESPACE = "tech_docs"
 TENANT_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
 _TENANT_ID_RE = re.compile(TENANT_ID_PATTERN)
 

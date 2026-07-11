@@ -4,9 +4,10 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, TenantContext, tenant_from_values
 
 
 DEFAULT_PROFILE = {
@@ -173,7 +174,7 @@ def _load_user_profile(
     settings: Settings | None = None,
 ) -> dict[str, Any]:
     settings = settings or get_settings()
-    path = _profile_path(tenant, settings=settings)
+    path = _profile_read_path(tenant, settings=settings)
     if not path.exists():
         return {}
 
@@ -202,7 +203,32 @@ def _save_user_profile(
 
 
 def _profile_path(tenant: TenantContext, *, settings: Settings) -> Path:
+    return (
+        Path(settings.DATA_PATH)
+        / "user_profiles"
+        / _profile_path_segment(tenant.user_id)
+        / f"{_profile_path_segment(tenant.namespace)}.json"
+    )
+
+
+def _profile_read_path(tenant: TenantContext, *, settings: Settings) -> Path:
+    path = _profile_path(tenant, settings=settings)
+    if path.exists():
+        return path
+
+    legacy_path = _legacy_profile_path(tenant, settings=settings)
+    if tenant.namespace == DEFAULT_NAMESPACE and legacy_path.exists():
+        return legacy_path
+
+    return path
+
+
+def _legacy_profile_path(tenant: TenantContext, *, settings: Settings) -> Path:
     return Path(settings.DATA_PATH) / "user_profiles" / f"{tenant.user_id}.json"
+
+
+def _profile_path_segment(value: str) -> str:
+    return quote(value, safe="")
 
 
 def _normalize_profile(profile: dict[str, Any], tenant: TenantContext) -> dict[str, Any]:

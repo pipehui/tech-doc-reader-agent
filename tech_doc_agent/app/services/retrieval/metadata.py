@@ -3,9 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, DEFAULT_USER_ID
 
-DEFAULT_USER_ID = "default"
-DEFAULT_NAMESPACE = "tech_docs"
 UNCATEGORIZED = "uncategorized"
 
 METADATA_KEYS = ("user_id", "namespace", "category", "tags")
