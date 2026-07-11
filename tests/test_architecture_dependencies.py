@@ -138,6 +138,26 @@ def test_retrieval_metadata_helpers_follow_one_way_dependency_direction():
     ) == []
 
 
+def test_extracted_retrieval_components_do_not_depend_on_hybrid_or_settings():
+    assert _dependency_violations(
+        RETRIEVAL_DIR,
+        (
+            "tech_doc_agent.app.core.settings",
+            "tech_doc_agent.app.services.retrieval.hybrid",
+        ),
+        filenames=(
+            "bm25.py",
+            "documents.py",
+            "exact.py",
+            "formatting.py",
+            "fusion.py",
+            "models.py",
+            "semantic.py",
+            "tokenization.py",
+        ),
+    ) == []
+
+
 def _dependency_violations(
     directory: Path,
     forbidden_prefixes: tuple[str, ...],

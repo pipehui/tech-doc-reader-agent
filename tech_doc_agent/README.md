@@ -127,6 +127,10 @@ tech_doc_agent
 - `learning_store_backend.py`
 - `web_search_backend.py`
 
+### `app/services/retrieval`
+
+`HybridRetriever` 保持统一 facade，只负责 mode、cache、settings 和 telemetry。内部按职责拆为 metadata taxonomy/filter/inference/normalization，以及 BM25、semantic、exact、RRF、formatter；ranker 通过 typed candidates 与窄 store ports 协作，可独立测试且不反向依赖 facade。
+
 ## 当前状态
 
 这个模块当前只服务于技术文档研读助手场景。所有代码应围绕：

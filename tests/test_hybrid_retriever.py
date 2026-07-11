@@ -2,15 +2,12 @@ from types import SimpleNamespace
 
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.retrieval import HybridRetriever
-from tech_doc_agent.app.services.retrieval.hybrid import (
-    BM25Index,
-    IndexedDocument,
-    RankedCandidate,
-    _format_result,
-    _rank_exact,
-    _reciprocal_rank_fusion,
-    _tokenize,
-)
+from tech_doc_agent.app.services.retrieval.bm25 import BM25Index
+from tech_doc_agent.app.services.retrieval.exact import rank_exact
+from tech_doc_agent.app.services.retrieval.formatting import format_result
+from tech_doc_agent.app.services.retrieval.fusion import reciprocal_rank_fusion
+from tech_doc_agent.app.services.retrieval.models import IndexedDocument, RankedCandidate
+from tech_doc_agent.app.services.retrieval.tokenization import tokenize
 
 
 class FakeStore:
@@ -236,7 +233,7 @@ def test_hybrid_retriever_rebuilds_bm25_when_documents_change():
 
 
 def test_tokenize_splits_camel_case_and_emits_cjk_unigrams_and_bigrams():
-    assert _tokenize("StateGraph 检索增强") == [
+    assert tokenize("StateGraph 检索增强") == [
         "stategraph",
         "state",
         "graph",
@@ -269,7 +266,7 @@ def test_exact_rank_prefers_title_and_content_match_then_title_order():
         _indexed_document(key="c", title="Other", content="StateGraph details"),
     ]
 
-    ranked = _rank_exact("stategraph", documents)
+    ranked = rank_exact("stategraph", documents)
 
     assert [(item.document.title, item.score) for item in ranked] == [
         ("StateGraph Alpha", 3.0),
@@ -296,8 +293,8 @@ def test_rrf_combines_signals_and_preserves_semantic_chunk_provenance():
         ],
     }
 
-    fused = _reciprocal_rank_fusion(rankings, rrf_k=60)
-    result = _format_result(fused[0])
+    fused = reciprocal_rank_fusion(rankings, rrf_k=60)
+    result = format_result(fused[0])
 
     assert [candidate.document.title for candidate in fused] == ["Alpha", "Beta"]
     assert result["match_type"] == "exact+semantic"
@@ -314,7 +311,7 @@ def test_rrf_equal_scores_and_ranks_use_title_as_final_tie_break():
     alpha = _indexed_document(key="alpha", title="Alpha", content="alpha")
     beta = _indexed_document(key="beta", title="Beta", content="beta")
 
-    fused = _reciprocal_rank_fusion(
+    fused = reciprocal_rank_fusion(
         {
             "bm25": [
                 RankedCandidate(key="beta", document=beta, score=1.0),
@@ -329,6 +326,16 @@ def test_rrf_equal_scores_and_ranks_use_title_as_final_tie_break():
     )
 
     assert [candidate.document.title for candidate in fused] == ["Alpha", "Beta"]
+
+
+def test_hybrid_module_keeps_staged_private_ranker_aliases():
+    from tech_doc_agent.app.services.retrieval import hybrid
+
+    assert hybrid.BM25Index is BM25Index
+    assert hybrid._tokenize is tokenize
+    assert hybrid._rank_exact is rank_exact
+    assert hybrid._reciprocal_rank_fusion is reciprocal_rank_fusion
+    assert hybrid._format_result is format_result
 
 
 def _indexed_document(*, key: str, title: str, content: str) -> IndexedDocument:
