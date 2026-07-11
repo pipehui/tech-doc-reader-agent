@@ -1,7 +1,19 @@
 import { create } from "zustand";
 import { normalizeAgent } from "./agentColors";
 import { INSPECTOR_EVENT_TYPES } from "./sseContract";
-import { normalizeTenant, sameTenant, sessionTenant, tenantKey } from "./tenant";
+import {
+  readStorage,
+  resolveBrowserStorage,
+  writeStorage
+} from "./storage/keyValueStorage";
+import type {
+  KeyValueStorage,
+  StorageFailure,
+  StorageFailureHandler
+} from "./storage/keyValueStorage";
+import { createTranscriptRepository } from "./storage/transcriptRepository";
+import type { TranscriptRepository } from "./storage/transcriptRepository";
+import { normalizeTenant, sameTenant, sessionTenant } from "./tenant";
 import type { AgentKey, ChatMessage, LearningOverview, SessionState, TenantScope, ToolCall, TraceEvent } from "./types";
 import { makeSessionId, uid } from "./utils";
 
@@ -9,8 +21,6 @@ const LEGACY_SESSION_KEY = "tech-doc-agent.session";
 const CONTEXT_KEY = "tech-doc-agent.context";
 const SESSIONS_KEY = "tech-doc-agent.sessions.v2";
 const THEME_KEY = "tech-doc-agent.theme";
-const TRANSCRIPT_PREFIX = "tech-doc-agent.react.transcript.";
-const TRANSCRIPT_VERSION = 2;
 
 export const EVENT_TYPES = [...INSPECTOR_EVENT_TYPES];
 
@@ -23,13 +33,6 @@ export interface SessionEntry {
 
 interface StoredContext extends TenantScope {
   session_id: string;
-}
-
-interface PersistedTranscript {
-  version: number;
-  messages: ChatMessage[];
-  events: TraceEvent[];
-  toolCalls: Record<string, ToolCall>;
 }
 
 export interface AppStore {
@@ -82,6 +85,12 @@ export interface AppStore {
   setTheme: (theme: "dark" | "light") => void;
 }
 
+export interface AppStoreDependencies {
+  storage: KeyValueStorage;
+  transcriptRepository: TranscriptRepository;
+  onStorageFailure: StorageFailureHandler;
+}
+
 function safeJson<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
   try {
@@ -91,42 +100,73 @@ function safeJson<T>(raw: string | null, fallback: T): T {
   }
 }
 
-function readSessions() {
-  return safeJson<SessionEntry[]>(localStorage.getItem(SESSIONS_KEY), []).flatMap((entry) => {
-    if (!entry || typeof entry.id !== "string" || !entry.id.trim()) return [];
-    const tenant = normalizeTenant(entry);
+function readSessions(
+  storage: KeyValueStorage,
+  onFailure: StorageFailureHandler
+) {
+  const parsed = safeJson<unknown>(
+    readStorage(storage, SESSIONS_KEY, onFailure),
+    []
+  );
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.id !== "string" || !entry.id.trim()) {
+      return [];
+    }
+    const tenant = normalizeTenant({
+      user_id: typeof entry.user_id === "string" ? entry.user_id : undefined,
+      namespace: typeof entry.namespace === "string" ? entry.namespace : undefined
+    });
     return [{
       id: entry.id,
       user_id: tenant.user_id,
       namespace: tenant.namespace,
-      updatedAt: entry.updatedAt || new Date().toISOString()
+      updatedAt: typeof entry.updatedAt === "string"
+        ? entry.updatedAt
+        : new Date().toISOString()
     }];
   });
 }
 
-function readStoredContext(): StoredContext {
-  const parsed = safeJson<StoredContext | null>(localStorage.getItem(CONTEXT_KEY), null);
-  if (parsed && typeof parsed.session_id === "string" && parsed.session_id.trim()) {
+function readStoredContext(
+  storage: KeyValueStorage,
+  onFailure: StorageFailureHandler
+): StoredContext {
+  const parsed = safeJson<unknown>(
+    readStorage(storage, CONTEXT_KEY, onFailure),
+    null
+  );
+  if (
+    isRecord(parsed)
+    && typeof parsed.session_id === "string"
+    && parsed.session_id.trim()
+  ) {
     return {
       session_id: parsed.session_id,
-      ...normalizeTenant(parsed)
+      ...normalizeTenant({
+        user_id: typeof parsed.user_id === "string" ? parsed.user_id : undefined,
+        namespace: typeof parsed.namespace === "string"
+          ? parsed.namespace
+          : undefined
+      })
     };
   }
 
-  const legacySessionId = localStorage.getItem(LEGACY_SESSION_KEY) || makeSessionId();
+  const legacySessionId = readStorage(storage, LEGACY_SESSION_KEY, onFailure)
+    || makeSessionId();
   return {
     session_id: legacySessionId,
     ...normalizeTenant()
   };
 }
 
-function persistStoredContext(context: StoredContext) {
-  localStorage.setItem(CONTEXT_KEY, JSON.stringify(context));
-  localStorage.setItem(LEGACY_SESSION_KEY, context.session_id);
-}
-
-function transcriptKey(sessionId: string, tenant?: Partial<TenantScope>) {
-  return `${TRANSCRIPT_PREFIX}${tenantKey(tenant)}::${sessionId}`;
+function persistStoredContext(
+  storage: KeyValueStorage,
+  context: StoredContext,
+  onFailure: StorageFailureHandler
+) {
+  writeStorage(storage, CONTEXT_KEY, JSON.stringify(context), onFailure);
+  writeStorage(storage, LEGACY_SESSION_KEY, context.session_id, onFailure);
 }
 
 function initialSession(sessionId: string, tenant?: Partial<TenantScope>): SessionState {
@@ -145,19 +185,48 @@ function initialSession(sessionId: string, tenant?: Partial<TenantScope>): Sessi
   };
 }
 
-const initialContext = readStoredContext();
+function reportStorageFailure(failure: StorageFailure) {
+  if (import.meta.env.DEV) {
+    console.warn(
+      `Browser storage ${failure.operation} failed for ${failure.key}`,
+      failure.error
+    );
+  }
+}
 
-export const useAppStore = create<AppStore>((set, get) => ({
+function readTheme(
+  storage: KeyValueStorage,
+  onFailure: StorageFailureHandler
+): "dark" | "light" {
+  return readStorage(storage, THEME_KEY, onFailure) === "light"
+    ? "light"
+    : "dark";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function createAppStore(
+  dependencies: Partial<AppStoreDependencies> = {}
+) {
+  const storage = dependencies.storage || resolveBrowserStorage();
+  const onStorageFailure = dependencies.onStorageFailure || reportStorageFailure;
+  const transcriptRepository = dependencies.transcriptRepository
+    || createTranscriptRepository(storage, onStorageFailure);
+  const initialContext = readStoredContext(storage, onStorageFailure);
+
+  return create<AppStore>((set, get) => ({
   session: initialSession(initialContext.session_id, initialContext),
   messages: [],
   events: [],
   toolCalls: {},
-  sessions: readSessions(),
+  sessions: readSessions(storage, onStorageFailure),
   learning: { total: 0, average_score: 0, needs_review_count: 0, records: [] },
   running: false,
   runLabel: "就绪",
   error: "",
-  theme: (localStorage.getItem(THEME_KEY) as "dark" | "light") || "dark",
+  theme: readTheme(storage, onStorageFailure),
   selectedEventId: null,
   filters: new Set(EVENT_TYPES),
   recording: true,
@@ -172,14 +241,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const now = new Date().toISOString();
     const next = [
       { id: sessionId, user_id: resolved.user_id, namespace: resolved.namespace, updatedAt: now },
-      ...readSessions().filter((item) => item.id !== sessionId || !sameTenant(item, resolved))
+      ...get().sessions
+        .filter((item) => item.id !== sessionId || !sameTenant(item, resolved))
     ].slice(0, 32);
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
-    persistStoredContext({
+    writeStorage(storage, SESSIONS_KEY, JSON.stringify(next), onStorageFailure);
+    persistStoredContext(storage, {
       session_id: sessionId,
       user_id: resolved.user_id,
       namespace: resolved.namespace
-    });
+    }, onStorageFailure);
     set({ sessions: next });
   },
 
@@ -379,50 +449,53 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   hydrateTranscript(sessionId, tenant) {
-    const parsed = safeJson<PersistedTranscript | null>(localStorage.getItem(transcriptKey(sessionId, tenant || sessionTenant(get().session))), null);
-    if (!parsed || parsed.version !== TRANSCRIPT_VERSION) return false;
+    const parsed = transcriptRepository.load(
+      sessionId,
+      tenant || sessionTenant(get().session)
+    );
+    if (!parsed) return false;
     set({
-      messages: parsed.messages || [],
-      events: (parsed.events || []).filter((event) => event.type !== "token"),
-      toolCalls: parsed.toolCalls || {}
+      messages: parsed.messages,
+      events: parsed.events.filter((event) => event.type !== "token"),
+      toolCalls: parsed.toolCalls
     });
-    return Boolean(parsed.messages?.length || parsed.events?.length);
+    return Boolean(parsed.messages.length || parsed.events.length);
   },
 
   persistTranscript() {
     const state = get();
-    const payload: PersistedTranscript = {
-      version: TRANSCRIPT_VERSION,
-      messages: state.messages,
-      events: state.events,
-      toolCalls: state.toolCalls
-    };
-    localStorage.setItem(
-      transcriptKey(state.session.session_id, sessionTenant(state.session)),
-      JSON.stringify(payload)
+    transcriptRepository.save(
+      state.session.session_id,
+      sessionTenant(state.session),
+      {
+        messages: state.messages,
+        events: state.events,
+        toolCalls: state.toolCalls
+      }
     );
   },
 
   deleteSession(sessionId, tenant) {
     const resolved = normalizeTenant(tenant || sessionTenant(get().session));
-    const next = readSessions().filter((item) => item.id !== sessionId || !sameTenant(item, resolved));
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(next));
-    localStorage.removeItem(transcriptKey(sessionId, resolved));
-    const current = readStoredContext();
+    const next = get().sessions
+      .filter((item) => item.id !== sessionId || !sameTenant(item, resolved));
+    writeStorage(storage, SESSIONS_KEY, JSON.stringify(next), onStorageFailure);
+    transcriptRepository.delete(sessionId, resolved);
+    const current = readStoredContext(storage, onStorageFailure);
     if (current.session_id === sessionId && sameTenant(current, resolved)) {
       const fallback = next.find((item) => sameTenant(item, resolved)) || next[0];
       if (fallback) {
-        persistStoredContext({
+        persistStoredContext(storage, {
           session_id: fallback.id,
           user_id: fallback.user_id,
           namespace: fallback.namespace
-        });
+        }, onStorageFailure);
       } else {
-        persistStoredContext({
+        persistStoredContext(storage, {
           session_id: makeSessionId(),
           user_id: resolved.user_id,
           namespace: resolved.namespace
-        });
+        }, onStorageFailure);
       }
     }
     set({ sessions: next });
@@ -450,7 +523,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   setTheme(theme) {
-    localStorage.setItem(THEME_KEY, theme);
+    writeStorage(storage, THEME_KEY, theme, onStorageFailure);
     set({ theme });
   }
-}));
+  }));
+}
+
+export const useAppStore = createAppStore();
