@@ -20,6 +20,7 @@
 | 2026-07-11 | Phase 1：SSE contract/translator/encoder 与 chat route 解耦 | 完成 | [2026-07-11-sse-boundary.md](2026-07-11-sse-boundary.md) |
 | 2026-07-11 | Git：本地任务单与待推送历史隔离 | 完成 | [2026-07-11-local-todo-policy.md](2026-07-11-local-todo-policy.md) |
 | 2026-07-11 | Phase 2：runtime config/serialization/session query 拆分 | 完成 | [2026-07-11-runtime-query-split.md](2026-07-11-runtime-query-split.md) |
+| 2026-07-11 | Phase 2：execution/telemetry/approval service 与 sync/async 收敛 | 完成 | [2026-07-11-runtime-execution-split.md](2026-07-11-runtime-execution-split.md) |
 
 ## 本地任务单策略
 

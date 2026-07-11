@@ -26,9 +26,12 @@ tech_doc_agent
 │   │   ├── specs.py
 │   │   └── tool_policy.py
 │   ├── runtime
+│   │   ├── approvals.py
 │   │   ├── config.py
+│   │   ├── execution.py
 │   │   ├── serialization.py
-│   │   └── sessions.py
+│   │   ├── sessions.py
+│   │   └── telemetry.py
 │   ├── main.py
 │   └── services
 │       ├── assistants
@@ -54,7 +57,7 @@ tech_doc_agent
 
 ### `app/runtime`
 
-运行时内聚组件：`config.py` 构造 tenant-scoped LangGraph config，`serialization.py` 负责消息 API 投影，`sessions.py` 读取 checkpoint 并形成 history/state view。组件通过窄 callable 获取 graph 和 approval 状态，不反向依赖 `ChatRuntime`。
+运行时内聚组件：`config.py` 构造 tenant-scoped LangGraph config，`serialization.py` 负责消息 API 投影，`sessions.py` 读取 checkpoint 并形成 history/state view，`execution.py` 统一 send/resume 与 sync/async bridge，`approvals.py` 定义审批用例和 repository port，`telemetry.py` 统一 operation 日志。组件通过窄接口获取 graph、settings 和 approval 状态，不反向依赖 `ChatRuntime` 或 API。
 
 ### `app/services/chat_runtime.py`
 
@@ -62,8 +65,7 @@ tech_doc_agent
 
 - 创建 Redis checkpointer
 - 构建 graph
-- 发消息
-- 审批恢复
+- 委托 `app/runtime` 发消息和审批恢复
 - 委托 `app/runtime` 获取历史与状态
 
 ### `app/api/routes/chat.py`

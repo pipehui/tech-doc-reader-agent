@@ -1,51 +1,24 @@
-import asyncio
-from contextlib import suppress
-from dataclasses import dataclass
-from tech_doc_agent.app.graph import build_multi_agentic_graph
-from tech_doc_agent.app.core.langfuse_tracing import (
-    flush_langfuse,
-    shutdown_langfuse,
-)
-from tech_doc_agent.app.core.observability import log_event, timed_node
-from tech_doc_agent.app.core.settings import get_settings
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values, tenant_thread_id
-from tech_doc_agent.app.runtime import SessionConfigFactory, SessionQueryService
-from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
-from langchain_core.messages import AIMessage, ToolMessage
+from time import sleep
+from typing import Any
+
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
 from redis.exceptions import BusyLoadingError
-from time import perf_counter, sleep
-from typing import Any
 
-
-_STREAM_DONE = object()
-
-
-@dataclass(frozen=True)
-class GuardrailApprovalRequest:
-    session_id: str
-    user_input: str
-    user_id: str
-    namespace: str
-    source: str
-    risk_level: str
-    findings: tuple[str, ...]
-
-
-def _elapsed_ms(start: float) -> float:
-    return round((perf_counter() - start) * 1000, 2)
-
-
-def _error_message(exc: Exception) -> str:
-    return str(exc) or type(exc).__name__
-
-
-def _next_or_done(iterator):
-    try:
-        return next(iterator)
-    except StopIteration:
-        return _STREAM_DONE
+from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
+from tech_doc_agent.app.core.observability import log_event
+from tech_doc_agent.app.core.settings import get_settings
+from tech_doc_agent.app.graph import build_multi_agentic_graph
+from tech_doc_agent.app.runtime import (
+    ApprovalRepository,
+    ApprovalService,
+    GraphExecutionService,
+    GuardrailApprovalRequest,
+    InMemoryApprovalRepository,
+    SessionConfigFactory,
+    SessionQueryService,
+)
+from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
 
 
 def _is_retryable_redis_startup_error(exc: Exception) -> bool:
@@ -53,48 +26,30 @@ def _is_retryable_redis_startup_error(exc: Exception) -> bool:
     return isinstance(exc, BusyLoadingError) or "redis is loading" in message or "loading the dataset" in message
 
 
-def _interrupted_node(snapshot: StateSnapshot) -> str | None:
-    next_nodes = getattr(snapshot, "next", ()) or ()
-    return next_nodes[0] if next_nodes else None
-
-
-def _rejection_tool_message(snapshot: StateSnapshot, feedback: str) -> ToolMessage:
-    tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
-    feedback = feedback or "用户未提供原因"
-    return ToolMessage(
-        tool_call_id=tool_call_id,
-        content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
-    )
-
-
-async def _aiter_sync_iterator(parts):
-    iterator = iter(parts)
-
-    try:
-        while True:
-            part = await asyncio.to_thread(_next_or_done, iterator)
-            if part is _STREAM_DONE:
-                return
-            yield part
-    finally:
-        close = getattr(iterator, "close", None)
-        if callable(close):
-            with suppress(Exception):
-                await asyncio.to_thread(close)
-
-
 class ChatRuntime:
-    def __init__(self) -> None:
+    def __init__(self, approval_repository: ApprovalRepository | None = None) -> None:
         self.settings = get_settings()
         self._checkpointer_cm: Any | None = None
         self.checkpointer: Any | None = None
         self.graph: Any | None = None
         self.resources: Any | None = None
-        self._guardrail_approvals: dict[str, GuardrailApprovalRequest] = {}
+        self._approval_repository = (
+            approval_repository
+            if approval_repository is not None
+            else InMemoryApprovalRepository()
+        )
+        self._approval_service = ApprovalService(self._approval_repository)
         self._session_queries = SessionQueryService(
             graph_provider=self._require_graph,
             config_builder=self.build_config,
-            pending_guardrail_checker=self.has_pending_guardrail_approval,
+            pending_guardrail_checker=self._approval_service.has_pending_guardrail_approval,
+        )
+        self._execution = GraphExecutionService(
+            settings_provider=lambda: self.settings,
+            graph_provider=self._require_graph,
+            config_builder=self.build_config,
+            session_queries=self._session_queries,
+            approvals=self._approval_service,
         )
 
     def __enter__(self):
@@ -170,16 +125,6 @@ class ChatRuntime:
             with_callbacks=with_callbacks,
         )
 
-    def _graph_input(self, session_id: str, user_input: str, tenant: TenantContext) -> dict:
-        return {
-            "messages": [("user", user_input)],
-            "user_id": tenant.user_id,
-            "namespace": tenant.namespace,
-        }
-
-    def _guardrail_approval_key(self, session_id: str, tenant: TenantContext) -> str:
-        return tenant_thread_id(session_id, tenant)
-
     def request_guardrail_approval(
         self,
         session_id: str,
@@ -191,27 +136,15 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> GuardrailApprovalRequest:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        request = GuardrailApprovalRequest(
-            session_id=session_id,
-            user_input=user_input,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
+        return self._approval_service.request_guardrail_approval(
+            session_id,
+            user_input,
             source=source,
             risk_level=risk_level,
-            findings=tuple(findings),
+            findings=findings,
+            user_id=user_id,
+            namespace=namespace,
         )
-        self._guardrail_approvals[self._guardrail_approval_key(session_id, tenant)] = request
-        log_event(
-            "guardrail.approval.requested",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            source=source,
-            risk_level=risk_level,
-            findings=list(findings),
-        )
-        return request
 
     def get_pending_guardrail_approval(
         self,
@@ -219,8 +152,11 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> GuardrailApprovalRequest | None:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        return self._guardrail_approvals.get(self._guardrail_approval_key(session_id, tenant))
+        return self._approval_service.get_pending_guardrail_approval(
+            session_id,
+            user_id=user_id,
+            namespace=namespace,
+        )
 
     def has_pending_guardrail_approval(
         self,
@@ -228,57 +164,10 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> bool:
-        return self.get_pending_guardrail_approval(session_id, user_id=user_id, namespace=namespace) is not None
-
-    def _pop_pending_guardrail_approval(
-        self,
-        session_id: str,
-        user_id: str | None = None,
-        namespace: str | None = None,
-    ) -> GuardrailApprovalRequest | None:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        return self._guardrail_approvals.pop(self._guardrail_approval_key(session_id, tenant), None)
-
-    def _guardrail_rejection_part(
-        self,
-        pending: GuardrailApprovalRequest,
-        feedback: str,
-    ) -> tuple[str, dict]:
-        reason = feedback or "未提供原因"
-        return (
-            "updates",
-            {
-                "guardrail": {
-                    "messages": [
-                        AIMessage(
-                            content=(
-                                "这条输入被 guardrails 标记为 medium risk，审批未通过，"
-                                f"已停止执行。原因：{reason}"
-                            ),
-                            name="guardrail",
-                        )
-                    ]
-                }
-            },
-        )
-
-    def _log_guardrail_approval_resolved(
-        self,
-        pending: GuardrailApprovalRequest,
-        *,
-        approved: bool,
-        feedback: str,
-    ) -> None:
-        log_event(
-            "guardrail.approval.resolved",
-            session_id=pending.session_id,
-            user_id=pending.user_id,
-            namespace=pending.namespace,
-            source=pending.source,
-            risk_level=pending.risk_level,
-            findings=list(pending.findings),
-            approved=approved,
-            feedback_length=len(feedback),
+        return self._approval_service.has_pending_guardrail_approval(
+            session_id,
+            user_id=user_id,
+            namespace=namespace,
         )
 
     def stream_user_message(
@@ -288,57 +177,12 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ):
-        start = perf_counter()
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        log_event(
-            "chat.request.started",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            message_length=len(user_input),
+        yield from self._execution.stream_user_message(
+            session_id,
+            user_input,
+            user_id=user_id,
+            namespace=namespace,
         )
-
-        try:
-            with timed_node("graph.stream", phase="chat"):
-                graph = self._require_graph()
-                config = self.build_config(
-                    session_id,
-                    user_id=tenant.user_id,
-                    namespace=tenant.namespace,
-                    operation="chat",
-                    with_callbacks=True,
-                )
-                parts = graph.stream(
-                    self._graph_input(session_id, user_input, tenant),
-                    config,
-                    stream_mode=["messages", "updates"],
-                    version="v2",
-                )
-                for part in parts:
-                    yield part
-        except Exception as exc:
-            log_event(
-                "chat.request.error",
-                session_id=session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                elapsed_ms=_elapsed_ms(start),
-                error_type=type(exc).__name__,
-                error=_error_message(exc),
-            )
-            raise
-
-        pending_interrupt = self.has_pending_interrupt(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-        log_event(
-            "chat.request.interrupted" if pending_interrupt else "chat.request.finished",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            elapsed_ms=_elapsed_ms(start),
-            pending_interrupt=pending_interrupt,
-        )
-        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
-            flush_langfuse(self.settings)
 
     async def astream_user_message(
         self,
@@ -347,66 +191,13 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ):
-        start = perf_counter()
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        log_event(
-            "chat.request.started",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            message_length=len(user_input),
-            async_runtime=True,
-        )
-
-        try:
-            graph = self._require_graph()
-            config = self.build_config(
-                session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                operation="chat",
-                with_callbacks=True,
-            )
-
-            with timed_node("graph.stream.thread", phase="chat"):
-                async for part in _aiter_sync_iterator(
-                    graph.stream(
-                        self._graph_input(session_id, user_input, tenant),
-                        config,
-                        stream_mode=["messages", "updates"],
-                        version="v2",
-                    )
-                ):
-                    yield part
-        except Exception as exc:
-            log_event(
-                "chat.request.error",
-                session_id=session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                elapsed_ms=_elapsed_ms(start),
-                async_runtime=True,
-                error_type=type(exc).__name__,
-                error=_error_message(exc),
-            )
-            raise
-
-        pending_interrupt = await self.ahas_pending_interrupt(
+        async for part in self._execution.astream_user_message(
             session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-        )
-        log_event(
-            "chat.request.interrupted" if pending_interrupt else "chat.request.finished",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            elapsed_ms=_elapsed_ms(start),
-            pending_interrupt=pending_interrupt,
-            async_runtime=True,
-        )
-        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
-            await asyncio.to_thread(flush_langfuse, self.settings)
+            user_input,
+            user_id=user_id,
+            namespace=namespace,
+        ):
+            yield part
 
     def has_pending_interrupt(
         self,
@@ -414,10 +205,11 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> bool:
-        if self.has_pending_guardrail_approval(session_id, user_id=user_id, namespace=namespace):
-            return True
-        snapshot = self.get_snapshot(session_id, user_id=user_id, namespace=namespace)
-        return bool(snapshot.next)
+        return self._execution.has_pending_interrupt(
+            session_id,
+            user_id=user_id,
+            namespace=namespace,
+        )
 
     async def ahas_pending_interrupt(
         self,
@@ -425,11 +217,10 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> bool:
-        return await asyncio.to_thread(
-            self.has_pending_interrupt,
+        return await self._execution.ahas_pending_interrupt(
             session_id,
-            user_id,
-            namespace,
+            user_id=user_id,
+            namespace=namespace,
         )
 
     def stream_approval(
@@ -440,105 +231,13 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ):
-        start = perf_counter()
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        log_event(
-            "chat.approval.started",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            approved=approved,
+        yield from self._execution.stream_approval(
+            session_id,
+            approved,
+            feedback=feedback,
+            user_id=user_id,
+            namespace=namespace,
         )
-
-        try:
-            pending_guardrail = self._pop_pending_guardrail_approval(
-                session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-            )
-            if pending_guardrail is not None:
-                self._log_guardrail_approval_resolved(
-                    pending_guardrail,
-                    approved=approved,
-                    feedback=feedback,
-                )
-                if approved:
-                    yield from self.stream_user_message(
-                        session_id,
-                        pending_guardrail.user_input,
-                        user_id=tenant.user_id,
-                        namespace=tenant.namespace,
-                    )
-                else:
-                    yield self._guardrail_rejection_part(pending_guardrail, feedback)
-                return
-
-            snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-
-            if not snapshot.next:
-                log_event(
-                    "chat.approval.no_pending_interrupt",
-                    session_id=session_id,
-                    user_id=tenant.user_id,
-                    namespace=tenant.namespace,
-                    elapsed_ms=_elapsed_ms(start),
-                    approved=approved,
-                )
-                return
-
-            config = self.build_config(
-                session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                operation="approval",
-                with_callbacks=True,
-            )
-
-            if approved:
-                graph = self._require_graph()
-                parts = graph.stream(None, config, stream_mode=["messages", "updates"], version="v2")
-            else:
-                graph = self._require_graph()
-                config = graph.update_state(
-                    config,
-                    {"messages": [_rejection_tool_message(snapshot, feedback)]},
-                    as_node=_interrupted_node(snapshot),
-                )
-                parts = graph.stream(
-                    None,
-                    config,
-                    stream_mode=["messages", "updates"],
-                    version="v2",
-                )
-
-            with timed_node("graph.stream", phase="approval", approved=approved):
-                for part in parts:
-                    yield part
-        except Exception as exc:
-            log_event(
-                "chat.approval.error",
-                session_id=session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                elapsed_ms=_elapsed_ms(start),
-                approved=approved,
-                error_type=type(exc).__name__,
-                error=_error_message(exc),
-            )
-            raise
-
-        pending_interrupt = self.has_pending_interrupt(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-        log_event(
-            "chat.approval.interrupted" if pending_interrupt else "chat.approval.finished",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            elapsed_ms=_elapsed_ms(start),
-            approved=approved,
-            pending_interrupt=pending_interrupt,
-        )
-        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
-            flush_langfuse(self.settings)
 
     async def astream_approval(
         self,
@@ -548,116 +247,14 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ):
-        start = perf_counter()
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        log_event(
-            "chat.approval.started",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            approved=approved,
-            async_runtime=True,
-        )
-
-        try:
-            pending_guardrail = self._pop_pending_guardrail_approval(
-                session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-            )
-            if pending_guardrail is not None:
-                self._log_guardrail_approval_resolved(
-                    pending_guardrail,
-                    approved=approved,
-                    feedback=feedback,
-                )
-                if approved:
-                    async for part in self.astream_user_message(
-                        session_id,
-                        pending_guardrail.user_input,
-                        user_id=tenant.user_id,
-                        namespace=tenant.namespace,
-                    ):
-                        yield part
-                else:
-                    yield self._guardrail_rejection_part(pending_guardrail, feedback)
-                return
-
-            snapshot = await self.aget_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-
-            if not snapshot.next:
-                log_event(
-                    "chat.approval.no_pending_interrupt",
-                    session_id=session_id,
-                    user_id=tenant.user_id,
-                    namespace=tenant.namespace,
-                    elapsed_ms=_elapsed_ms(start),
-                    approved=approved,
-                    async_runtime=True,
-                )
-                return
-
-            config = self.build_config(
-                session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                operation="approval",
-                with_callbacks=True,
-            )
-            graph = self._require_graph()
-
-            if approved:
-                graph_input = None
-            else:
-                config = await asyncio.to_thread(
-                    graph.update_state,
-                    config,
-                    {"messages": [_rejection_tool_message(snapshot, feedback)]},
-                    _interrupted_node(snapshot),
-                )
-                graph_input = None
-
-            with timed_node("graph.stream.thread", phase="approval", approved=approved):
-                async for part in _aiter_sync_iterator(
-                    graph.stream(
-                        graph_input,
-                        config,
-                        stream_mode=["messages", "updates"],
-                        version="v2",
-                    )
-                ):
-                    yield part
-        except Exception as exc:
-            log_event(
-                "chat.approval.error",
-                session_id=session_id,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                elapsed_ms=_elapsed_ms(start),
-                approved=approved,
-                async_runtime=True,
-                error_type=type(exc).__name__,
-                error=_error_message(exc),
-            )
-            raise
-
-        pending_interrupt = await self.ahas_pending_interrupt(
+        async for part in self._execution.astream_approval(
             session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-        )
-        log_event(
-            "chat.approval.interrupted" if pending_interrupt else "chat.approval.finished",
-            session_id=session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            elapsed_ms=_elapsed_ms(start),
-            approved=approved,
-            pending_interrupt=pending_interrupt,
-            async_runtime=True,
-        )
-        if self.settings.LANGFUSE_FLUSH_ON_REQUEST:
-            await asyncio.to_thread(flush_langfuse, self.settings)
+            approved,
+            feedback=feedback,
+            user_id=user_id,
+            namespace=namespace,
+        ):
+            yield part
 
     def get_snapshot(
         self,
