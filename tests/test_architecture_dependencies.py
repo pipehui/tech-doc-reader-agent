@@ -7,6 +7,7 @@ CORE_DIR = APP_DIR / "core"
 RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
 ASSISTANTS_DIR = APP_DIR / "services" / "assistants"
+RETRIEVAL_DIR = APP_DIR / "services" / "retrieval"
 FORBIDDEN_CORE_DEPENDENCIES = (
     "tech_doc_agent.app.api",
     "tech_doc_agent.app.services",
@@ -116,6 +117,25 @@ def test_global_app_resource_locator_symbols_are_removed():
                 violations.append(f"{path.relative_to(APP_DIR)} contains {symbol}")
 
     assert violations == []
+
+
+def test_retrieval_metadata_helpers_follow_one_way_dependency_direction():
+    package = "tech_doc_agent.app.services.retrieval"
+    assert _dependency_violations(
+        RETRIEVAL_DIR,
+        (f"{package}.inference", f"{package}.normalization", f"{package}.filters"),
+        filenames=("taxonomy.py",),
+    ) == []
+    assert _dependency_violations(
+        RETRIEVAL_DIR,
+        (f"{package}.normalization", f"{package}.filters"),
+        filenames=("inference.py",),
+    ) == []
+    assert _dependency_violations(
+        RETRIEVAL_DIR,
+        (f"{package}.filters",),
+        filenames=("normalization.py",),
+    ) == []
 
 
 def _dependency_violations(

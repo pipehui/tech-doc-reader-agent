@@ -8,11 +8,8 @@ from typing import Any, Literal
 
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.services.retrieval.metadata import (
-    metadata_matches,
-    normalize_filter,
-    normalize_metadata,
-)
+from tech_doc_agent.app.services.retrieval.filters import metadata_matches, normalize_filter
+from tech_doc_agent.app.services.retrieval.normalization import normalize_metadata
 
 
 TOKEN_RE = re.compile(r"[A-Za-z0-9_+#.-]+|[\u4e00-\u9fff]+")

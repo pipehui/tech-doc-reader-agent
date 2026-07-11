@@ -2,6 +2,15 @@ from types import SimpleNamespace
 
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.retrieval import HybridRetriever
+from tech_doc_agent.app.services.retrieval.hybrid import (
+    BM25Index,
+    IndexedDocument,
+    RankedCandidate,
+    _format_result,
+    _rank_exact,
+    _reciprocal_rank_fusion,
+    _tokenize,
+)
 
 
 class FakeStore:
@@ -224,3 +233,111 @@ def test_hybrid_retriever_rebuilds_bm25_when_documents_change():
 
     assert first_results[0]["title"] == "LangGraph StateGraph"
     assert second_results[0]["title"] == "Function Calling"
+
+
+def test_tokenize_splits_camel_case_and_emits_cjk_unigrams_and_bigrams():
+    assert _tokenize("StateGraph 检索增强") == [
+        "stategraph",
+        "state",
+        "graph",
+        "检",
+        "索",
+        "增",
+        "强",
+        "检索",
+        "索增",
+        "增强",
+    ]
+
+
+def test_bm25_ties_are_stable_by_document_title():
+    documents = [
+        _indexed_document(key="b", title="Beta", content="shared term"),
+        _indexed_document(key="a", title="Alpha", content="shared term"),
+    ]
+
+    ranked = BM25Index(documents).search("shared", top_k=2)
+
+    assert [candidate.document.title for candidate in ranked] == ["Alpha", "Beta"]
+    assert ranked[0].score == ranked[1].score
+
+
+def test_exact_rank_prefers_title_and_content_match_then_title_order():
+    documents = [
+        _indexed_document(key="b", title="StateGraph Beta", content="StateGraph details"),
+        _indexed_document(key="a", title="StateGraph Alpha", content="StateGraph details"),
+        _indexed_document(key="c", title="Other", content="StateGraph details"),
+    ]
+
+    ranked = _rank_exact("stategraph", documents)
+
+    assert [(item.document.title, item.score) for item in ranked] == [
+        ("StateGraph Alpha", 3.0),
+        ("StateGraph Beta", 3.0),
+        ("Other", 2.0),
+    ]
+
+
+def test_rrf_combines_signals_and_preserves_semantic_chunk_provenance():
+    alpha = _indexed_document(key="alpha", title="Alpha", content="alpha")
+    beta = _indexed_document(key="beta", title="Beta", content="beta")
+    rankings = {
+        "exact": [
+            RankedCandidate(key="beta", document=beta, score=2.0),
+            RankedCandidate(key="alpha", document=alpha, score=1.0),
+        ],
+        "semantic": [
+            RankedCandidate(
+                key="alpha",
+                document=alpha,
+                score=0.8,
+                metadata={"distance": 0.25, "chunk_index": 2, "chunk_text": "matched"},
+            )
+        ],
+    }
+
+    fused = _reciprocal_rank_fusion(rankings, rrf_k=60)
+    result = _format_result(fused[0])
+
+    assert [candidate.document.title for candidate in fused] == ["Alpha", "Beta"]
+    assert result["match_type"] == "exact+semantic"
+    assert result["retrieval"]["signals"] == {
+        "exact": {"rank": 2, "score": 1.0},
+        "semantic": {"rank": 1, "score": 0.8, "distance": 0.25, "chunk_index": 2},
+    }
+    assert result["matched_chunks"] == [
+        {"text": "matched", "chunk_index": 2, "distance": 0.25}
+    ]
+
+
+def test_rrf_equal_scores_and_ranks_use_title_as_final_tie_break():
+    alpha = _indexed_document(key="alpha", title="Alpha", content="alpha")
+    beta = _indexed_document(key="beta", title="Beta", content="beta")
+
+    fused = _reciprocal_rank_fusion(
+        {
+            "bm25": [
+                RankedCandidate(key="beta", document=beta, score=1.0),
+                RankedCandidate(key="alpha", document=alpha, score=0.5),
+            ],
+            "semantic": [
+                RankedCandidate(key="alpha", document=alpha, score=1.0),
+                RankedCandidate(key="beta", document=beta, score=0.5),
+            ],
+        },
+        rrf_k=60,
+    )
+
+    assert [candidate.document.title for candidate in fused] == ["Alpha", "Beta"]
+
+
+def _indexed_document(*, key: str, title: str, content: str) -> IndexedDocument:
+    return IndexedDocument(
+        key=key,
+        doc_id=key,
+        title=title,
+        content=content,
+        source="test",
+        metadata={"category": "uncategorized", "tags": []},
+        raw={"id": key, "title": title, "content": content, "source": "test"},
+    )

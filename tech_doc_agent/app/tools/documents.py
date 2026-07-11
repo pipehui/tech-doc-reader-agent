@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from langchain_core.tools import BaseTool, tool
 
-from tech_doc_agent.app.services.retrieval.metadata import normalize_filter
+from tech_doc_agent.app.services.retrieval.filters import normalize_filter
 from tech_doc_agent.app.tools.dependencies import ToolDependencies
 
 

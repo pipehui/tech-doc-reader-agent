@@ -9,7 +9,10 @@ from typing import Any
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.services.embedding import generate_embedding
-from tech_doc_agent.app.services.retrieval.metadata import normalize_chunk_metadata, normalize_document
+from tech_doc_agent.app.services.retrieval.normalization import (
+    normalize_chunk_metadata,
+    normalize_document,
+)
 from tech_doc_agent.app.services.vectordb.chunkenizer import recursive_character_splitting
 
 
