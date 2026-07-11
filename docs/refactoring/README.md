@@ -14,6 +14,7 @@
 |---|---|---|---|
 | 2026-07-11 | Phase 0：基线、依赖方向、User Profile namespace 隔离 | 首批完成，Phase 0 继续 | [2026-07-11-phase-0.md](2026-07-11-phase-0.md) |
 | 2026-07-11 | Phase 0：统一原子 JSON 持久化 | 完成 | [2026-07-11-atomic-json.md](2026-07-11-atomic-json.md) |
+| 2026-07-11 | Phase 0：Graph topology/router/interrupt 行为刻画 | 完成 | [2026-07-11-graph-characterization.md](2026-07-11-graph-characterization.md) |
 
 ## 关联入口
 
