@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAppStore } from "./store";
 import type { KeyValueStorage, StorageFailure } from "./storage/keyValueStorage";
+import type { PreferenceRepository } from "./storage/preferenceRepository";
+import type { SessionRepository } from "./storage/sessionRepository";
 import type {
   TranscriptRepository,
   TranscriptSnapshot
@@ -73,6 +75,47 @@ function persistedSnapshot(): TranscriptSnapshot {
 
 
 describe("store persistence boundary", () => {
+  it("composes injected session and preference repositories", () => {
+    const sessions = {
+      loadContext: vi.fn(() => ({
+        session_id: "injected-session",
+        user_id: "user-a",
+        namespace: "docs"
+      })),
+      saveContext: vi.fn(() => true),
+      loadSessions: vi.fn(() => [{
+        id: "injected-session",
+        user_id: "user-a",
+        namespace: "docs",
+        updatedAt: "2026-07-11T00:00:00.000Z"
+      }]),
+      saveSessions: vi.fn(() => true)
+    } satisfies SessionRepository;
+    const preferences = {
+      loadTheme: vi.fn(() => "light" as const),
+      saveTheme: vi.fn(() => true)
+    } satisfies PreferenceRepository;
+    const app = createAppStore({
+      storage: new MemoryStorage(),
+      sessionRepository: sessions,
+      preferenceRepository: preferences,
+      transcriptRepository: repository()
+    });
+
+    expect(app.getState().session.session_id).toBe("injected-session");
+    expect(app.getState().sessions).toHaveLength(1);
+    expect(app.getState().theme).toBe("light");
+
+    app.getState().rememberSession("session-2", TENANT);
+    app.getState().setTheme("dark");
+    expect(sessions.saveSessions).toHaveBeenCalledOnce();
+    expect(sessions.saveContext).toHaveBeenCalledWith({
+      session_id: "session-2",
+      ...TENANT
+    });
+    expect(preferences.saveTheme).toHaveBeenCalledWith("dark");
+  });
+
   it("falls back safely for malformed session lists, contexts and themes", () => {
     const storage = new MemoryStorage();
     storage.setItem("tech-doc-agent.sessions.v2", JSON.stringify({ invalid: true }));

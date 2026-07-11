@@ -29,6 +29,7 @@
 | 2026-07-11 | Phase 3：legacy frontend 与 production dist 静态边界 | 完成，Docker image build 待有 daemon 环境复核 | [2026-07-11-frontend-static-boundary.md](2026-07-11-frontend-static-boundary.md) |
 | 2026-07-11 | Phase 3：前端类型化 SSE parser/reducer/store adapter | 完成，tool status 协议化继续 | [2026-07-11-frontend-sse-reducer.md](2026-07-11-frontend-sse-reducer.md) |
 | 2026-07-11 | Phase 3：前端 transcript repository 与安全 storage port | 完成，Store slices 继续 | [2026-07-11-frontend-transcript-repository.md](2026-07-11-frontend-transcript-repository.md) |
+| 2026-07-11 | Phase 3：前端 session/preference repositories | 完成，Store raw storage policy 清零 | [2026-07-11-frontend-session-preference-repositories.md](2026-07-11-frontend-session-preference-repositories.md) |
 
 ## 本地任务单策略
 

@@ -1,39 +1,31 @@
 import { create } from "zustand";
 import { normalizeAgent } from "./agentColors";
 import { INSPECTOR_EVENT_TYPES } from "./sseContract";
-import {
-  readStorage,
-  resolveBrowserStorage,
-  writeStorage
-} from "./storage/keyValueStorage";
+import { resolveBrowserStorage } from "./storage/keyValueStorage";
 import type {
   KeyValueStorage,
   StorageFailure,
   StorageFailureHandler
 } from "./storage/keyValueStorage";
+import { createPreferenceRepository } from "./storage/preferenceRepository";
+import type {
+  PreferenceRepository,
+  Theme
+} from "./storage/preferenceRepository";
+import { createSessionRepository } from "./storage/sessionRepository";
+import type {
+  SessionEntry,
+  SessionRepository
+} from "./storage/sessionRepository";
 import { createTranscriptRepository } from "./storage/transcriptRepository";
 import type { TranscriptRepository } from "./storage/transcriptRepository";
 import { normalizeTenant, sameTenant, sessionTenant } from "./tenant";
 import type { AgentKey, ChatMessage, LearningOverview, SessionState, TenantScope, ToolCall, TraceEvent } from "./types";
 import { makeSessionId, uid } from "./utils";
 
-const LEGACY_SESSION_KEY = "tech-doc-agent.session";
-const CONTEXT_KEY = "tech-doc-agent.context";
-const SESSIONS_KEY = "tech-doc-agent.sessions.v2";
-const THEME_KEY = "tech-doc-agent.theme";
-
 export const EVENT_TYPES = [...INSPECTOR_EVENT_TYPES];
 
-export interface SessionEntry {
-  id: string;
-  user_id: string;
-  namespace: string;
-  updatedAt: string;
-}
-
-interface StoredContext extends TenantScope {
-  session_id: string;
-}
+export type { SessionEntry } from "./storage/sessionRepository";
 
 export interface AppStore {
   session: SessionState;
@@ -45,7 +37,7 @@ export interface AppStore {
   running: boolean;
   runLabel: string;
   error: string;
-  theme: "dark" | "light";
+  theme: Theme;
   selectedEventId: string | null;
   filters: Set<string>;
   recording: boolean;
@@ -82,91 +74,15 @@ export interface AppStore {
   resetForContext: (sessionId: string, tenant: Partial<TenantScope>) => void;
   resetForSession: (sessionId: string) => void;
   newSession: () => void;
-  setTheme: (theme: "dark" | "light") => void;
+  setTheme: (theme: Theme) => void;
 }
 
 export interface AppStoreDependencies {
   storage: KeyValueStorage;
+  sessionRepository: SessionRepository;
+  preferenceRepository: PreferenceRepository;
   transcriptRepository: TranscriptRepository;
   onStorageFailure: StorageFailureHandler;
-}
-
-function safeJson<T>(raw: string | null, fallback: T): T {
-  if (!raw) return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function readSessions(
-  storage: KeyValueStorage,
-  onFailure: StorageFailureHandler
-) {
-  const parsed = safeJson<unknown>(
-    readStorage(storage, SESSIONS_KEY, onFailure),
-    []
-  );
-  if (!Array.isArray(parsed)) return [];
-  return parsed.flatMap((entry) => {
-    if (!isRecord(entry) || typeof entry.id !== "string" || !entry.id.trim()) {
-      return [];
-    }
-    const tenant = normalizeTenant({
-      user_id: typeof entry.user_id === "string" ? entry.user_id : undefined,
-      namespace: typeof entry.namespace === "string" ? entry.namespace : undefined
-    });
-    return [{
-      id: entry.id,
-      user_id: tenant.user_id,
-      namespace: tenant.namespace,
-      updatedAt: typeof entry.updatedAt === "string"
-        ? entry.updatedAt
-        : new Date().toISOString()
-    }];
-  });
-}
-
-function readStoredContext(
-  storage: KeyValueStorage,
-  onFailure: StorageFailureHandler
-): StoredContext {
-  const parsed = safeJson<unknown>(
-    readStorage(storage, CONTEXT_KEY, onFailure),
-    null
-  );
-  if (
-    isRecord(parsed)
-    && typeof parsed.session_id === "string"
-    && parsed.session_id.trim()
-  ) {
-    return {
-      session_id: parsed.session_id,
-      ...normalizeTenant({
-        user_id: typeof parsed.user_id === "string" ? parsed.user_id : undefined,
-        namespace: typeof parsed.namespace === "string"
-          ? parsed.namespace
-          : undefined
-      })
-    };
-  }
-
-  const legacySessionId = readStorage(storage, LEGACY_SESSION_KEY, onFailure)
-    || makeSessionId();
-  return {
-    session_id: legacySessionId,
-    ...normalizeTenant()
-  };
-}
-
-function persistStoredContext(
-  storage: KeyValueStorage,
-  context: StoredContext,
-  onFailure: StorageFailureHandler
-) {
-  writeStorage(storage, CONTEXT_KEY, JSON.stringify(context), onFailure);
-  writeStorage(storage, LEGACY_SESSION_KEY, context.session_id, onFailure);
 }
 
 function initialSession(sessionId: string, tenant?: Partial<TenantScope>): SessionState {
@@ -194,39 +110,30 @@ function reportStorageFailure(failure: StorageFailure) {
   }
 }
 
-function readTheme(
-  storage: KeyValueStorage,
-  onFailure: StorageFailureHandler
-): "dark" | "light" {
-  return readStorage(storage, THEME_KEY, onFailure) === "light"
-    ? "light"
-    : "dark";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function createAppStore(
   dependencies: Partial<AppStoreDependencies> = {}
 ) {
   const storage = dependencies.storage || resolveBrowserStorage();
   const onStorageFailure = dependencies.onStorageFailure || reportStorageFailure;
+  const sessionRepository = dependencies.sessionRepository
+    || createSessionRepository(storage, onStorageFailure);
+  const preferenceRepository = dependencies.preferenceRepository
+    || createPreferenceRepository(storage, onStorageFailure);
   const transcriptRepository = dependencies.transcriptRepository
     || createTranscriptRepository(storage, onStorageFailure);
-  const initialContext = readStoredContext(storage, onStorageFailure);
+  const initialContext = sessionRepository.loadContext();
 
   return create<AppStore>((set, get) => ({
   session: initialSession(initialContext.session_id, initialContext),
   messages: [],
   events: [],
   toolCalls: {},
-  sessions: readSessions(storage, onStorageFailure),
+  sessions: sessionRepository.loadSessions(),
   learning: { total: 0, average_score: 0, needs_review_count: 0, records: [] },
   running: false,
   runLabel: "就绪",
   error: "",
-  theme: readTheme(storage, onStorageFailure),
+  theme: preferenceRepository.loadTheme(),
   selectedEventId: null,
   filters: new Set(EVENT_TYPES),
   recording: true,
@@ -244,12 +151,12 @@ export function createAppStore(
       ...get().sessions
         .filter((item) => item.id !== sessionId || !sameTenant(item, resolved))
     ].slice(0, 32);
-    writeStorage(storage, SESSIONS_KEY, JSON.stringify(next), onStorageFailure);
-    persistStoredContext(storage, {
+    sessionRepository.saveSessions(next);
+    sessionRepository.saveContext({
       session_id: sessionId,
       user_id: resolved.user_id,
       namespace: resolved.namespace
-    }, onStorageFailure);
+    });
     set({ sessions: next });
   },
 
@@ -479,23 +386,23 @@ export function createAppStore(
     const resolved = normalizeTenant(tenant || sessionTenant(get().session));
     const next = get().sessions
       .filter((item) => item.id !== sessionId || !sameTenant(item, resolved));
-    writeStorage(storage, SESSIONS_KEY, JSON.stringify(next), onStorageFailure);
+    sessionRepository.saveSessions(next);
     transcriptRepository.delete(sessionId, resolved);
-    const current = readStoredContext(storage, onStorageFailure);
+    const current = sessionRepository.loadContext();
     if (current.session_id === sessionId && sameTenant(current, resolved)) {
       const fallback = next.find((item) => sameTenant(item, resolved)) || next[0];
       if (fallback) {
-        persistStoredContext(storage, {
+        sessionRepository.saveContext({
           session_id: fallback.id,
           user_id: fallback.user_id,
           namespace: fallback.namespace
-        }, onStorageFailure);
+        });
       } else {
-        persistStoredContext(storage, {
+        sessionRepository.saveContext({
           session_id: makeSessionId(),
           user_id: resolved.user_id,
           namespace: resolved.namespace
-        }, onStorageFailure);
+        });
       }
     }
     set({ sessions: next });
@@ -523,7 +430,7 @@ export function createAppStore(
   },
 
   setTheme(theme) {
-    writeStorage(storage, THEME_KEY, theme, onStorageFailure);
+    preferenceRepository.saveTheme(theme);
     set({ theme });
   }
   }));

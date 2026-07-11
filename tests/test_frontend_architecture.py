@@ -8,8 +8,11 @@ STORE_SOURCE = (FRONTEND_SRC / "store.ts").read_text(encoding="utf-8")
 def test_zustand_store_uses_storage_port_instead_of_browser_global():
     assert "localStorage" not in STORE_SOURCE
     assert "resolveBrowserStorage" in STORE_SOURCE
-    assert "readStorage" in STORE_SOURCE
-    assert "writeStorage" in STORE_SOURCE
+    assert "readStorage" not in STORE_SOURCE
+    assert "writeStorage" not in STORE_SOURCE
+    assert "sessionRepository.loadContext(" in STORE_SOURCE
+    assert "sessionRepository.loadSessions(" in STORE_SOURCE
+    assert "preferenceRepository.loadTheme(" in STORE_SOURCE
 
 
 def test_zustand_store_delegates_transcript_persistence_to_repository():
