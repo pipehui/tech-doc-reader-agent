@@ -6,6 +6,7 @@ from redis.exceptions import BusyLoadingError
 
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.runtime import config as runtime_config
 from tech_doc_agent.app.services import chat_runtime
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
@@ -21,7 +22,7 @@ def test_build_config_adds_langfuse_callback_when_enabled(monkeypatch):
     callback = object()
 
     monkeypatch.setattr(
-        chat_runtime,
+        runtime_config,
         "build_langfuse_trace",
         lambda settings, trace_id: SimpleNamespace(
             callback=callback,

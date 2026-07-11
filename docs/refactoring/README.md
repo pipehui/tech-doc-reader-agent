@@ -18,8 +18,9 @@
 | 2026-07-11 | Phase 1：Graph package 与 AgentSpec 注册 | 完成 | [2026-07-11-agent-spec.md](2026-07-11-agent-spec.md) |
 | 2026-07-11 | Phase 1：拆分 graph nodes/tool policy/tool execution | 完成 | [2026-07-11-graph-utils-split.md](2026-07-11-graph-utils-split.md) |
 | 2026-07-11 | Phase 1：SSE contract/translator/encoder 与 chat route 解耦 | 完成 | [2026-07-11-sse-boundary.md](2026-07-11-sse-boundary.md) |
+| 2026-07-11 | Git：本地任务单与待推送历史隔离 | 完成 | [2026-07-11-local-todo-policy.md](2026-07-11-local-todo-policy.md) |
+| 2026-07-11 | Phase 2：runtime config/serialization/session query 拆分 | 完成 | [2026-07-11-runtime-query-split.md](2026-07-11-runtime-query-split.md) |
 
-## 关联入口
+## 本地任务单策略
 
-- [重构 TODO 总索引](../todo/tech-doc-reader-agent-upgrade-roadmap.md)
-- [分阶段执行计划](../todo/06-execution-plan.md)
+`docs/todo/` 是本地执行清单，受 `.gitignore` 保护，不进入待推送提交。可共享、可审计的实施事实统一记录在本目录，避免远端文档索引指向不存在的本地文件。

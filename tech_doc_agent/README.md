@@ -25,6 +25,10 @@ tech_doc_agent
 │   │   ├── routing.py
 │   │   ├── specs.py
 │   │   └── tool_policy.py
+│   ├── runtime
+│   │   ├── config.py
+│   │   ├── serialization.py
+│   │   └── sessions.py
 │   ├── main.py
 │   └── services
 │       ├── assistants
@@ -48,15 +52,19 @@ tech_doc_agent
 
 `builder.py` 负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。
 
+### `app/runtime`
+
+运行时内聚组件：`config.py` 构造 tenant-scoped LangGraph config，`serialization.py` 负责消息 API 投影，`sessions.py` 读取 checkpoint 并形成 history/state view。组件通过窄 callable 获取 graph 和 approval 状态，不反向依赖 `ChatRuntime`。
+
 ### `app/services/chat_runtime.py`
 
-运行时封装层，负责：
+兼容 facade 与当前 composition boundary，负责：
 
 - 创建 Redis checkpointer
 - 构建 graph
 - 发消息
 - 审批恢复
-- 获取历史与状态
+- 委托 `app/runtime` 获取历史与状态
 
 ### `app/api/routes/chat.py`
 

@@ -3,14 +3,13 @@ from contextlib import suppress
 from dataclasses import dataclass
 from tech_doc_agent.app.graph import build_multi_agentic_graph
 from tech_doc_agent.app.core.langfuse_tracing import (
-    build_langfuse_trace,
     flush_langfuse,
-    langfuse_metadata,
     shutdown_langfuse,
 )
-from tech_doc_agent.app.core.observability import get_trace_context, log_event, timed_node
+from tech_doc_agent.app.core.observability import log_event, timed_node
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values, tenant_thread_id
+from tech_doc_agent.app.runtime import SessionConfigFactory, SessionQueryService
 from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.redis import RedisSaver
@@ -92,6 +91,11 @@ class ChatRuntime:
         self.graph: Any | None = None
         self.resources: Any | None = None
         self._guardrail_approvals: dict[str, GuardrailApprovalRequest] = {}
+        self._session_queries = SessionQueryService(
+            graph_provider=self._require_graph,
+            config_builder=self.build_config,
+            pending_guardrail_checker=self.has_pending_guardrail_approval,
+        )
 
     def __enter__(self):
         try:
@@ -158,39 +162,13 @@ class ChatRuntime:
         operation: str = "state",
         with_callbacks: bool = False,
     ) -> dict:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        context = get_trace_context()
-        trace_id = context.get("trace_id")
-        langfuse_trace = (
-            build_langfuse_trace(self.settings, trace_id)
-            if with_callbacks and isinstance(trace_id, str)
-            else None
+        return SessionConfigFactory(self.settings).build(
+            session_id,
+            user_id=user_id,
+            namespace=namespace,
+            operation=operation,
+            with_callbacks=with_callbacks,
         )
-        metadata = {
-            "session_id": session_id,
-            "user_id": tenant.user_id,
-            "namespace": tenant.namespace,
-            **langfuse_metadata(
-                session_id=session_id,
-                operation=operation,
-                external_trace_id=trace_id if isinstance(trace_id, str) else None,
-                langfuse_trace=langfuse_trace,
-            ),
-        }
-
-        config = {
-            "configurable": {
-                "thread_id": tenant_thread_id(session_id, tenant),
-            },
-            "metadata": metadata,
-            "run_name": f"tech_doc_agent.{operation}",
-            "recursion_limit": self.settings.LANGGRAPH_RECURSION_LIMIT,
-        }
-
-        if langfuse_trace is not None:
-            config["callbacks"] = [langfuse_trace.callback]
-
-        return config
 
     def _graph_input(self, session_id: str, user_input: str, tenant: TenantContext) -> dict:
         return {
@@ -687,9 +665,7 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> StateSnapshot:
-        return self._require_graph().get_state(
-            self.build_config(session_id, user_id=user_id, namespace=namespace)
-        )
+        return self._session_queries.get_snapshot(session_id, user_id=user_id, namespace=namespace)
 
     async def aget_snapshot(
         self,
@@ -697,44 +673,11 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> StateSnapshot:
-        return await asyncio.to_thread(self.get_snapshot, session_id, user_id, namespace)
-    
-    def _extract_text_content(self, content) -> str:
-        if isinstance(content, str):
-            return content
-
-        if isinstance(content, list):
-            parts = []
-            for item in content:
-                if isinstance(item, str):
-                    parts.append(item)
-                elif isinstance(item, dict):
-                    if item.get("type") == "text":
-                        parts.append(item.get("text", ""))
-                    elif "text" in item:
-                        parts.append(item.get("text", ""))
-            return "".join(parts)
-
-        return ""
-
-    def _serialize_message(self, message) -> dict:
-        raw_type = getattr(message, "type", "unknown")
-        role_map = {
-            "human": "user",
-            "ai": "assistant",
-            "tool": "tool",
-            "system": "system",
-        }
-
-        return {
-            "id": getattr(message, "id", None),
-            "role": role_map.get(raw_type, raw_type),
-            "raw_type": raw_type,
-            "content": self._extract_text_content(getattr(message, "content", "")),
-            "name": getattr(message, "name", None),
-            "tool_call_id": getattr(message, "tool_call_id", None),
-            "tool_calls": getattr(message, "tool_calls", []) or [],
-        }
+        return await self._session_queries.aget_snapshot(
+            session_id,
+            user_id=user_id,
+            namespace=namespace,
+        )
     
     def get_history(
         self,
@@ -742,64 +685,11 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> dict:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        pending_guardrail = self.has_pending_guardrail_approval(
+        return self._session_queries.get_history(
             session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
+            user_id=user_id,
+            namespace=namespace,
         )
-        snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-        state_values = getattr(snapshot, "values", None)
-
-        if not isinstance(state_values, dict):
-            state_values = {}
-
-        messages = state_values.get("messages", [])
-
-        return {
-            "session_id": session_id,
-            "user_id": state_values.get("user_id") or tenant.user_id,
-            "namespace": state_values.get("namespace") or tenant.namespace,
-            "learning_target": state_values.get("learning_target"),
-            "pending_interrupt": pending_guardrail or bool(snapshot.next),
-            "message_count": len(messages),
-            "messages": [self._serialize_message(message) for message in messages],
-        }
-    
-    def _to_history_view_item(self, message) -> dict | None:
-        raw_type = getattr(message, "type", "unknown")
-        content = self._extract_text_content(getattr(message, "content", ""))
-
-        if raw_type == "human":
-            return {
-                "id": getattr(message, "id", None),
-                "role": "user",
-                "kind": "message",
-                "content": content,
-            }
-
-        if raw_type == "ai":
-            if not content.strip():
-                return None
-            return {
-                "id": getattr(message, "id", None),
-                "role": "assistant",
-                "kind": "message",
-                "content": content,
-                "name": getattr(message, "name", None),
-            }
-
-        if raw_type == "tool":
-            return {
-                "id": getattr(message, "id", None),
-                "role": "tool",
-                "kind": "tool_result",
-                "content": content,
-                "tool_call_id": getattr(message, "tool_call_id", None),
-                "name": getattr(message, "name", None),
-            }
-
-        return None
     
     def get_history_view(
         self,
@@ -808,40 +698,12 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> dict:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        pending_guardrail = self.has_pending_guardrail_approval(
+        return self._session_queries.get_history_view(
             session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
+            include_tools=include_tools,
+            user_id=user_id,
+            namespace=namespace,
         )
-        snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-        state_values = getattr(snapshot, "values", None)
-
-        if not isinstance(state_values, dict):
-            state_values = {}
-
-        raw_messages = state_values.get("messages", [])
-        items = []
-
-        for message in raw_messages:
-            item = self._to_history_view_item(message)
-            if item is None:
-                continue
-
-            if item["role"] == "tool" and not include_tools:
-                continue
-
-            items.append(item)
-
-        return {
-            "session_id": session_id,
-            "user_id": state_values.get("user_id") or tenant.user_id,
-            "namespace": state_values.get("namespace") or tenant.namespace,
-            "learning_target": state_values.get("learning_target"),
-            "pending_interrupt": pending_guardrail or bool(snapshot.next),
-            "message_count": len(items),
-            "messages": items,
-        }
 
     def get_session_state(
         self,
@@ -849,41 +711,11 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> dict:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
-        pending_guardrail = self.has_pending_guardrail_approval(
+        return self._session_queries.get_session_state(
             session_id,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
+            user_id=user_id,
+            namespace=namespace,
         )
-        snapshot = self.get_snapshot(session_id, user_id=tenant.user_id, namespace=tenant.namespace)
-        state_values = getattr(snapshot, "values", None)
-
-        if not isinstance(state_values, dict):
-            state_values = {}
-
-        messages = state_values.get("messages", [])
-        learning_target = state_values.get("learning_target")
-
-        exists = bool(messages) or bool(learning_target) or bool(snapshot.next) or pending_guardrail
-
-        dialog_stack = state_values.get("dialog_state", [])
-        current_agent = "guardrail" if pending_guardrail else dialog_stack[-1] if dialog_stack else "primary"
-
-        workflow_plan = state_values.get("workflow_plan", [])
-        plan_index = state_values.get("plan_index", 0)
-
-        return {
-            "session_id": session_id,
-            "user_id": state_values.get("user_id") or tenant.user_id,
-            "namespace": state_values.get("namespace") or tenant.namespace,
-            "exists": exists,
-            "pending_interrupt": pending_guardrail or bool(snapshot.next),
-            "learning_target": learning_target,
-            "message_count": len(messages),
-            "current_agent": current_agent,
-            "workflow_plan": workflow_plan,
-            "plan_index": plan_index,
-        }
 
     async def aget_session_state(
         self,
@@ -891,4 +723,8 @@ class ChatRuntime:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> dict:
-        return await asyncio.to_thread(self.get_session_state, session_id, user_id, namespace)
+        return await self._session_queries.aget_session_state(
+            session_id,
+            user_id=user_id,
+            namespace=namespace,
+        )
