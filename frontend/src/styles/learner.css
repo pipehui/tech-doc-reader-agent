@@ -1,0 +1,116 @@
+
+.hero {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  gap: 18px;
+  min-height: 120px;
+  padding: 18px 22px;
+}
+
+.hero-title {
+  font-size: 22px;
+}
+
+.hero-copy {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+
+.hero-metrics {
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  min-width: min(460px, 50%);
+}
+
+.knowledge-card,
+.review-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.knowledge-card {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
+}
+
+.knowledge-card.active {
+  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+}
+
+.knowledge-head {
+  align-items: start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.knowledge-head strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.score-ring {
+  --score-color: var(--success);
+  background:
+    radial-gradient(circle closest-side, var(--bg-subtle) 66%, transparent 68%),
+    conic-gradient(var(--score-color) calc(var(--score) * 1%), var(--border) 0);
+  border-radius: 999px;
+  color: var(--text-primary);
+  display: grid;
+  flex: 0 0 42px;
+  font-size: 11px;
+  font-weight: 900;
+  height: 42px;
+  place-items: center;
+  width: 42px;
+}
+
+.knowledge-meta {
+  color: var(--text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.review-card {
+  background: color-mix(in srgb, var(--warning) 8%, var(--bg-subtle));
+  color: var(--text-primary);
+}
+
+.review-priority {
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.quiz-shell {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.quiz-card {
+  align-self: start;
+  background: var(--bg-surface);
+  border: 1px solid color-mix(in srgb, var(--danger) 32%, var(--border));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+  justify-self: center;
+  max-width: 780px;
+  padding: 18px;
+  width: 100%;
+}
+
+.quiz-answer {
+  min-height: 120px;
+  padding: 12px;
+  resize: vertical;
+  width: 100%;
+}

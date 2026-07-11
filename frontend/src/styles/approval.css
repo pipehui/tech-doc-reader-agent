@@ -1,0 +1,50 @@
+
+.approval-drawer {
+  background: color-mix(in srgb, var(--warning) 12%, var(--bg-surface));
+  border-top: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+  box-shadow: 0 -16px 38px rgba(0, 0, 0, 0.22);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 360px) auto;
+  padding: 14px 18px;
+}
+
+.approval-drawer.hidden {
+  display: none;
+}
+
+.approval-title {
+  color: var(--warning);
+  font-size: 14px;
+  font-weight: 900;
+  margin: 0 0 4px;
+}
+
+.approval-copy {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.approval-drawer textarea,
+.composer textarea,
+.quiz-answer {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.approval-drawer textarea {
+  min-height: 56px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.approval-actions {
+  align-items: end;
+  display: flex;
+  gap: 10px;
+}

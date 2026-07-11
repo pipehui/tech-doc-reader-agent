@@ -1,0 +1,46 @@
+
+.composer {
+  align-items: end;
+  background: color-mix(in srgb, var(--bg-base) 86%, transparent);
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px 18px 18px;
+}
+
+.composer textarea {
+  line-height: 1.5;
+  max-height: 180px;
+  min-height: 46px;
+  padding: 12px 13px;
+  resize: none;
+  width: 100%;
+}
+
+.send-button {
+  height: 46px;
+  padding: 0;
+  width: 46px;
+}
+
+.tool-timeline {
+  flex: 1;
+}
+
+.tool-timeline-item {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+}
+
+.tool-timeline-item strong {
+  font-size: 13px;
+}
+
+.tool-timeline-item code,
+.event-row code {
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  font-size: 12px;
+}

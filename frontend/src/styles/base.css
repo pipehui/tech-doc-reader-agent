@@ -1,0 +1,50 @@
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--sans);
+  letter-spacing: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+textarea:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.icon-sprite {
+  display: none;
+}
+
+svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}

@@ -1,0 +1,137 @@
+
+@media (max-width: 1180px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .studio-grid,
+  .learner-grid,
+  .inspector-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .rail,
+  .observer,
+  .knowledge-rail,
+  .review-rail,
+  .detail-pane {
+    border: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rail,
+  .observer,
+  .knowledge-rail,
+  .review-rail {
+    max-height: none;
+  }
+
+  .chat-pane {
+    min-height: 72vh;
+  }
+
+  .hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-metrics {
+    min-width: 0;
+  }
+
+  .landing-frame {
+    overflow: visible;
+  }
+
+  .highlights-section,
+  .quickstart-section {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .view-switcher {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .session-control,
+  .topbar-actions {
+    width: 100%;
+  }
+
+  .starter-grid,
+  .hero-metrics,
+  .state-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-drawer {
+    grid-template-columns: 1fr;
+  }
+
+  .event-row {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-page {
+    padding: 0 16px 32px;
+  }
+
+  .landing-hero {
+    min-height: auto;
+    padding: 42px 0 34px;
+  }
+
+  .landing-hero h2 {
+    font-size: 36px;
+  }
+
+  .landing-hero p:not(.landing-kicker) {
+    font-size: 16px;
+  }
+
+  .landing-primary-cta,
+  .landing-secondary-cta {
+    width: 100%;
+  }
+
+  .landing-modes,
+  .highlight-grid,
+  .prompt-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mode-card {
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .architecture-figure {
+    padding: 14px;
+  }
+
+  .landing-section {
+    margin-bottom: 82px;
+  }
+
+  .landing-footer {
+    align-items: center;
+    flex-direction: column;
+  }
+}
