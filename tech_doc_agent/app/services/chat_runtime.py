@@ -1,9 +1,7 @@
-from time import sleep
 from typing import Any
 
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
-from redis.exceptions import BusyLoadingError
 
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
@@ -17,13 +15,9 @@ from tech_doc_agent.app.runtime.approvals import (
 )
 from tech_doc_agent.app.runtime.config import SessionConfigFactory
 from tech_doc_agent.app.runtime.execution import GraphExecutionService
+from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
 from tech_doc_agent.app.runtime.sessions import SessionQueryService
 from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
-
-
-def _is_retryable_redis_startup_error(exc: Exception) -> bool:
-    message = str(exc).lower()
-    return isinstance(exc, BusyLoadingError) or "redis is loading" in message or "loading the dataset" in message
 
 
 class ChatRuntime:
@@ -32,12 +26,21 @@ class ChatRuntime:
         approval_repository: ApprovalRepository | None = None,
         *,
         settings: Settings | None = None,
+        lifecycle: RuntimeLifecycle | None = None,
     ) -> None:
         self.settings = settings if settings is not None else get_settings()
-        self._checkpointer_cm: Any | None = None
-        self.checkpointer: Any | None = None
-        self.graph: Any | None = None
-        self.resources: Any | None = None
+        self._lifecycle = (
+            lifecycle
+            if lifecycle is not None
+            else RuntimeLifecycle(
+                settings=self.settings,
+                resource_factory=AppResources.create,
+                resource_publisher=set_app_resources,
+                resource_resetter=reset_app_resources,
+                checkpointer_context_factory=RedisSaver.from_conn_string,
+                graph_factory=build_multi_agentic_graph,
+            )
+        )
         self._approval_repository = (
             approval_repository
             if approval_repository is not None
@@ -57,54 +60,47 @@ class ChatRuntime:
             approvals=self._approval_service,
         )
 
+    @property
+    def resources(self) -> Any | None:
+        return self._lifecycle.resources
+
+    @resources.setter
+    def resources(self, value: Any | None) -> None:
+        self._lifecycle.resources = value
+
+    @property
+    def checkpointer(self) -> Any | None:
+        return self._lifecycle.checkpointer
+
+    @checkpointer.setter
+    def checkpointer(self, value: Any | None) -> None:
+        self._lifecycle.checkpointer = value
+
+    @property
+    def graph(self) -> Any | None:
+        return self._lifecycle.graph
+
+    @graph.setter
+    def graph(self, value: Any | None) -> None:
+        self._lifecycle.graph = value
+
     def __enter__(self):
         try:
-            self.resources = AppResources.create(self.settings)
-            set_app_resources(self.resources)
-            self._setup_checkpointer_with_retry()
-            self.graph = build_multi_agentic_graph(self.checkpointer)
+            self._lifecycle.settings = self.settings
+            self._lifecycle.start()
             return self
         except Exception:
-            self._cleanup_runtime()
+            self._close_approval_repository()
             raise
 
     def __exit__(self, exc_type, exc, tb):
         try:
             shutdown_langfuse(self.settings)
         finally:
-            self._cleanup_runtime(exc_type, exc, tb)
-
-    def _setup_checkpointer_with_retry(self) -> None:
-        max_attempts = max(1, int(self.settings.REDIS_SETUP_MAX_ATTEMPTS))
-        retry_seconds = max(0.0, float(self.settings.REDIS_SETUP_RETRY_SECONDS))
-
-        for attempt in range(1, max_attempts + 1):
-            self._checkpointer_cm = RedisSaver.from_conn_string(self.settings.REDIS_URL)
             try:
-                self.checkpointer = self._checkpointer_cm.__enter__()
-                self.checkpointer.setup()
-                if attempt > 1:
-                    log_event("redis.checkpointer.setup.ready", attempt=attempt)
-                return
-            except Exception as exc:
-                self._close_checkpointer()
-                if attempt >= max_attempts or not _is_retryable_redis_startup_error(exc):
-                    raise
-                log_event(
-                    "redis.checkpointer.setup.retry",
-                    attempt=attempt,
-                    max_attempts=max_attempts,
-                    retry_seconds=retry_seconds,
-                    error_type=type(exc).__name__,
-                    error=str(exc),
-                )
-                sleep(retry_seconds)
-
-    def _close_checkpointer(self, exc_type=None, exc=None, tb=None) -> None:
-        if self._checkpointer_cm is not None:
-            self._checkpointer_cm.__exit__(exc_type, exc, tb)
-        self._checkpointer_cm = None
-        self.checkpointer = None
+                self._lifecycle.close(exc_type, exc, tb)
+            finally:
+                self._close_approval_repository()
 
     def _close_approval_repository(self) -> None:
         try:
@@ -115,15 +111,6 @@ class ChatRuntime:
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
-
-    def _cleanup_runtime(self, exc_type=None, exc=None, tb=None) -> None:
-        try:
-            self._close_checkpointer(exc_type, exc, tb)
-        finally:
-            try:
-                reset_app_resources()
-            finally:
-                self._close_approval_repository()
 
     def _require_graph(self) -> Any:
         if self.graph is None:

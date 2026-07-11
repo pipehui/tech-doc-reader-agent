@@ -7,6 +7,7 @@ from redis.exceptions import BusyLoadingError
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.runtime import config as runtime_config
+from tech_doc_agent.app.runtime import lifecycle as runtime_lifecycle
 from tech_doc_agent.app.services import chat_runtime
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
@@ -149,7 +150,7 @@ def test_enter_retries_redis_busy_loading_during_checkpointer_setup(monkeypatch)
     monkeypatch.setattr(chat_runtime, "shutdown_langfuse", lambda settings: None)
     monkeypatch.setattr(chat_runtime, "build_multi_agentic_graph", lambda checkpointer: {"checkpointer": checkpointer})
     monkeypatch.setattr(chat_runtime, "RedisSaver", FakeRedisSaver)
-    monkeypatch.setattr(chat_runtime, "sleep", lambda seconds: None)
+    monkeypatch.setattr(runtime_lifecycle, "sleep", lambda seconds: None)
 
     runtime = ChatRuntime()
     runtime.settings = Settings(

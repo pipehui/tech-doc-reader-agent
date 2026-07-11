@@ -29,5 +29,6 @@ def test_build_chat_runtime_selects_redis_approval_repository(monkeypatch):
     )
 
     assert runtime.settings is settings
+    assert runtime._lifecycle.settings is settings
     assert calls == [("redis://runtime-test", {"ttl_seconds": 123})]
     assert repository.get("user-a:docs:session-1") == request
