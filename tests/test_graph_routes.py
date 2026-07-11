@@ -80,6 +80,17 @@ def test_subagent_route_sends_sensitive_tools_to_sensitive_node(route, sensitive
 
 
 @pytest.mark.parametrize(
+    ("route", "safe_target"),
+    [
+        (route_relation, "relation_assistant_safe_tools"),
+        (route_explanation, "explanation_assistant_safe_tools"),
+    ],
+)
+def test_read_only_subagent_keeps_unknown_tool_calls_on_existing_safe_fallback(route, safe_target):
+    assert route(_state_with_tool_call("unexpected_tool")) == safe_target
+
+
+@pytest.mark.parametrize(
     ("step", "target"),
     [
         ("parser", "enter_parser"),
