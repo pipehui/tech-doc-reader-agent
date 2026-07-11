@@ -19,7 +19,12 @@ tech_doc_agent
 ├── app
 │   ├── api
 │   ├── core
-│   ├── graph.py
+│   ├── graph
+│   │   ├── builder.py
+│   │   ├── nodes.py
+│   │   ├── routing.py
+│   │   ├── specs.py
+│   │   └── tool_policy.py
 │   ├── main.py
 │   └── services
 │       ├── assistants
@@ -31,15 +36,17 @@ tech_doc_agent
 
 ## 关键文件
 
-### `app/graph.py`
+### `app/graph`
 
-定义主工作流图，包括：
+定义主工作流图，并通过 `AgentSpec` 注册同构子 Agent，包括：
 
 - 用户信息注入
 - primary assistant
 - parser / relation / explanation / examination / summary 子助手
 - safe / sensitive tool 路由
 - interrupt 节点
+
+`builder.py` 负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。
 
 ### `app/services/chat_runtime.py`
 

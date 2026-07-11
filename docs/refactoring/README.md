@@ -16,6 +16,7 @@
 | 2026-07-11 | Phase 0：统一原子 JSON 持久化 | 完成 | [2026-07-11-atomic-json.md](2026-07-11-atomic-json.md) |
 | 2026-07-11 | Phase 0：Graph topology/router/interrupt 行为刻画 | 完成 | [2026-07-11-graph-characterization.md](2026-07-11-graph-characterization.md) |
 | 2026-07-11 | Phase 1：Graph package 与 AgentSpec 注册 | 完成 | [2026-07-11-agent-spec.md](2026-07-11-agent-spec.md) |
+| 2026-07-11 | Phase 1：拆分 graph nodes/tool policy/tool execution | 完成 | [2026-07-11-graph-utils-split.md](2026-07-11-graph-utils-split.md) |
 
 ## 关联入口
 

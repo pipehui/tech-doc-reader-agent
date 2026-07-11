@@ -4,7 +4,7 @@ from tech_doc_agent.app.core.structured_outputs import (
     parse_parser_result,
     parse_relation_result,
 )
-from tech_doc_agent.app.services.utils import create_finish_node
+from tech_doc_agent.app.graph.nodes import create_finish_node
 
 
 PARSER_TEXT = """

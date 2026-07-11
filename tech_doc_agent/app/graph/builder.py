@@ -32,11 +32,10 @@ from tech_doc_agent.app.services.assistants.summary_assistant import (
     summary_assistant_safe_tools,
     summary_assistant_sensitive_tools,
 )
-from tech_doc_agent.app.services.utils import (
+from .nodes import (
     create_entry_node,
     create_exit_node,
     create_finish_node,
-    create_tool_node_with_fallback,
     store_plan,
 )
 
@@ -50,6 +49,7 @@ from .routing import (
 )
 from .specs import AgentSpec, CompletionPolicy, ToolPolicy
 from .state import State
+from .tool_nodes import create_tool_node_with_fallback
 
 
 SUBAGENT_SPECS = (
