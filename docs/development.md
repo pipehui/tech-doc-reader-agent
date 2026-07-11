@@ -2,13 +2,14 @@
 
 ## Quality Gates
 
-当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查和生产构建：
+当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查、生产构建和 FastAPI dist/asset smoke：
 
 ```bash
 python -m ruff check tech_doc_agent tests evals
 python -m mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py
 python -m pytest
 cd frontend && npm run check && npm run build
+python -m pytest tests/test_frontend_static.py -q
 ```
 
 ## Local Setup
@@ -69,7 +70,7 @@ cd frontend
 npm run build
 ```
 
-构建产物会生成到 `frontend/dist/`。FastAPI 会优先服务 `frontend/dist/index.html` 和 `/assets`。
+构建产物会生成到 `frontend/dist/`。FastAPI 只服务该目录的 `index.html` 和 `/assets`；如果 dist 缺失，页面路由返回明确 `503`，不会回退到不可执行的 `/src/main.tsx` 源码入口。
 
 启动后端：
 
@@ -98,7 +99,7 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/ready
 ```
 
-注意：`docker compose up --build` 不会启动 Vite dev server，所以不会开放 `5173`。
+注意：`docker compose up --build` 不会启动 Vite dev server，所以不会开放 `5173`；Docker multi-stage build 会生成 production dist，并由容器内 FastAPI 在 `8000` 提供。
 
 ## Knowledge Base Seeding
 

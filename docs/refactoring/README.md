@@ -26,6 +26,7 @@
 | 2026-07-11 | Phase 2：显式 resources/tools/models/assistants/graph 依赖注入 | 完成 | [2026-07-11-resource-injection.md](2026-07-11-resource-injection.md) |
 | 2026-07-11 | Phase 3：retrieval taxonomy/normalization/filter/inference 拆分 | 完成，60-case corpus baseline 待准备 | [2026-07-11-retrieval-metadata-split.md](2026-07-11-retrieval-metadata-split.md) |
 | 2026-07-11 | Phase 3：BM25/semantic/exact/RRF/formatter 拆分 | 完成，真实 corpus 质量评测待补 | [2026-07-11-retrieval-rankers-split.md](2026-07-11-retrieval-rankers-split.md) |
+| 2026-07-11 | Phase 3：legacy frontend 与 production dist 静态边界 | 完成，Docker image build 待有 daemon 环境复核 | [2026-07-11-frontend-static-boundary.md](2026-07-11-frontend-static-boundary.md) |
 
 ## 本地任务单策略
 

@@ -42,6 +42,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install frontend dependencies
         run: npm ci
 
@@ -50,3 +54,11 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install static smoke dependencies
+        working-directory: ${{ github.workspace }}
+        run: pip install "fastapi>=0.115,<1.0" "httpx>=0.27,<1.0" "pytest>=8.3,<9.0"
+
+      - name: FastAPI static smoke
+        working-directory: ${{ github.workspace }}
+        run: python -m pytest tests/test_frontend_static.py -q

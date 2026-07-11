@@ -1,3 +1,14 @@
+FROM node:22-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -17,7 +28,7 @@ COPY requirements.txt /app/
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY tech_doc_agent /app/tech_doc_agent
-COPY frontend /app/frontend
+COPY --from=frontend-builder /frontend/dist /app/frontend/dist
 COPY graphs /app/graphs
 
 EXPOSE 8000
