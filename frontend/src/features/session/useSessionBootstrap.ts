@@ -4,7 +4,7 @@ import {
   getLearningOverview,
   getSessionHistory,
   getSessionState
-} from "../../api";
+} from "../../shared/api/sessionApi";
 import { useAppStore } from "../../store";
 import {
   applyTenantSearchParams,

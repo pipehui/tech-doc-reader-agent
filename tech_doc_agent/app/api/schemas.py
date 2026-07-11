@@ -1,6 +1,8 @@
 '''
 设置数据进出格式
 '''
+from typing import Literal
+
 from pydantic import BaseModel, Field
 from tech_doc_agent.app.core.tenant import TENANT_ID_PATTERN
 
@@ -25,7 +27,7 @@ class ApproveRequest(BaseModel):
 
 class HistoryMessage(BaseModel):
     id: str | None = None
-    role: str
+    role: Literal["user", "assistant", "system", "tool"]
     raw_type: str
     content: str
     name: str | None = None
@@ -43,7 +45,7 @@ class HistoryResponse(BaseModel):
 
 class HistoryViewItem(BaseModel):
     id: str | None = None
-    role: str
+    role: Literal["user", "assistant", "system", "tool"]
     kind: str
     content: str
     name: str | None = None

@@ -1,5 +1,8 @@
 import { useMemo } from "react";
-import { getLearningOverview, getSessionState } from "../../api";
+import {
+  getLearningOverview,
+  getSessionState
+} from "../../shared/api/sessionApi";
 import { useAppStore } from "../../store";
 import { sessionTenant } from "../../tenant";
 import { refreshSessionContext } from "./refreshSessionContext";

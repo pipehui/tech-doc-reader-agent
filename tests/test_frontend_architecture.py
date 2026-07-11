@@ -30,6 +30,10 @@ SESSION_CONTROLS_SOURCE = (
 INSPECTOR_MODEL_SOURCE = (
     FRONTEND_SRC / "features" / "inspector" / "inspectorModel.ts"
 ).read_text(encoding="utf-8")
+API_DIR = FRONTEND_SRC / "shared" / "api"
+API_CLIENT_SOURCE = (API_DIR / "client.ts").read_text(encoding="utf-8")
+API_CONTRACT_SOURCE = (API_DIR / "contracts.ts").read_text(encoding="utf-8")
+SESSION_API_SOURCE = (API_DIR / "sessionApi.ts").read_text(encoding="utf-8")
 
 
 def test_zustand_store_uses_storage_port_instead_of_browser_global():
@@ -202,3 +206,38 @@ def test_inspector_model_stays_pure_and_independent_from_ui_state():
         "eventSummary",
     ):
         assert f"export function {helper}" in INSPECTOR_MODEL_SOURCE
+
+
+def test_rest_transport_and_endpoint_contracts_have_one_shared_boundary():
+    assert not (FRONTEND_SRC / "api.ts").exists()
+    assert sorted(path.name for path in API_DIR.iterdir()) == [
+        "client.test.ts",
+        "client.ts",
+        "contracts.test.ts",
+        "contracts.ts",
+        "sessionApi.test.ts",
+        "sessionApi.ts",
+    ]
+
+    assert "class HttpError" in API_CLIENT_SOURCE
+    assert "class ApiContractError" in API_CLIENT_SOURCE
+    assert "payloadMessage" in API_CLIENT_SOURCE
+    assert "buildTenantUrl" in API_CLIENT_SOURCE
+    assert "response.json() as Promise" not in API_CLIENT_SOURCE
+
+    for decoder in (
+        "decodeSessionState",
+        "decodeHistoryResponse",
+        "decodeLearningOverview",
+    ):
+        assert f"export function {decoder}" in API_CONTRACT_SOURCE
+        assert decoder in SESSION_API_SOURCE
+
+    for path in FRONTEND_SRC.rglob("*.ts*"):
+        if path.name.endswith(".test.ts"):
+            continue
+        source = path.read_text(encoding="utf-8")
+        assert 'from "./api"' not in source, path
+        assert 'from "../../api"' not in source, path
+        if path != API_DIR / "client.ts":
+            assert not re.search(r"\bfetch\(", source), path

@@ -33,6 +33,7 @@
 | 2026-07-11 | Phase 3：前端 Zustand session/transcript/trace/learning/ui slices | 完成，根 Store 收敛为 composition facade | [2026-07-11-frontend-store-slices.md](2026-07-11-frontend-store-slices.md) |
 | 2026-07-12 | Phase 3：前端可取消 session bootstrap、路由模型与 Topbar 边界 | 完成，App feature components 继续拆分 | [2026-07-12-frontend-session-bootstrap.md](2026-07-12-frontend-session-bootstrap.md) |
 | 2026-07-12 | Phase 3：AppRouter 与 Landing/Studio/Chat/Approval/Learner/Inspector feature 边界 | 完成，根 App 收敛为 6 行 facade | [2026-07-12-frontend-feature-boundaries.md](2026-07-12-frontend-feature-boundaries.md) |
+| 2026-07-12 | Phase 3：shared REST client、运行时 response decoder 与 FastAPI schema 漂移门禁 | 完成，F4 API/session bootstrap 收敛完成 | [2026-07-12-frontend-rest-api-boundary.md](2026-07-12-frontend-rest-api-boundary.md) |
 
 ## 本地任务单策略
 

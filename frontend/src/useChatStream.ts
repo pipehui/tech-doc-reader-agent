@@ -1,6 +1,10 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { normalizeAgent } from "./agentColors";
-import { API_BASE, getLearningOverview, getSessionState, tenantHeaders } from "./api";
+import { API_BASE, tenantHeaders } from "./shared/api/client";
+import {
+  getLearningOverview,
+  getSessionState
+} from "./shared/api/sessionApi";
 import { useAppStore } from "./store";
 import { refreshSessionContext } from "./features/session/refreshSessionContext";
 import {
