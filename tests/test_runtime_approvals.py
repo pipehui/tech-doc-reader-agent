@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import TenantContext
 from tech_doc_agent.app.runtime.approvals import ApprovalService, InMemoryApprovalRepository
 from tech_doc_agent.app.runtime.telemetry import RuntimeOperationTelemetry
@@ -80,6 +81,26 @@ def test_chat_runtime_accepts_an_injected_approval_repository():
     )
 
     assert repository.get("user-a:docs:session-1") == request
+
+
+def test_chat_runtime_closes_the_injected_approval_repository():
+    class ClosingRepository(InMemoryApprovalRepository):
+        def __init__(self):
+            super().__init__()
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    repository = ClosingRepository()
+    runtime = ChatRuntime(
+        approval_repository=repository,
+        settings=Settings(LANGFUSE_ENABLED=False),
+    )
+
+    runtime.__exit__(None, None, None)
+
+    assert repository.closed is True
 
 
 def test_runtime_telemetry_keeps_async_marker_out_of_sync_events():

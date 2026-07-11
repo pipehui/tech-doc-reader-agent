@@ -21,6 +21,7 @@
 | 2026-07-11 | Git：本地任务单与待推送历史隔离 | 完成 | [2026-07-11-local-todo-policy.md](2026-07-11-local-todo-policy.md) |
 | 2026-07-11 | Phase 2：runtime config/serialization/session query 拆分 | 完成 | [2026-07-11-runtime-query-split.md](2026-07-11-runtime-query-split.md) |
 | 2026-07-11 | Phase 2：execution/telemetry/approval service 与 sync/async 收敛 | 完成 | [2026-07-11-runtime-execution-split.md](2026-07-11-runtime-execution-split.md) |
+| 2026-07-11 | Phase 2：Redis durable guardrail approval 与 production bootstrap | 核心恢复/原子消费完成，安全审计继续 | [2026-07-11-durable-guardrail-approval.md](2026-07-11-durable-guardrail-approval.md) |
 
 ## 本地任务单策略
 

@@ -12,7 +12,7 @@
 
 - `primary` 按任务复杂度选择 direct response、single-agent 或 `parser -> relation -> explanation` 链式研读。
 - FastAPI 通过 async SSE 输出 token、tool、plan、agent transition、interrupt 等事件，前端实时渲染。
-- Redis checkpointer 支持会话恢复；敏感工具在写入前触发 HITL 审批。
+- Redis checkpointer 支持会话恢复；medium-risk input approval 也使用带 TTL 的 Redis pending record 和原子消费，敏感工具在写入前触发 HITL 审批。
 - 本地文档库使用 BM25 + Vector + RRF 的 Hybrid RAG，并提供检索 eval。
 - 学习记录、学习轨迹 memory、长期用户画像分层存储，后续回答可读取用户上下文。
 - `trace_id` 贯穿 SSE、结构化日志和 Langfuse callback，便于定位多 agent 链路问题。

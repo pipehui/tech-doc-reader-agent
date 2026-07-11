@@ -27,6 +27,8 @@ class ApprovalRepository(Protocol):
 
     def pop(self, key: str) -> GuardrailApprovalRequest | None: ...
 
+    def close(self) -> None: ...
+
 
 @dataclass(slots=True)
 class InMemoryApprovalRepository:
@@ -46,6 +48,9 @@ class InMemoryApprovalRepository:
     def pop(self, key: str) -> GuardrailApprovalRequest | None:
         with self._lock:
             return self._items.pop(key, None)
+
+    def close(self) -> None:
+        return None
 
 
 @dataclass(slots=True)

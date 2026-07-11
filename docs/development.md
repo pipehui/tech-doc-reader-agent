@@ -29,7 +29,10 @@ EMBEDDING_API_BASE=your_embedding_base
 EMBEDDING_MODEL=your_embedding_model
 TAVILY_API_KEY=your_tavily_key
 REDIS_URL=redis://localhost:6379
+GUARDRAIL_APPROVAL_TTL_SECONDS=900
 ```
+
+LangGraph checkpoint 和 medium-risk input guardrail approval 共用 Redis。approval 使用带 TTL 的独立 key，并通过原子 `GETDEL` 保证同一请求只被一个 worker 消费；部署的 Redis 版本需不低于 6.2。
 
 启动 Redis：
 

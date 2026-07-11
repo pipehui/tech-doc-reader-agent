@@ -23,6 +23,19 @@ def test_runtime_does_not_depend_on_api_or_legacy_services():
     assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
 
 
+def test_runtime_package_init_does_not_eagerly_load_components():
+    path = RUNTIME_DIR / "__init__.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    imports = [
+        imported_module
+        for node in ast.walk(tree)
+        for imported_module in _imported_modules(node)
+    ]
+
+    assert imports == []
+
+
 def _dependency_violations(directory: Path, forbidden_prefixes: tuple[str, ...]) -> list[str]:
     violations: list[str] = []
 

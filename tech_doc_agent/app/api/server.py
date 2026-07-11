@@ -11,16 +11,16 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 from tech_doc_agent.app.api.routes.chat import router as chat_router
 from tech_doc_agent.app.api.routes.health import router as health_router
 from tech_doc_agent.app.api.routes.learning import router as learning_router
+from tech_doc_agent.app.bootstrap import build_chat_runtime
 from tech_doc_agent.app.core.settings import get_settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    with ChatRuntime() as runtime:
+    with build_chat_runtime() as runtime:
         app.state.runtime = runtime
         yield
 

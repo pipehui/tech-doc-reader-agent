@@ -46,6 +46,7 @@ services:
       PROXY_URL: ${PROXY_URL:-}
       REDIS_SETUP_MAX_ATTEMPTS: ${REDIS_SETUP_MAX_ATTEMPTS:-60}
       REDIS_SETUP_RETRY_SECONDS: ${REDIS_SETUP_RETRY_SECONDS:-1.0}
+      GUARDRAIL_APPROVAL_TTL_SECONDS: ${GUARDRAIL_APPROVAL_TTL_SECONDS:-900}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
     REDIS_SETUP_MAX_ATTEMPTS: int = 60
     REDIS_SETUP_RETRY_SECONDS: float = 1.0
+    GUARDRAIL_APPROVAL_TTL_SECONDS: int = Field(default=900, gt=0)
     LANGGRAPH_RECURSION_LIMIT: int = 80
 
     HYBRID_RAG_TOP_K: int = 5

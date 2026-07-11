@@ -5,7 +5,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ.pop("LANGCHAIN_API_KEY", None)
 
 from tech_doc_agent.app.core.logger import logger
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tech_doc_agent.app.bootstrap import build_chat_runtime
 
 def print_new_messages(parts) -> None:
     # for event in events:
@@ -34,7 +34,7 @@ def print_new_messages(parts) -> None:
         print()
 
 def main():
-    with ChatRuntime() as runtime:
+    with build_chat_runtime() as runtime:
         # Generate a unique thread ID for the session
         session_id = input("请输入会话ID，留空则新建：").strip()
         if not session_id:

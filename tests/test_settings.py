@@ -11,6 +11,7 @@ def test_settings_parses_typed_values():
         SEED_DOC_STORE_ON_EMPTY="true",
         REDIS_SETUP_MAX_ATTEMPTS="3",
         REDIS_SETUP_RETRY_SECONDS="0.5",
+        GUARDRAIL_APPROVAL_TTL_SECONDS="120",
     )
 
     assert settings.TAVILY_DAILY_LIMIT == 7
@@ -18,6 +19,7 @@ def test_settings_parses_typed_values():
     assert settings.SEED_DOC_STORE_ON_EMPTY is True
     assert settings.REDIS_SETUP_MAX_ATTEMPTS == 3
     assert settings.REDIS_SETUP_RETRY_SECONDS == 0.5
+    assert settings.GUARDRAIL_APPROVAL_TTL_SECONDS == 120
     assert settings.ALLOWED_ORIGINS == [
         "http://127.0.0.1:5173",
         "http://localhost:5173",

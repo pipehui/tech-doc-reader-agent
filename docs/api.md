@@ -71,7 +71,7 @@
 
 响应：`text/event-stream`。首帧总是 `session_snapshot`，随后可能出现 `token`、`agent_message`、`agent_transition`、`plan_update`、`structured_result`、`tool_call`、`tool_result`，最后以 `done`、`interrupt_required` 或 `error` 结束。
 
-如果输入命中 high-risk prompt-injection 规则，会在进入 LangGraph 前返回 `400`，响应体包含 `error=guardrail_blocked`、`risk_level` 和 `findings`，不会触发任何 agent 或工具调用。medium-risk 输入会返回 `interrupt_required`，并等待 `/chat/approve` 显式批准；批准后才继续执行原始用户消息。
+如果输入命中 high-risk prompt-injection 规则，会在进入 LangGraph 前返回 `400`，响应体包含 `error=guardrail_blocked`、`risk_level` 和 `findings`，不会触发任何 agent 或工具调用。medium-risk 输入会返回 `interrupt_required`，并等待 `/chat/approve` 显式批准；批准后才继续执行原始用户消息。pending guardrail request 保存在 Redis，并按 `GUARDRAIL_APPROVAL_TTL_SECONDS` 自动过期（默认 900 秒）；过期后该 guardrail approval 不再可用，若同一 session 也没有 graph interrupt，审批接口会返回无 pending interrupt。
 
 ### POST /chat/approve
 

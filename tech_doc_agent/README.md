@@ -18,6 +18,7 @@
 tech_doc_agent
 ├── app
 │   ├── api
+│   ├── bootstrap.py
 │   ├── core
 │   ├── graph
 │   │   ├── builder.py
@@ -25,6 +26,10 @@ tech_doc_agent
 │   │   ├── routing.py
 │   │   ├── specs.py
 │   │   └── tool_policy.py
+│   ├── infrastructure
+│   │   └── persistence
+│   │       ├── approval_repository.py
+│   │       └── atomic_json.py
 │   ├── runtime
 │   │   ├── approvals.py
 │   │   ├── config.py
@@ -54,6 +59,10 @@ tech_doc_agent
 - interrupt 节点
 
 `builder.py` 负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。
+
+### `app/bootstrap.py` 与 `app/infrastructure`
+
+`bootstrap.py` 是 production composition root：FastAPI lifespan 和 CLI 从这里显式组装 settings、Redis approval repository 与 `ChatRuntime`。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；runtime domain 不依赖该具体实现。
 
 ### `app/runtime`
 
