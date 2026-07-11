@@ -48,3 +48,27 @@ class AgentSpec:
     @property
     def finish_node(self) -> str:
         return f"finish_{self.key}"
+
+
+@dataclass(frozen=True)
+class PrimarySpec:
+    assistant: Any
+    tools: ToolPolicy
+
+
+@dataclass(frozen=True)
+class GraphSpec:
+    primary: PrimarySpec
+    subagents: tuple[AgentSpec, ...]
+    user_info_node: Any
+
+    @property
+    def interrupt_nodes(self) -> tuple[str, ...]:
+        return (
+            *(
+                spec.sensitive_tool_node
+                for spec in self.subagents
+                if spec.tools.sensitive
+            ),
+            "primary_assistant_sensitive_tools",
+        )

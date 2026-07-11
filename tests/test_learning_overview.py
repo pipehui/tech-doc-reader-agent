@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from tech_doc_agent.app.api.routes.learning import router
 from tech_doc_agent.app.api.routes.learning import _needs_review
 from tech_doc_agent.app.api.schemas import LearningRecord
-from tech_doc_agent.app.services.resources import override_app_resources
+from tech_doc_agent.app.core.settings import Settings
 
 
 def test_needs_review_when_score_is_low():
@@ -97,17 +97,18 @@ def test_learning_routes_filter_by_tenant_query_params():
     app = FastAPI()
     app.include_router(router)
     resources = SimpleNamespace(
+        settings=Settings(),
         faiss_store=None,
         learning_store=FakeStore(),
         memory_store=FakeMemoryStore(),
         web_search_backend=None,
     )
+    app.state.runtime = SimpleNamespace(resources=resources)
 
-    with override_app_resources(resources):
-        response = TestClient(app).get(
-            "/learning/overview",
-            params={"user_id": "user-a", "namespace": "tenant-docs"},
-        )
+    response = TestClient(app).get(
+        "/learning/overview",
+        params={"user_id": "user-a", "namespace": "tenant-docs"},
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -116,11 +117,10 @@ def test_learning_routes_filter_by_tenant_query_params():
     assert payload["total"] == 1
     assert payload["records"][0]["knowledge"] == "Tenant A"
 
-    with override_app_resources(resources):
-        memory_response = TestClient(app).get(
-            "/learning/memory",
-            params={"user_id": "user-a", "namespace": "tenant-docs", "query": "StateGraph"},
-        )
+    memory_response = TestClient(app).get(
+        "/learning/memory",
+        params={"user_id": "user-a", "namespace": "tenant-docs", "query": "StateGraph"},
+    )
 
     assert memory_response.status_code == 200
     memory_payload = memory_response.json()
@@ -129,30 +129,29 @@ def test_learning_routes_filter_by_tenant_query_params():
     assert memory_payload["memories"][0]["kind"] == "stuck_point"
 
 
-def test_learning_profile_route_resolves_tenant(monkeypatch):
-    def fake_get_user_profile(user_id: str | None = None, namespace: str | None = None):
-        return {
-            "profile_version": 1,
-            "user_id": user_id,
-            "namespace": namespace,
-            "experience_level": "进阶",
-            "explanation_style": "先看工程实现",
-            "depth": "中等",
-            "language": "中文",
-            "known_topics": ["StateGraph"],
-            "weak_topics": ["Checkpoint"],
-            "notes": "用户主动更新过画像。",
-            "last_update_reason": "测试",
-            "updated_at": "2026-04-30T00:00:00+00:00",
-        }
-
-    monkeypatch.setattr(
-        "tech_doc_agent.app.api.routes.learning.get_user_profile",
-        fake_get_user_profile,
-    )
+def test_learning_profile_route_resolves_tenant():
+    class FakeProfileService:
+        def get_profile(self, *, user_id: str, namespace: str):
+            return {
+                "profile_version": 1,
+                "user_id": user_id,
+                "namespace": namespace,
+                "experience_level": "进阶",
+                "explanation_style": "先看工程实现",
+                "depth": "中等",
+                "language": "中文",
+                "known_topics": ["StateGraph"],
+                "weak_topics": ["Checkpoint"],
+                "notes": "用户主动更新过画像。",
+                "last_update_reason": "测试",
+                "updated_at": "2026-04-30T00:00:00+00:00",
+            }
 
     app = FastAPI()
     app.include_router(router)
+    app.state.runtime = SimpleNamespace(
+        resources=SimpleNamespace(profile_service=FakeProfileService())
+    )
     response = TestClient(app).get(
         "/learning/profile",
         params={"user_id": "user-a", "namespace": "tenant-docs"},

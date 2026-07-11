@@ -1,9 +1,9 @@
 import json
-from types import SimpleNamespace
 
 from tech_doc_agent.app.core.observability import trace_context
-from tech_doc_agent.app.services.tools.doc_store import read_docs, save_docs
-from tech_doc_agent.app.services.resources import override_app_resources
+from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.services.retrieval import HybridRetriever
+from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
 class FakeFaissStore:
@@ -45,15 +45,22 @@ class FakeHybridRetriever:
         self.refreshed = True
 
 
-def test_read_docs_returns_seed_document_for_exact_topic():
-    resources = SimpleNamespace(
-        faiss_store=FakeFaissStore(),
+def _document_tools(store, retriever=None):
+    settings = Settings()
+    dependencies = ToolDependencies(
+        document_store=store,
+        document_retriever=retriever or HybridRetriever(store, settings=settings),
         learning_store=None,
-        web_search_backend=None,
+        memory_store=None,
+        profile_service=None,
+        web_search=None,
     )
+    return build_tool_bundle(dependencies)
 
-    with override_app_resources(resources):
-        raw = read_docs.invoke({"query": "LangGraph StateGraph"})
+
+def test_read_docs_returns_seed_document_for_exact_topic():
+    tools = _document_tools(FakeFaissStore())
+    raw = tools.read_docs.invoke({"query": "LangGraph StateGraph"})
 
     documents = json.loads(raw)
 
@@ -64,14 +71,8 @@ def test_read_docs_returns_seed_document_for_exact_topic():
 
 
 def test_read_docs_applies_category_filter():
-    resources = SimpleNamespace(
-        faiss_store=FakeFaissStore(),
-        learning_store=None,
-        web_search_backend=None,
-    )
-
-    with override_app_resources(resources):
-        raw = read_docs.invoke({"query": "seed content", "category": "fastapi"})
+    tools = _document_tools(FakeFaissStore())
+    raw = tools.read_docs.invoke({"query": "seed content", "category": "fastapi"})
 
     documents = json.loads(raw)
 
@@ -97,15 +98,9 @@ def test_read_docs_uses_shared_corpus_across_trace_context_tenants():
             "metadata": {"user_id": "user-b", "namespace": "tenant-docs"},
         },
     ]
-    resources = SimpleNamespace(
-        faiss_store=store,
-        learning_store=None,
-        web_search_backend=None,
-    )
-
-    with override_app_resources(resources):
-        with trace_context(user_id="user-a", namespace="tenant-docs"):
-            raw = read_docs.invoke({"query": "shared keyword"})
+    tools = _document_tools(store)
+    with trace_context(user_id="user-a", namespace="tenant-docs"):
+        raw = tools.read_docs.invoke({"query": "shared keyword"})
 
     documents = json.loads(raw)
 
@@ -115,21 +110,14 @@ def test_read_docs_uses_shared_corpus_across_trace_context_tenants():
 def test_save_docs_writes_shared_document_ignoring_trace_context_tenant():
     store = FakeFaissStore()
     retriever = FakeHybridRetriever()
-    resources = SimpleNamespace(
-        faiss_store=store,
-        hybrid_retriever=retriever,
-        learning_store=None,
-        web_search_backend=None,
-    )
-
-    with override_app_resources(resources):
-        with trace_context(user_id="user-a", namespace="tenant-docs"):
-            result = save_docs.invoke(
-                {
-                    "title": "Tenant Doc",
-                    "content": "content",
-                }
-            )
+    tools = _document_tools(store, retriever)
+    with trace_context(user_id="user-a", namespace="tenant-docs"):
+        result = tools.save_docs.invoke(
+            {
+                "title": "Tenant Doc",
+                "content": "content",
+            }
+        )
 
     assert "Tenant Doc" in result
     assert "user_id" not in store.added_docs[0]

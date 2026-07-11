@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 
 from tech_doc_agent.app.core.observability import log_event
@@ -11,6 +9,7 @@ from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
 from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
+from tech_doc_agent.app.services.user_profile import UserProfileService
 
 
 SEED_DOCS = [
@@ -54,23 +53,24 @@ class AppResources:
     hybrid_retriever: HybridRetriever
     learning_store: LearningStore
     memory_store: MemoryStore
+    profile_service: UserProfileService
     web_search_backend: WebSearchBackend
 
     @classmethod
     def create(cls, settings: Settings | None = None) -> AppResources:
         settings = settings or get_settings()
         faiss_store = _initialize_faiss_store(settings)
+        learning_store = _initialize_learning_store(settings)
+        memory_store = _initialize_memory_store(settings)
         return cls(
             settings=settings,
             faiss_store=faiss_store,
             hybrid_retriever=HybridRetriever(faiss_store, settings=settings),
-            learning_store=_initialize_learning_store(settings),
-            memory_store=_initialize_memory_store(settings),
+            learning_store=learning_store,
+            memory_store=memory_store,
+            profile_service=UserProfileService(settings, memory_store),
             web_search_backend=WebSearchBackend(settings=settings),
         )
-
-
-_current_resources: AppResources | None = None
 
 
 def _seed_documents_without_index(store: FaissStore) -> None:
@@ -145,34 +145,3 @@ def _initialize_memory_store(settings: Settings) -> MemoryStore:
     store.save()
     log_event("resources.memory_store.initialized", memories=len(store.memories))
     return store
-
-
-def set_app_resources(resources: AppResources) -> None:
-    global _current_resources
-    _current_resources = resources
-
-
-def reset_app_resources() -> None:
-    global _current_resources
-    _current_resources = None
-
-
-def get_app_resources() -> AppResources:
-    global _current_resources
-    if _current_resources is None:
-        _current_resources = AppResources.create()
-    return _current_resources
-
-
-@contextmanager
-def override_app_resources(resources: AppResources) -> Iterator[None]:
-    previous = _current_resources
-    set_app_resources(resources)
-
-    try:
-        yield
-    finally:
-        if previous is None:
-            reset_app_resources()
-        else:
-            set_app_resources(previous)

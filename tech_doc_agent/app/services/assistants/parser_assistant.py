@@ -6,12 +6,10 @@ sensitive tools: save_docs
 
 from datetime import datetime
 from langchain_core.prompts import ChatPromptTemplate
-from tech_doc_agent.app.services.tools import (
-    web_search,
-    read_docs,
-    save_docs,
-)
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant, CompleteOrEscalate, llm
+from tech_doc_agent.app.graph.commands import CompleteOrEscalate
+from tech_doc_agent.app.services.assistants.definition import AssistantDefinition, build_assistant_definition
+from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
+from tech_doc_agent.app.tools import ToolBundle
 
 # 1. 文档解析prompt（告诉LLM你是谁、能做什么、什么时候该退出）
 parser_assistant_prompt = ChatPromptTemplate.from_messages(
@@ -101,16 +99,15 @@ parser_assistant_prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
-# 2. 文档解析工具
-parser_assistant_safe_tools = [read_docs, web_search]
-parser_assistant_sensitive_tools = [save_docs]
-parser_assistant_tools = parser_assistant_safe_tools + parser_assistant_sensitive_tools
-
-# 3. 创建文档解析助手的可运行对象
-parser_assistant_runnable = parser_assistant_prompt | llm.bind_tools(
-    parser_assistant_tools + [CompleteOrEscalate],
-    parallel_tool_calls=False,
-)
-
-# 4. 实例化文档解析助手
-parser_assistant = Assistant(parser_assistant_runnable, name="parser")
+def build_parser_assistant(
+    models: AssistantModelProvider,
+    tools: ToolBundle,
+) -> AssistantDefinition:
+    return build_assistant_definition(
+        prompt=parser_assistant_prompt,
+        models=models,
+        name="parser",
+        safe_tools=(tools.read_docs, tools.web_search),
+        sensitive_tools=(tools.save_docs,),
+        control_tools=(CompleteOrEscalate,),
+    )

@@ -7,8 +7,10 @@ safe: read_learning_history, read_user_memory   sensitive: upsert_learning_state
 
 from datetime import datetime
 from langchain_core.prompts import ChatPromptTemplate
-from tech_doc_agent.app.services.tools import read_learning_history, read_user_memory, upsert_learning_state
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant, CompleteOrEscalate, llm
+from tech_doc_agent.app.graph.commands import CompleteOrEscalate
+from tech_doc_agent.app.services.assistants.definition import AssistantDefinition, build_assistant_definition
+from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
+from tech_doc_agent.app.tools import ToolBundle
 
 # 1. 总结助手prompt（告诉LLM你是谁、能做什么、什么时候该退出）
 summary_assistant_prompt = ChatPromptTemplate.from_messages(
@@ -85,16 +87,15 @@ summary_assistant_prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
-# 2. 总结助手工具
-summary_assistant_safe_tools = [read_learning_history, read_user_memory]
-summary_assistant_sensitive_tools = [upsert_learning_state]
-summary_assistant_tools = summary_assistant_safe_tools + summary_assistant_sensitive_tools
-
-# 3. 创建总结助手的可运行对象
-summary_assistant_runnable = summary_assistant_prompt | llm.bind_tools(
-    summary_assistant_tools + [CompleteOrEscalate],
-    parallel_tool_calls=False,
-)
-
-# 4. 实例化总结助手
-summary_assistant = Assistant(summary_assistant_runnable, name="summary")
+def build_summary_assistant(
+    models: AssistantModelProvider,
+    tools: ToolBundle,
+) -> AssistantDefinition:
+    return build_assistant_definition(
+        prompt=summary_assistant_prompt,
+        models=models,
+        name="summary",
+        safe_tools=(tools.read_learning_history, tools.read_user_memory),
+        sensitive_tools=(tools.upsert_learning_state,),
+        control_tools=(CompleteOrEscalate,),
+    )

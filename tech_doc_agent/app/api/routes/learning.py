@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request, status
 
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
 from tech_doc_agent.app.api.schemas import (
@@ -10,8 +10,6 @@ from tech_doc_agent.app.api.schemas import (
     MemoryRecord,
     UserProfileResponse,
 )
-from tech_doc_agent.app.services.user_profile import get_user_profile
-from tech_doc_agent.app.services.tools.learning_store import get_learning_store, get_memory_store
 
 
 router = APIRouter()
@@ -52,10 +50,21 @@ def _resolve_tenant(
     )
 
 
-def _read_records(tenant: TenantContext) -> list[LearningRecord]:
+def _runtime_resources(request: Request):
+    runtime = getattr(request.app.state, "runtime", None)
+    resources = getattr(runtime, "resources", None)
+    if resources is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Application resources are not initialized.",
+        )
+    return resources
+
+
+def _read_records(resources, tenant: TenantContext) -> list[LearningRecord]:
     return [
         LearningRecord(**record)
-        for record in get_learning_store().read_overview(
+        for record in resources.learning_store.read_overview(
             user_id=tenant.user_id,
             namespace=tenant.namespace,
         )
@@ -69,7 +78,7 @@ def get_learning_overview(
     namespace: str | None = None,
 ):
     tenant = _resolve_tenant(request, user_id, namespace)
-    records = _read_records(tenant)
+    records = _read_records(_runtime_resources(request), tenant)
     total = len(records)
     average_score = sum(record.score for record in records) / total if total else 0.0
     now = datetime.now(timezone.utc)
@@ -91,7 +100,7 @@ def get_learning_records(
     namespace: str | None = None,
 ):
     tenant = _resolve_tenant(request, user_id, namespace)
-    return _read_records(tenant)
+    return _read_records(_runtime_resources(request), tenant)
 
 
 @router.get("/learning/memory", response_model=LearningMemoryResponse)
@@ -103,9 +112,10 @@ def get_learning_memory(
     limit: int = 20,
 ):
     tenant = _resolve_tenant(request, user_id, namespace)
+    resources = _runtime_resources(request)
     memories = [
         MemoryRecord(**memory)
-        for memory in get_memory_store().read_by_query(
+        for memory in resources.memory_store.read_by_query(
             query,
             user_id=tenant.user_id,
             namespace=tenant.namespace,
@@ -127,4 +137,10 @@ def get_learning_profile(
     namespace: str | None = None,
 ):
     tenant = _resolve_tenant(request, user_id, namespace)
-    return UserProfileResponse(**get_user_profile(tenant.user_id, tenant.namespace))
+    resources = _runtime_resources(request)
+    return UserProfileResponse(
+        **resources.profile_service.get_profile(
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+        )
+    )

@@ -1,8 +1,6 @@
 import json
-from types import SimpleNamespace
 
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.resources import override_app_resources
 from tech_doc_agent.app.services.user_profile import (
     get_user_context_summary,
     get_user_profile,
@@ -162,15 +160,13 @@ def test_user_context_summary_includes_tenant_memory(tmp_path):
                 }
             ]
 
-    resources = SimpleNamespace(memory_store=FakeMemoryStore())
-
-    with override_app_resources(resources):
-        summary = get_user_context_summary(
-            user_id="user-a",
-            namespace="tenant-docs",
-            memory_query="StateGraph",
-            settings=Settings(DATA_PATH=str(tmp_path)),
-        )
+    summary = get_user_context_summary(
+        user_id="user-a",
+        namespace="tenant-docs",
+        memory_query="StateGraph",
+        settings=Settings(DATA_PATH=str(tmp_path)),
+        memory_store=FakeMemoryStore(),
+    )
 
     assert "长期学习轨迹记忆" in summary
     assert "[stuck_point] LangGraph StateGraph" in summary

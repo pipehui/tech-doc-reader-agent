@@ -1,46 +1,18 @@
-from typing import Literal
 from datetime import datetime
+
 from langchain_core.prompts import ChatPromptTemplate
-from tech_doc_agent.app.services.tools import (
-    read_all_learning_history,
-    read_learning_history,
-    read_user_memory,
-    read_user_profile,
-    update_user_profile,
-    upsert_learning_history,
+
+from tech_doc_agent.app.graph.commands import (
+    PlanWorkflow,
+    ToDocParserAssistant,
+    ToExaminationAssistant,
+    ToExplanationAssistant,
+    ToRelationAssistant,
+    ToSummaryAssistant,
 )
-# from langchain_community.tools.ddg_search.tool import DuckDuckGoSearchResults
-from pydantic import BaseModel, Field
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant, llm
-
-class ToDocParserAssistant(BaseModel):
-    """Transfers work to a specialized assistant to handle document parsing."""
-    content: str = Field(description="The content of the document that needs to be parsed, or a URL pointing to the document, or any other relevant information that can help the document parsing assistant understand what needs to be parsed.")
-    request: str = Field(description="Any specific information the user wants to extract from the document or any particular questions they have about the document.")
-
-class ToExplanationAssistant(BaseModel):
-    """Transfers work to a specialized assistant to handle concept explanation."""
-    concept: str = Field(description="The specific concept or topic that the user wants to understand better.")
-    request: str = Field(description="Any specific questions the user has about the concept or any particular aspects they want the explanation to focus on.")
-
-class ToRelationAssistant(BaseModel):
-    """Transfers work to a specialized assistant to retrieve analogous or related knowledge that may help the user understand the target concept, even when the user did not explicitly ask for analogy."""
-    entity: str = Field(description="The target concept, mechanism, or topic that needs analogical or relational retrieval.")
-    request: str = Field(description="Why this relation retrieval is useful for the current learning goal, including any user question, confusion point, or context that should guide the retrieval.")
-
-class ToExaminationAssistant(BaseModel):
-    """Transfers work to a specialized assistant to handle examination and quiz generation."""
-    topic: str = Field(description="The specific topic or subject that the user wants to be tested on.")
-    request: str = Field(description="Any specific questions the user has about the topic or any particular types of questions they want the examination assistant to generate.")
-
-class ToSummaryAssistant(BaseModel):
-    """Transfers work to a specialized assistant to summarize the user's learning process."""
-    request: str = Field(description="What kind of learning summary the user needs, including whether the focus should be on key takeaways, mistakes, corrections, or review suggestions.")
-
-class PlanWorkflow(BaseModel):
-    steps: list[Literal["parser", "relation", "explanation", "examination", "summary"]]
-    goal: str = Field(description="The user's learning goal in this turn.")
-    learning_target: str = Field(description="The canonical learning target for this turn. Use one stable, concise, reusable topic name. Prefer the exact term used by the user or document. Do not add suffixes like 'core concepts', 'basics', 'summary', or 'notes'.")
+from tech_doc_agent.app.services.assistants.definition import AssistantDefinition, build_assistant_definition
+from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
+from tech_doc_agent.app.tools import ToolBundle
 
 
 # Primary assistant prompt
@@ -162,26 +134,25 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(
 ).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
 
-# Primary assistant tools
-primary_assistant_tools = [
-    # DuckDuckGoSearchResults(max_results=10),
-    read_user_profile,
-    read_learning_history,
-    read_all_learning_history,
-    read_user_memory,
-    PlanWorkflow,
-    ToDocParserAssistant,
-    ToExplanationAssistant,
-    ToRelationAssistant,
-    ToExaminationAssistant,
-    ToSummaryAssistant,
-]
-primary_assistant_sensitive_tools = [upsert_learning_history, update_user_profile]
-# Create the primary assistant runnable
-primary_assistant_runnable = primary_assistant_prompt | llm.bind_tools(
-    primary_assistant_tools + primary_assistant_sensitive_tools,
-    parallel_tool_calls=False,
-)
-
-# Instantiate the primary assistant
-primary_assistant = Assistant(primary_assistant_runnable, name="primary")
+def build_primary_assistant(
+    models: AssistantModelProvider,
+    tools: ToolBundle,
+) -> AssistantDefinition:
+    return build_assistant_definition(
+        prompt=primary_assistant_prompt,
+        models=models,
+        name="primary",
+        safe_tools=(
+            tools.read_user_profile,
+            tools.read_learning_history,
+            tools.read_all_learning_history,
+            tools.read_user_memory,
+            PlanWorkflow,
+            ToDocParserAssistant,
+            ToExplanationAssistant,
+            ToRelationAssistant,
+            ToExaminationAssistant,
+            ToSummaryAssistant,
+        ),
+        sensitive_tools=(tools.upsert_learning_history, tools.update_user_profile),
+    )

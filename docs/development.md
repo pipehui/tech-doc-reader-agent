@@ -126,13 +126,16 @@ python scripts/migrate_doc_metadata.py
 ```text
 tech_doc_agent/
   app/
-    api/          FastAPI routes and schemas
-    core/         settings, tenant, observability, guardrails
+    api/           FastAPI routes, SSE protocol and schemas
+    composition.py explicit tools, models, assistants and graph wiring
+    core/          settings, tenant, observability, guardrails
+    graph/         dependency-free graph specs, nodes, routing and builder
+    runtime/       lifecycle, execution, approvals and session queries
+    tools/         dependency-bound document, learning and profile tools
     services/
-      assistants/  LangGraph agent implementations
-      retrieval/   hybrid retrieval and metadata helpers
-      tools/       document, learning, profile and web-search tools
-      vectordb/    FAISS, learning, memory and web-search stores
+      assistants/ prompts, model factory and assistant registry
+      retrieval/  hybrid retrieval and metadata helpers
+      vectordb/   FAISS, learning, memory and web-search stores
   data/           runtime data
 docs/
 frontend/

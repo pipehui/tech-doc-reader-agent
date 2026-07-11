@@ -2,19 +2,27 @@ import json
 
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.tools import read_user_profile, update_user_profile
+from tech_doc_agent.app.services.user_profile import UserProfileService
+from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
-def test_user_profile_tools_use_current_tenant(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        "tech_doc_agent.app.services.tools.user_profile.get_settings",
-        lambda: Settings(DATA_PATH=str(tmp_path)),
+def test_user_profile_tools_use_current_tenant(tmp_path):
+    settings = Settings(DATA_PATH=str(tmp_path))
+    tools = build_tool_bundle(
+        ToolDependencies(
+            document_store=None,
+            document_retriever=None,
+            learning_store=None,
+            memory_store=None,
+            profile_service=UserProfileService(settings),
+            web_search=None,
+        )
     )
 
     with trace_context(user_id="user-a", namespace="tenant-docs"):
-        initial = json.loads(read_user_profile.invoke({}))
+        initial = json.loads(tools.read_user_profile.invoke({}))
         updated = json.loads(
-            update_user_profile.invoke(
+            tools.update_user_profile.invoke(
                 {
                     "experience_level": "进阶",
                     "known_topics": ["LangGraph StateGraph"],
@@ -23,7 +31,7 @@ def test_user_profile_tools_use_current_tenant(tmp_path, monkeypatch):
                 }
             )
         )
-        reloaded = json.loads(read_user_profile.invoke({}))
+        reloaded = json.loads(tools.read_user_profile.invoke({}))
 
     assert initial["user_id"] == "user-a"
     assert initial["namespace"] == "tenant-docs"

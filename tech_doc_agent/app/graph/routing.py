@@ -6,15 +6,14 @@ from typing import Any, Literal, cast
 from langgraph.graph import END
 from langgraph.prebuilt import tools_condition
 
-from tech_doc_agent.app.services.assistants.assistant_base import CompleteOrEscalate
-from tech_doc_agent.app.services.assistants.primary_assistant import (
+from tech_doc_agent.app.graph.commands import (
+    CompleteOrEscalate,
     PlanWorkflow,
     ToDocParserAssistant,
     ToExaminationAssistant,
     ToExplanationAssistant,
     ToRelationAssistant,
     ToSummaryAssistant,
-    primary_assistant_sensitive_tools,
 )
 from tech_doc_agent.app.services.message_scope import should_route_to_examination
 
@@ -104,29 +103,36 @@ def make_subagent_router(spec: AgentSpec) -> Callable[[State], str]:
     return route_subagent
 
 
-def route_primary_assistant(state: State) -> PrimaryRouteTarget:
-    route = tools_condition(cast(dict[str, Any], state))
-    if route == END:
-        return cast(PrimaryRouteTarget, END)
+def make_primary_router(sensitive_tool_names: frozenset[str]) -> Callable[[State], PrimaryRouteTarget]:
+    def route_primary_assistant(state: State) -> PrimaryRouteTarget:
+        route = tools_condition(cast(dict[str, Any], state))
+        if route == END:
+            return cast(PrimaryRouteTarget, END)
 
-    tool_calls = list(getattr(state["messages"][-1], "tool_calls", []) or [])
-    unsafe_tool_names = [tool.name for tool in primary_assistant_sensitive_tools]
-    if not tool_calls:
-        return cast(PrimaryRouteTarget, END)
+        tool_calls = list(getattr(state["messages"][-1], "tool_calls", []) or [])
+        if not tool_calls:
+            return cast(PrimaryRouteTarget, END)
 
-    tool_name = tool_calls[0]["name"]
-    if tool_name == PlanWorkflow.__name__:
-        return "store_plan"
-    if tool_name == ToDocParserAssistant.__name__:
-        return "enter_parser"
-    if tool_name == ToExplanationAssistant.__name__:
-        return "enter_explanation"
-    if tool_name == ToRelationAssistant.__name__:
-        return "enter_relation"
-    if tool_name == ToExaminationAssistant.__name__:
-        return "enter_examination"
-    if tool_name == ToSummaryAssistant.__name__:
-        return "enter_summary"
-    if tool_name in unsafe_tool_names:
-        return "primary_assistant_sensitive_tools"
-    return "primary_assistant_tools"
+        tool_name = tool_calls[0]["name"]
+        if tool_name == PlanWorkflow.__name__:
+            return "store_plan"
+        if tool_name == ToDocParserAssistant.__name__:
+            return "enter_parser"
+        if tool_name == ToExplanationAssistant.__name__:
+            return "enter_explanation"
+        if tool_name == ToRelationAssistant.__name__:
+            return "enter_relation"
+        if tool_name == ToExaminationAssistant.__name__:
+            return "enter_examination"
+        if tool_name == ToSummaryAssistant.__name__:
+            return "enter_summary"
+        if tool_name in sensitive_tool_names:
+            return "primary_assistant_sensitive_tools"
+        return "primary_assistant_tools"
+
+    return route_primary_assistant
+
+
+route_primary_assistant = make_primary_router(
+    frozenset({"upsert_learning_history", "update_user_profile"})
+)

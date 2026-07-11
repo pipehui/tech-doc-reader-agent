@@ -12,10 +12,8 @@ from tech_doc_agent.app.core.settings import Settings
 
 
 ResourceFactory = Callable[[Settings], Any]
-ResourcePublisher = Callable[[Any], None]
-ResourceResetter = Callable[[], None]
 CheckpointerContextFactory = Callable[[str], Any]
-GraphFactory = Callable[[Any], Any]
+GraphFactory = Callable[[Any, Any], Any]
 
 
 def _is_retryable_redis_startup_error(exc: Exception) -> bool:
@@ -31,8 +29,6 @@ def _is_retryable_redis_startup_error(exc: Exception) -> bool:
 class RuntimeLifecycle:
     settings: Settings
     resource_factory: ResourceFactory
-    resource_publisher: ResourcePublisher
-    resource_resetter: ResourceResetter
     checkpointer_context_factory: CheckpointerContextFactory
     graph_factory: GraphFactory
     event_logger: Callable[..., None] = field(default_factory=lambda: log_event)
@@ -41,7 +37,6 @@ class RuntimeLifecycle:
     checkpointer: Any | None = field(default=None, init=False)
     graph: Any | None = field(default=None, init=False)
     _checkpointer_cm: Any | None = field(default=None, init=False, repr=False)
-    _resources_published: bool = field(default=False, init=False, repr=False)
     _started: bool = field(default=False, init=False, repr=False)
 
     def start(self) -> RuntimeLifecycle:
@@ -50,10 +45,8 @@ class RuntimeLifecycle:
 
         try:
             self.resources = self.resource_factory(self.settings)
-            self._resources_published = True
-            self.resource_publisher(self.resources)
             self._setup_checkpointer_with_retry()
-            self.graph = self.graph_factory(self.checkpointer)
+            self.graph = self.graph_factory(self.checkpointer, self.resources)
             self._started = True
             return self
         except Exception:
@@ -99,9 +92,4 @@ class RuntimeLifecycle:
         finally:
             self.graph = None
             self._started = False
-            try:
-                if self._resources_published:
-                    self.resource_resetter()
-            finally:
-                self._resources_published = False
-                self.resources = None
+            self.resources = None

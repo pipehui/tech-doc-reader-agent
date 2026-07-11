@@ -7,8 +7,10 @@ safe: read_learning_history   sensitive: upsert_learning_history
 
 from datetime import datetime
 from langchain_core.prompts import ChatPromptTemplate
-from tech_doc_agent.app.services.tools import read_docs, read_learning_history, upsert_learning_history
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant, CompleteOrEscalate, llm
+from tech_doc_agent.app.graph.commands import CompleteOrEscalate
+from tech_doc_agent.app.services.assistants.definition import AssistantDefinition, build_assistant_definition
+from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
+from tech_doc_agent.app.tools import ToolBundle
 
 # 1. 检测助手prompt（告诉LLM你是谁、能做什么、什么时候该退出）
 examination_assistant_prompt = ChatPromptTemplate.from_messages(
@@ -106,16 +108,15 @@ examination_assistant_prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
-# 2. 检测助手工具
-examination_assistant_safe_tools = [read_learning_history, read_docs]
-examination_assistant_sensitive_tools = [upsert_learning_history]
-examination_assistant_tools = examination_assistant_safe_tools + examination_assistant_sensitive_tools
-
-# 3. 创建检测助手的可运行对象
-examination_assistant_runnable = examination_assistant_prompt | llm.bind_tools(
-    examination_assistant_tools + [CompleteOrEscalate],
-    parallel_tool_calls=False,
-)
-
-# 4. 实例化检测助手
-examination_assistant = Assistant(examination_assistant_runnable, name="examination")
+def build_examination_assistant(
+    models: AssistantModelProvider,
+    tools: ToolBundle,
+) -> AssistantDefinition:
+    return build_assistant_definition(
+        prompt=examination_assistant_prompt,
+        models=models,
+        name="examination",
+        safe_tools=(tools.read_learning_history, tools.read_docs),
+        sensitive_tools=(tools.upsert_learning_history,),
+        control_tools=(CompleteOrEscalate,),
+    )

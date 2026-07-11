@@ -3,10 +3,10 @@ from typing import Any
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
 
+from tech_doc_agent.app.composition import build_application_graph
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.graph import build_multi_agentic_graph
 from tech_doc_agent.app.runtime.approvals import (
     ApprovalRepository,
     ApprovalService,
@@ -17,7 +17,7 @@ from tech_doc_agent.app.runtime.config import SessionConfigFactory
 from tech_doc_agent.app.runtime.execution import GraphExecutionService
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
 from tech_doc_agent.app.runtime.sessions import SessionQueryService
-from tech_doc_agent.app.services.resources import AppResources, reset_app_resources, set_app_resources
+from tech_doc_agent.app.services.resources import AppResources
 
 
 class ChatRuntime:
@@ -35,10 +35,8 @@ class ChatRuntime:
             else RuntimeLifecycle(
                 settings=self.settings,
                 resource_factory=AppResources.create,
-                resource_publisher=set_app_resources,
-                resource_resetter=reset_app_resources,
                 checkpointer_context_factory=RedisSaver.from_conn_string,
-                graph_factory=build_multi_agentic_graph,
+                graph_factory=build_application_graph,
             )
         )
         self._approval_repository = (

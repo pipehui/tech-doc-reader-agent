@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from json import JSONDecodeError
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,48 @@ DEFAULT_PROFILE = {
 PROFILE_VERSION = 1
 TEXT_PROFILE_FIELDS = ("experience_level", "explanation_style", "depth", "language", "notes")
 LIST_PROFILE_FIELDS = ("known_topics", "weak_topics")
+
+
+@dataclass(frozen=True, slots=True)
+class UserProfileService:
+    """Resource-scoped facade for profile persistence and context queries."""
+
+    settings: Settings
+    memory_store: Any | None = None
+
+    def get_profile(self, *, user_id: str, namespace: str) -> dict[str, Any]:
+        return get_user_profile(user_id, namespace, settings=self.settings)
+
+    def update_profile(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        **updates: Any,
+    ) -> dict[str, Any]:
+        return update_user_profile(
+            user_id,
+            namespace,
+            settings=self.settings,
+            **updates,
+        )
+
+    def context_summary(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        memory_query: str = "",
+        memory_limit: int = 5,
+    ) -> str:
+        return get_user_context_summary(
+            user_id,
+            namespace,
+            memory_query=memory_query,
+            memory_limit=memory_limit,
+            settings=self.settings,
+            memory_store=self.memory_store,
+        )
 
 
 def get_user_profile_summary(
@@ -62,6 +105,7 @@ def get_user_context_summary(
     memory_query: str = "",
     memory_limit: int = 5,
     settings: Settings | None = None,
+    memory_store: Any | None = None,
 ) -> str:
     tenant = tenant_from_values(user_id, namespace)
     summary = get_user_profile_summary(
@@ -73,6 +117,7 @@ def get_user_context_summary(
         tenant,
         query=memory_query,
         limit=memory_limit,
+        memory_store=memory_store,
     )
     if not memories:
         return summary
@@ -282,13 +327,12 @@ def _load_user_memories(
     *,
     query: str,
     limit: int,
+    memory_store: Any | None,
 ) -> list[dict[str, Any]]:
-    try:
-        from tech_doc_agent.app.services.resources import get_app_resources
+    if memory_store is None:
+        return []
 
-        memory_store = getattr(get_app_resources(), "memory_store", None)
-        if memory_store is None:
-            return []
+    try:
         if query:
             return memory_store.read_by_query(
                 query,

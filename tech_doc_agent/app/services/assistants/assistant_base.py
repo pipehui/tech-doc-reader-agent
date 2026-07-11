@@ -1,39 +1,10 @@
 from typing import Optional
 
-from langchain_openai import ChatOpenAI
 from langchain_core.runnables import Runnable, RunnableConfig
-from pydantic import BaseModel
 
 from tech_doc_agent.app.core.observability import log_event
-from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.core.state import State
 
-settings = get_settings()
-
-
-def _api_base_or_none(value: str) -> str | None:
-    return value or None
-
-
-# Initialize the language model (shared among assistants)
-primary_llm = ChatOpenAI(
-    model=settings.PRIMARY_MODEL or "gpt-4o-mini",
-    openai_api_key=settings.OPENAI_API_KEY or "not-set",
-    openai_api_base=_api_base_or_none(settings.OPENAI_BASE_URL),
-    temperature=0,
-)
-
-if settings.BACKUP_MODEL and settings.BACKUP_API_KEY:
-    backup_llm = ChatOpenAI(
-        model=settings.BACKUP_MODEL,
-        openai_api_key=settings.BACKUP_API_KEY,
-        openai_api_base=_api_base_or_none(settings.BACKUP_API_BASE),
-        temperature=0,
-    )
-    llm = primary_llm.with_fallbacks([backup_llm])
-else:
-    backup_llm = None
-    llm = primary_llm
 
 def is_empty_assistant_output(result) -> bool:
     if getattr(result, "tool_calls", None):
@@ -47,16 +18,13 @@ def is_empty_assistant_output(result) -> bool:
         if not content:
             return True
 
-        return not any(
-            isinstance(item, dict)
-            and str(item.get("text", "")).strip()
-            for item in content
-        )
+        return not any(isinstance(item, dict) and str(item.get("text", "")).strip() for item in content)
 
     if isinstance(content, str):
         return not content.strip()
 
     return False
+
 
 class Assistant:
     def __init__(self, runnable: Runnable, name: str | None = None, max_retries: int = 3):
@@ -99,8 +67,7 @@ class Assistant:
                 max_attempts=self.max_retries + 1,
             )
             raise RuntimeError(
-                f"Assistant {assistant_name} returned empty output "
-                f"after {self.max_retries + 1} attempts."
+                f"Assistant {assistant_name} returned empty output after {self.max_retries + 1} attempts."
             )
 
         result = self._name_result(result)
@@ -133,15 +100,8 @@ class Assistant:
                 async_runtime=True,
             )
             raise RuntimeError(
-                f"Assistant {assistant_name} returned empty output "
-                f"after {self.max_retries + 1} attempts."
+                f"Assistant {assistant_name} returned empty output after {self.max_retries + 1} attempts."
             )
 
         result = self._name_result(result)
         return {"messages": result}
-
-# Define the CompleteOrEscalate tool
-class CompleteOrEscalate(BaseModel):
-    """A tool to mark the current task as completed or to escalate control to the main assistant."""
-    cancel: bool = True
-    reason: str

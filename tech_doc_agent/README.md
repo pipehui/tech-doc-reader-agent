@@ -19,9 +19,11 @@ tech_doc_agent
 ├── app
 │   ├── api
 │   ├── bootstrap.py
+│   ├── composition.py
 │   ├── core
 │   ├── graph
 │   │   ├── builder.py
+│   │   ├── commands.py
 │   │   ├── nodes.py
 │   │   ├── routing.py
 │   │   ├── specs.py
@@ -38,10 +40,18 @@ tech_doc_agent
 │   │   ├── serialization.py
 │   │   ├── sessions.py
 │   │   └── telemetry.py
+│   ├── tools
+│   │   ├── bundle.py
+│   │   ├── dependencies.py
+│   │   ├── documents.py
+│   │   ├── learning.py
+│   │   └── profiles.py
 │   ├── main.py
 │   └── services
 │       ├── assistants
-│       ├── tools
+│       │   ├── definition.py
+│       │   ├── model_factory.py
+│       │   └── registry.py
 │       ├── vectordb
 │       └── chat_runtime.py
 └── data
@@ -59,11 +69,11 @@ tech_doc_agent
 - safe / sensitive tool 路由
 - interrupt 节点
 
-`builder.py` 负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。
+`builder.py` 只消费注入的 `GraphSpec` 并负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。它们不创建真实模型、工具或存储。
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 
-`bootstrap.py` 是 production composition root：FastAPI lifespan 和 CLI 从这里显式组装 settings、Redis approval repository 与 `ChatRuntime`。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；runtime domain 不依赖该具体实现。
+`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式组装 settings、Redis approval repository 与 `ChatRuntime`。`composition.py` 再把 runtime resources 组合为 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；runtime domain 不依赖该具体实现。
 
 ### `app/runtime`
 
@@ -88,7 +98,7 @@ tech_doc_agent
 
 ### `app/services/assistants`
 
-包含当前系统的全部助手：
+包含当前系统的 prompt 与依赖绑定工厂：
 
 - `primary_assistant.py`
 - `parser_assistant.py`
@@ -97,12 +107,17 @@ tech_doc_agent
 - `examination_assistant.py`
 - `summary_assistant.py`
 
-### `app/services/tools`
+`model_factory.py` 是模型客户端的唯一构造位置，`definition.py` 统一绑定 safe/sensitive/control tools，`registry.py` 组装六个 role。import assistant 基类不会读取 settings 或创建模型客户端。
 
-包含当前项目的业务工具：
+### `app/tools`
 
-- `doc_store.py`
-- `learning_store.py`
+包含按资源实例绑定的业务工具：
+
+- `dependencies.py` 定义窄端口；
+- `documents.py`、`learning.py`、`profiles.py` 分别构造各领域工具；
+- `bundle.py` 提供稳定命名的 `ToolBundle`。
+
+工具函数不使用全局 resource locator。每个 runtime/composition 都拥有独立工具实例，测试可直接注入 fake ports。
 
 ### `app/services/vectordb`
 

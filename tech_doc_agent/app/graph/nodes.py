@@ -7,7 +7,6 @@ from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.structured_outputs import ResultKind, parse_structured_result
 from tech_doc_agent.app.core.tenant import tenant_from_values
 from tech_doc_agent.app.services.message_scope import build_scoped_state
-from tech_doc_agent.app.services.user_profile import get_user_context_summary
 
 from .state import State
 from .messages import extract_last_message_text
@@ -25,28 +24,31 @@ def assistant_node(assistant, scoped_messages: bool = False):
     return RunnableLambda(invoke, afunc=ainvoke, name=assistant.name)
 
 
-def user_info(state: State, config: RunnableConfig):
-    metadata = (config or {}).get("metadata", {}) if isinstance(config, dict) else {}
-    tenant = tenant_from_values(
-        state.get("user_id") or metadata.get("user_id"),
-        state.get("namespace") or metadata.get("namespace"),
-    )
-    info_str = get_user_context_summary(
-        user_id=tenant.user_id,
-        namespace=tenant.namespace,
-        memory_query=state.get("learning_target", ""),
-    )
-    update = {
-        "user_info": info_str,
-        "user_id": tenant.user_id,
-        "namespace": tenant.namespace,
-        "learning_target": state.get("learning_target", ""),
-    }
+def create_user_info_node(context_provider: Callable[..., str]) -> Callable:
+    def user_info(state: State, config: RunnableConfig):
+        metadata = (config or {}).get("metadata", {}) if isinstance(config, dict) else {}
+        tenant = tenant_from_values(
+            state.get("user_id") or metadata.get("user_id"),
+            state.get("namespace") or metadata.get("namespace"),
+        )
+        info_str = context_provider(
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+            memory_query=state.get("learning_target", ""),
+        )
+        update = {
+            "user_info": info_str,
+            "user_id": tenant.user_id,
+            "namespace": tenant.namespace,
+            "learning_target": state.get("learning_target", ""),
+        }
 
-    if state.get("examination_context") and not _last_ai_was_examination(state):
-        update["examination_context"] = ""
+        if state.get("examination_context") and not _last_ai_was_examination(state):
+            update["examination_context"] = ""
 
-    return update
+        return update
+
+    return user_info
 
 
 def _last_ai_was_examination(state: State) -> bool:

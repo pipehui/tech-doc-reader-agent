@@ -2,14 +2,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
-from tech_doc_agent.app.graph import (
-    route_examination,
-    route_explanation,
-    route_next_step,
-    route_parser,
-    route_relation,
-    route_summary,
-)
+from tech_doc_agent.app.graph import make_primary_router, make_subagent_router, route_next_step
 
 
 def _state_with_tool_call(tool_name: str) -> dict:
@@ -24,70 +17,75 @@ def _state_with_tool_call(tool_name: str) -> dict:
 
 
 @pytest.mark.parametrize(
-    ("route", "finish_target"),
+    ("agent", "finish_target"),
     [
-        (route_parser, "finish_parser"),
-        (route_relation, "finish_relation"),
-        (route_explanation, "finish_explanation"),
-        (route_examination, "finish_examination"),
-        (route_summary, "finish_summary"),
+        ("parser", "finish_parser"),
+        ("relation", "finish_relation"),
+        ("explanation", "finish_explanation"),
+        ("examination", "finish_examination"),
+        ("summary", "finish_summary"),
     ],
 )
-def test_subagent_route_finishes_when_assistant_returns_content(route, finish_target):
+def test_subagent_route_finishes_when_assistant_returns_content(graph_spec, agent, finish_target):
     state = {"messages": [AIMessage(content="done")]}
 
-    assert route(state) == finish_target
+    assert _route(graph_spec, agent)(state) == finish_target
 
 
 @pytest.mark.parametrize(
-    ("route", "leave_target"),
+    ("agent", "leave_target"),
     [
-        (route_parser, "leave_parser"),
-        (route_relation, "leave_relation"),
-        (route_explanation, "leave_explanation"),
-        (route_examination, "leave_examination"),
-        (route_summary, "leave_summary"),
+        ("parser", "leave_parser"),
+        ("relation", "leave_relation"),
+        ("explanation", "leave_explanation"),
+        ("examination", "leave_examination"),
+        ("summary", "leave_summary"),
     ],
 )
-def test_subagent_route_leaves_on_complete_or_escalate(route, leave_target):
-    assert route(_state_with_tool_call("CompleteOrEscalate")) == leave_target
+def test_subagent_route_leaves_on_complete_or_escalate(graph_spec, agent, leave_target):
+    assert _route(graph_spec, agent)(_state_with_tool_call("CompleteOrEscalate")) == leave_target
 
 
 @pytest.mark.parametrize(
-    ("route", "safe_tool", "safe_target"),
+    ("agent", "safe_tool", "safe_target"),
     [
-        (route_parser, "read_docs", "parser_assistant_safe_tools"),
-        (route_relation, "read_all_learning_history", "relation_assistant_safe_tools"),
-        (route_explanation, "read_docs", "explanation_assistant_safe_tools"),
-        (route_examination, "read_docs", "examination_assistant_safe_tools"),
-        (route_summary, "read_learning_history", "summary_assistant_safe_tools"),
+        ("parser", "read_docs", "parser_assistant_safe_tools"),
+        ("relation", "read_all_learning_history", "relation_assistant_safe_tools"),
+        ("explanation", "read_docs", "explanation_assistant_safe_tools"),
+        ("examination", "read_docs", "examination_assistant_safe_tools"),
+        ("summary", "read_learning_history", "summary_assistant_safe_tools"),
     ],
 )
-def test_subagent_route_sends_safe_tools_to_safe_node(route, safe_tool, safe_target):
-    assert route(_state_with_tool_call(safe_tool)) == safe_target
+def test_subagent_route_sends_safe_tools_to_safe_node(graph_spec, agent, safe_tool, safe_target):
+    assert _route(graph_spec, agent)(_state_with_tool_call(safe_tool)) == safe_target
 
 
 @pytest.mark.parametrize(
-    ("route", "sensitive_tool", "sensitive_target"),
+    ("agent", "sensitive_tool", "sensitive_target"),
     [
-        (route_parser, "save_docs", "parser_assistant_sensitive_tools"),
-        (route_examination, "upsert_learning_history", "examination_assistant_sensitive_tools"),
-        (route_summary, "upsert_learning_state", "summary_assistant_sensitive_tools"),
+        ("parser", "save_docs", "parser_assistant_sensitive_tools"),
+        ("examination", "upsert_learning_history", "examination_assistant_sensitive_tools"),
+        ("summary", "upsert_learning_state", "summary_assistant_sensitive_tools"),
     ],
 )
-def test_subagent_route_sends_sensitive_tools_to_sensitive_node(route, sensitive_tool, sensitive_target):
-    assert route(_state_with_tool_call(sensitive_tool)) == sensitive_target
+def test_subagent_route_sends_sensitive_tools_to_sensitive_node(
+    graph_spec,
+    agent,
+    sensitive_tool,
+    sensitive_target,
+):
+    assert _route(graph_spec, agent)(_state_with_tool_call(sensitive_tool)) == sensitive_target
 
 
 @pytest.mark.parametrize(
-    ("route", "safe_target"),
+    ("agent", "safe_target"),
     [
-        (route_relation, "relation_assistant_safe_tools"),
-        (route_explanation, "explanation_assistant_safe_tools"),
+        ("relation", "relation_assistant_safe_tools"),
+        ("explanation", "explanation_assistant_safe_tools"),
     ],
 )
-def test_read_only_subagent_keeps_unknown_tool_calls_on_existing_safe_fallback(route, safe_target):
-    assert route(_state_with_tool_call("unexpected_tool")) == safe_target
+def test_read_only_subagent_keeps_unknown_tool_calls_on_existing_safe_fallback(graph_spec, agent, safe_target):
+    assert _route(graph_spec, agent)(_state_with_tool_call("unexpected_tool")) == safe_target
 
 
 @pytest.mark.parametrize(
@@ -107,3 +105,15 @@ def test_route_next_step_maps_workflow_step_to_entry_node(step, target):
 def test_route_next_step_ends_for_completed_or_unknown_plan():
     assert route_next_step({"workflow_plan": ["parser"], "plan_index": 1}) == END
     assert route_next_step({"workflow_plan": ["unknown"], "plan_index": 0}) == END
+
+
+def test_primary_router_uses_injected_sensitive_tool_names():
+    route = make_primary_router(frozenset({"custom_sensitive_write"}))
+
+    assert route(_state_with_tool_call("custom_sensitive_write")) == "primary_assistant_sensitive_tools"
+    assert route(_state_with_tool_call("read_user_profile")) == "primary_assistant_tools"
+
+
+def _route(graph_spec, agent: str):
+    spec = next(spec for spec in graph_spec.subagents if spec.key == agent)
+    return make_subagent_router(spec)

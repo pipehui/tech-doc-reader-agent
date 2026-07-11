@@ -53,8 +53,8 @@ EXPECTED_INTERRUPTS = {
 }
 
 
-def test_compiled_graph_preserves_subagent_topology_and_interrupts():
-    graph = build_multi_agentic_graph(MemorySaver())
+def test_compiled_graph_preserves_subagent_topology_and_interrupts(graph_spec):
+    graph = build_multi_agentic_graph(MemorySaver(), graph_spec)
     graph_view = graph.get_graph()
     outgoing: dict[str, set[str]] = defaultdict(set)
     conditional_sources: set[str] = set()

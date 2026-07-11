@@ -1,21 +1,9 @@
 import json
-from types import SimpleNamespace
 
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.resources import (
-    AppResources,
-    get_app_resources,
-    override_app_resources,
-    reset_app_resources,
-)
-from tech_doc_agent.app.services.tools.learning_store import (
-    read_all_learning_history,
-    read_learning_history,
-    read_user_memory,
-    upsert_learning_history,
-    upsert_learning_state,
-)
+from tech_doc_agent.app.services.resources import AppResources
+from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
 def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatch):
@@ -37,15 +25,13 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
 
     resources = AppResources.create(settings)
 
-    try:
-        assert resources.faiss_store.store_dir == tmp_path / "faiss_store"
-        assert resources.faiss_store.read_documents("StateGraph")
-        assert resources.hybrid_retriever.search("StateGraph")
-        assert resources.learning_store.records
-        assert resources.memory_store.memories == []
-        assert resources.web_search_backend.store_dir == tmp_path / "web_search"
-    finally:
-        reset_app_resources()
+    assert resources.faiss_store.store_dir == tmp_path / "faiss_store"
+    assert resources.faiss_store.read_documents("StateGraph")
+    assert resources.hybrid_retriever.search("StateGraph")
+    assert resources.learning_store.records
+    assert resources.memory_store.memories == []
+    assert resources.profile_service.memory_store is resources.memory_store
+    assert resources.web_search_backend.store_dir == tmp_path / "web_search"
 
 
 def test_app_resources_skips_faiss_index_when_embedding_is_not_configured(tmp_path):
@@ -58,12 +44,9 @@ def test_app_resources_skips_faiss_index_when_embedding_is_not_configured(tmp_pa
 
     resources = AppResources.create(settings)
 
-    try:
-        assert resources.faiss_store.index is None
-        assert resources.faiss_store.read_documents("StateGraph")
-        assert resources.hybrid_retriever.search("StateGraph")
-    finally:
-        reset_app_resources()
+    assert resources.faiss_store.index is None
+    assert resources.faiss_store.read_documents("StateGraph")
+    assert resources.hybrid_retriever.search("StateGraph")
 
 
 def test_app_resources_keeps_document_store_empty_when_seed_is_disabled(tmp_path):
@@ -71,25 +54,9 @@ def test_app_resources_keeps_document_store_empty_when_seed_is_disabled(tmp_path
 
     resources = AppResources.create(settings)
 
-    try:
-        assert resources.faiss_store.index is None
-        assert resources.faiss_store.documents == []
-        assert resources.hybrid_retriever.search("StateGraph") == []
-    finally:
-        reset_app_resources()
-
-
-def test_override_app_resources_restores_previous_resources():
-    first = SimpleNamespace(value="first")
-    second = SimpleNamespace(value="second")
-
-    with override_app_resources(first):
-        assert get_app_resources().value == "first"
-        with override_app_resources(second):
-            assert get_app_resources().value == "second"
-        assert get_app_resources().value == "first"
-
-    reset_app_resources()
+    assert resources.faiss_store.index is None
+    assert resources.faiss_store.documents == []
+    assert resources.hybrid_retriever.search("StateGraph") == []
 
 
 class FakeLearningStore:
@@ -220,38 +187,44 @@ class FakeMemoryStore:
         return True
 
 
-def test_learning_tools_use_resource_registry():
-    learning_store = FakeLearningStore()
-    memory_store = FakeMemoryStore()
-    test_resources = SimpleNamespace(
-        faiss_store=None,
+def _learning_tools(learning_store, memory_store):
+    dependencies = ToolDependencies(
+        document_store=None,
+        document_retriever=None,
         learning_store=learning_store,
         memory_store=memory_store,
-        web_search_backend=None,
+        profile_service=None,
+        web_search=None,
     )
+    return build_tool_bundle(dependencies)
 
-    with override_app_resources(test_resources):
-        assert json.loads(read_learning_history.invoke({"query": "LangGraph"}))
-        assert json.loads(read_all_learning_history.invoke({}))
-        assert json.loads(read_user_memory.invoke({"query": "StateGraph"}))
-        assert upsert_learning_history.invoke(
-            {
-                "knowledge": "FastAPI Depends",
-                "timestamp": "2026-04-28T00:00:00Z",
-                "score": 0.9,
-            }
-        ) == "ok"
-        assert "Memory" in upsert_learning_state.invoke(
-            {
-                "knowledge": "LangGraph StateGraph",
-                "timestamp": "2026-04-28T00:00:00Z",
-                "score": 0.85,
-                "memory_kind": "stuck_point",
-                "memory_topic": "LangGraph StateGraph",
-                "memory_content": "用户需要继续区分 reducer 和覆盖更新。",
-                "memory_confidence": 0.8,
-            }
-        )
+
+def test_learning_tools_use_bound_dependencies():
+    learning_store = FakeLearningStore()
+    memory_store = FakeMemoryStore()
+    tools = _learning_tools(learning_store, memory_store)
+
+    assert json.loads(tools.read_learning_history.invoke({"query": "LangGraph"}))
+    assert json.loads(tools.read_all_learning_history.invoke({}))
+    assert json.loads(tools.read_user_memory.invoke({"query": "StateGraph"}))
+    assert tools.upsert_learning_history.invoke(
+        {
+            "knowledge": "FastAPI Depends",
+            "timestamp": "2026-04-28T00:00:00Z",
+            "score": 0.9,
+        }
+    ) == "ok"
+    assert "Memory" in tools.upsert_learning_state.invoke(
+        {
+            "knowledge": "LangGraph StateGraph",
+            "timestamp": "2026-04-28T00:00:00Z",
+            "score": 0.85,
+            "memory_kind": "stuck_point",
+            "memory_topic": "LangGraph StateGraph",
+            "memory_content": "用户需要继续区分 reducer 和覆盖更新。",
+            "memory_confidence": 0.8,
+        }
+    )
 
     assert learning_store.saved is True
     assert memory_store.saved is True
@@ -275,24 +248,18 @@ def test_learning_tools_use_trace_context_tenant():
             "namespace": "tenant-docs",
         }
     )
-    test_resources = SimpleNamespace(
-        faiss_store=None,
-        learning_store=learning_store,
-        memory_store=memory_store,
-        web_search_backend=None,
-    )
+    tools = _learning_tools(learning_store, memory_store)
 
-    with override_app_resources(test_resources):
-        with trace_context(user_id="user-a", namespace="tenant-docs"):
-            assert json.loads(read_learning_history.invoke({"query": "Tenant"}))[0]["knowledge"] == "Tenant Only"
-            assert json.loads(read_all_learning_history.invoke({}))[0]["user_id"] == "user-a"
-            assert upsert_learning_history.invoke(
-                {
-                    "knowledge": "Tenant Upsert",
-                    "timestamp": "2026-04-28T00:00:00Z",
-                    "score": 0.9,
-                }
-            ) == "ok"
+    with trace_context(user_id="user-a", namespace="tenant-docs"):
+        assert json.loads(tools.read_learning_history.invoke({"query": "Tenant"}))[0]["knowledge"] == "Tenant Only"
+        assert json.loads(tools.read_all_learning_history.invoke({}))[0]["user_id"] == "user-a"
+        assert tools.upsert_learning_history.invoke(
+            {
+                "knowledge": "Tenant Upsert",
+                "timestamp": "2026-04-28T00:00:00Z",
+                "score": 0.9,
+            }
+        ) == "ok"
 
     assert learning_store.records[-1]["user_id"] == "user-a"
     assert learning_store.records[-1]["namespace"] == "tenant-docs"
@@ -302,26 +269,20 @@ def test_learning_tools_prefer_runnable_config_over_trace_context():
     """When LangGraph injects config, tools should use it instead of the ambient ContextVar."""
     learning_store = FakeLearningStore()
     memory_store = FakeMemoryStore()
-    test_resources = SimpleNamespace(
-        faiss_store=None,
-        learning_store=learning_store,
-        memory_store=memory_store,
-        web_search_backend=None,
-    )
+    tools = _learning_tools(learning_store, memory_store)
 
     config = {"metadata": {"user_id": "config-user", "namespace": "config-ns"}}
 
-    with override_app_resources(test_resources):
-        # ContextVar 设的是 ctx-user，但 config metadata 是 config-user，期望工具用 config-user
-        with trace_context(user_id="ctx-user", namespace="ctx-ns"):
-            upsert_learning_history.invoke(
-                {
-                    "knowledge": "Config Wins",
-                    "timestamp": "2026-04-28T00:00:00Z",
-                    "score": 0.5,
-                },
-                config=config,
-            )
+    # ContextVar 设的是 ctx-user，但 config metadata 是 config-user，期望工具用 config-user
+    with trace_context(user_id="ctx-user", namespace="ctx-ns"):
+        tools.upsert_learning_history.invoke(
+            {
+                "knowledge": "Config Wins",
+                "timestamp": "2026-04-28T00:00:00Z",
+                "score": 0.5,
+            },
+            config=config,
+        )
 
     assert learning_store.records[-1]["user_id"] == "config-user"
     assert learning_store.records[-1]["namespace"] == "config-ns"

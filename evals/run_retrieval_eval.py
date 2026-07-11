@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from tech_doc_agent.app.services.resources import AppResources, reset_app_resources
+from tech_doc_agent.app.services.resources import AppResources
 from tech_doc_agent.app.services.retrieval import HybridRetriever, RetrievalMode
 
 
@@ -131,26 +131,23 @@ def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
     if args.vector_top_k is not None:
         resources.hybrid_retriever.vector_top_k = args.vector_top_k
 
-    try:
-        results: list[dict[str, Any]] = []
-        for index, case in enumerate(cases, start=1):
-            print(f"[{index}/{len(cases)}] {case['id']} {case['query'][:60]}")
-            result = run_case(case, resources.hybrid_retriever, default_top_k=args.k, mode=args.mode)
-            results.append(result)
-            scores = result["scores"]
-            print(
-                "  "
-                f"status={result['status']} "
-                f"mode={result['mode']} "
-                f"recall@{result['top_k']}={format_score(scores.get('recall_at_k'))} "
-                f"mrr={format_score(scores.get('mrr'))} "
-                f"keywords={format_score(scores.get('keyword_coverage'))}"
-            )
-            if result.get("error"):
-                print(f"  error={result['error']}")
-        return results
-    finally:
-        reset_app_resources()
+    results: list[dict[str, Any]] = []
+    for index, case in enumerate(cases, start=1):
+        print(f"[{index}/{len(cases)}] {case['id']} {case['query'][:60]}")
+        result = run_case(case, resources.hybrid_retriever, default_top_k=args.k, mode=args.mode)
+        results.append(result)
+        scores = result["scores"]
+        print(
+            "  "
+            f"status={result['status']} "
+            f"mode={result['mode']} "
+            f"recall@{result['top_k']}={format_score(scores.get('recall_at_k'))} "
+            f"mrr={format_score(scores.get('mrr'))} "
+            f"keywords={format_score(scores.get('keyword_coverage'))}"
+        )
+        if result.get("error"):
+            print(f"  error={result['error']}")
+    return results
 
 
 def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:

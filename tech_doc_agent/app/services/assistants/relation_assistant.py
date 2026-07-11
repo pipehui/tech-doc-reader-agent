@@ -7,8 +7,10 @@ safe: read_all_learning_history, search_related_docs, read_docs   sensitive: 无
 
 from datetime import datetime
 from langchain_core.prompts import ChatPromptTemplate
-from tech_doc_agent.app.services.tools import read_docs, search_related_docs, read_all_learning_history
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant, CompleteOrEscalate, llm
+from tech_doc_agent.app.graph.commands import CompleteOrEscalate
+from tech_doc_agent.app.services.assistants.definition import AssistantDefinition, build_assistant_definition
+from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
+from tech_doc_agent.app.tools import ToolBundle
 
 # 1. 关系助手prompt（告诉LLM你是谁、能做什么、什么时候该退出）
 relation_assistant_prompt = ChatPromptTemplate.from_messages(
@@ -91,16 +93,14 @@ relation_assistant_prompt = ChatPromptTemplate.from_messages(
     ]
 ).partial(time=lambda: datetime.now().isoformat(timespec="seconds"))
 
-# 2. 关系助手工具
-relation_assistant_safe_tools = [read_all_learning_history, search_related_docs, read_docs]
-relation_assistant_sensitive_tools = []
-relation_assistant_tools = relation_assistant_safe_tools + relation_assistant_sensitive_tools
-
-# 3. 创建关系助手的可运行对象
-relation_assistant_runnable = relation_assistant_prompt | llm.bind_tools(
-    relation_assistant_tools + [CompleteOrEscalate],
-    parallel_tool_calls=False,
-)
-
-# 4. 实例化关系助手
-relation_assistant = Assistant(relation_assistant_runnable, name="relation")
+def build_relation_assistant(
+    models: AssistantModelProvider,
+    tools: ToolBundle,
+) -> AssistantDefinition:
+    return build_assistant_definition(
+        prompt=relation_assistant_prompt,
+        models=models,
+        name="relation",
+        safe_tools=(tools.read_all_learning_history, tools.search_related_docs, tools.read_docs),
+        control_tools=(CompleteOrEscalate,),
+    )
