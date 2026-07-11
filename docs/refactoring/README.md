@@ -17,6 +17,7 @@
 | 2026-07-11 | Phase 0：Graph topology/router/interrupt 行为刻画 | 完成 | [2026-07-11-graph-characterization.md](2026-07-11-graph-characterization.md) |
 | 2026-07-11 | Phase 1：Graph package 与 AgentSpec 注册 | 完成 | [2026-07-11-agent-spec.md](2026-07-11-agent-spec.md) |
 | 2026-07-11 | Phase 1：拆分 graph nodes/tool policy/tool execution | 完成 | [2026-07-11-graph-utils-split.md](2026-07-11-graph-utils-split.md) |
+| 2026-07-11 | Phase 1：SSE contract/translator/encoder 与 chat route 解耦 | 完成 | [2026-07-11-sse-boundary.md](2026-07-11-sse-boundary.md) |
 
 ## 关联入口
 

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { normalizeAgent } from "./agentColors";
+import { INSPECTOR_EVENT_TYPES } from "./sseContract";
 import { normalizeTenant, sameTenant, sessionTenant, tenantKey } from "./tenant";
 import type { AgentKey, ChatMessage, LearningOverview, SessionState, TenantScope, ToolCall, TraceEvent } from "./types";
 import { makeSessionId, uid } from "./utils";
@@ -11,18 +12,7 @@ const THEME_KEY = "tech-doc-agent.theme";
 const TRANSCRIPT_PREFIX = "tech-doc-agent.react.transcript.";
 const TRANSCRIPT_VERSION = 2;
 
-export const EVENT_TYPES = [
-  "session_snapshot",
-  "agent_message",
-  "agent_transition",
-  "plan_update",
-  "tool_call",
-  "tool_result",
-  "interrupt_required",
-  "no_pending_interrupt",
-  "done",
-  "error"
-];
+export const EVENT_TYPES = [...INSPECTOR_EVENT_TYPES];
 
 export interface SessionEntry {
   id: string;

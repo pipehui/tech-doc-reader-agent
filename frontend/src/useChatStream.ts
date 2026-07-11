@@ -135,6 +135,12 @@ function applySseEvent(event: string, data: Record<string, unknown>, context: St
     return;
   }
 
+  if (event === "structured_result") {
+    const agent = normalizeAgent(data.node || context.activeAgent);
+    store.recordEvent({ type: event, data, agent, responseId: context.id });
+    return;
+  }
+
   if (event === "token") {
     const agent = normalizeAgent(data.agent || context.activeAgent);
     const text = typeof data.text === "string" ? data.text : "";
@@ -206,6 +212,11 @@ function applySseEvent(event: string, data: Record<string, unknown>, context: St
     store.recordEvent({ type: event, data, agent: context.activeAgent, responseId: context.id });
     store.setSessionState({ pending_interrupt: true });
     return;
+  }
+
+  if (event === "guardrail_blocked") {
+    store.recordEvent({ type: event, data, agent: context.activeAgent, responseId: context.id });
+    throw new Error("输入被安全规则阻止");
   }
 
   if (event === "no_pending_interrupt") {

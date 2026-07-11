@@ -69,7 +69,7 @@
 | `user_id` | `string` | 否 | 用户 ID，默认 `default` |
 | `namespace` | `string` | 否 | 会话/学习记录命名空间，默认 `tech_docs` |
 
-响应：`text/event-stream`。首帧总是 `session_snapshot`，随后可能出现 `token`、`agent_message`、`agent_transition`、`plan_update`、`tool_call`、`tool_result`，最后以 `done`、`interrupt_required` 或 `error` 结束。
+响应：`text/event-stream`。首帧总是 `session_snapshot`，随后可能出现 `token`、`agent_message`、`agent_transition`、`plan_update`、`structured_result`、`tool_call`、`tool_result`，最后以 `done`、`interrupt_required` 或 `error` 结束。
 
 如果输入命中 high-risk prompt-injection 规则，会在进入 LangGraph 前返回 `400`，响应体包含 `error=guardrail_blocked`、`risk_level` 和 `findings`，不会触发任何 agent 或工具调用。medium-risk 输入会返回 `interrupt_required`，并等待 `/chat/approve` 显式批准；批准后才继续执行原始用户消息。
 
@@ -315,6 +315,17 @@ LLM 流式输出片段。
 | `plan_index` | `number` | 否 | 当前计划下标 |
 | `learning_target` | `string` | 否 | 学习目标，通常只在 `store_plan` 后出现 |
 
+### structured_result
+
+parser 或 relation 的结构化结果写入 graph state 时发送。前端 Inspector 会记录该事件，但不会把它当作面向用户的聊天消息。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `node` | `string` | 是 | 产生结果的 finish node |
+| `result_key` | `"parser_result" \| "relation_result"` | 是 | state 字段名 |
+| `result` | `object` | 是 | 结构化结果 |
+| `parsed` | `boolean` | 是 | 当前结果是否通过结构化解析 |
+
 ### tool_call
 
 AI message 中包含 tool call 时发送。
@@ -351,6 +362,10 @@ AI message 中包含 tool call 时发送。
 | `risk_level` | `string` | 否 | Guardrails 风险级别 |
 | `findings` | `string[]` | 否 | Guardrails 命中的规则名 |
 
+### guardrail_blocked
+
+同步兼容流在输入被 guardrail 阻止时使用。当前 HTTP endpoint 会在建立 SSE 前优先返回 `400 guardrail_blocked` JSON；该事件名仍保留在跨端 contract 中，防止兼容调用方静默丢弃。
+
 ### no_pending_interrupt
 
 调用 `/chat/approve` 但当前没有 pending interrupt。
@@ -384,4 +399,4 @@ AI message 中包含 tool call 时发送。
 2. `GET /sessions/{id}/history` 恢复聊天记录。
 3. `GET /sessions/{id}/state` 恢复当前 agent、计划和 interrupt 状态。
 
-用户发消息时调用 `POST /chat`。收到第一帧 `session_snapshot` 后用它作为本次流的 baseline；收到 `plan_update` 后合并更新计划字段；收到 `agent_transition` 后更新当前 agent；收到 `token` 时追加到正在流式输出的 assistant 文本；收到 `done` 或 `interrupt_required` 后结束本次流。
+用户发消息时调用 `POST /chat`。收到第一帧 `session_snapshot` 后用它作为本次流的 baseline；收到 `plan_update` 后合并更新计划字段；收到 `agent_transition` 后更新当前 agent；收到 `structured_result` 后记录到 Inspector；收到 `token` 时追加到正在流式输出的 assistant 文本；收到 `done` 或 `interrupt_required` 后结束本次流。
