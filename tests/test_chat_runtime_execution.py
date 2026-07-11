@@ -150,6 +150,7 @@ def test_sync_and_async_graph_approval_have_identical_parts_and_side_effects(app
         assert async_update["as_node"] == sync_update["as_node"] == "primary_assistant_sensitive_tools"
         assert async_update["config"] == sync_update["config"]
         assert async_update["values"]["messages"][0].model_dump() == sync_update["values"]["messages"][0].model_dump()
+        assert async_update["values"]["messages"][0].status == "error"
 
 
 async def _collect_async_guardrail_approval(runtime: ChatRuntime, approved: bool):

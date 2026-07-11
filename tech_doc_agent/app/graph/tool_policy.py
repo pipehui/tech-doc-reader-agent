@@ -107,6 +107,7 @@ def maybe_block_repeated_tool_calls(state: State, max_identical_repeats: int = 2
         "messages": [
             ToolMessage(
                 tool_call_id=tool_call["id"],
+                status="error",
                 content=(
                     f"Blocked repeated identical tool call to '{tool_name}' in step '{current_step}'. "
                     f"The same request has already been made {repeat_count - 1} times in a row and its prior result is already in context. "
@@ -153,6 +154,7 @@ def maybe_block_parser_tool_budget(
         "messages": [
             ToolMessage(
                 tool_call_id=tool_call["id"],
+                status="error",
                 content=(
                     "Blocked parser retrieval budget overflow. "
                     f"In the current parser step, read_docs and web_search have already been called {total_calls - 1} times. "

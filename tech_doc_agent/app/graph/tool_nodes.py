@@ -20,6 +20,7 @@ def handle_tool_error(state) -> dict:
                 "type": "tool",
                 "content": f"Error: {repr(error)}\nPlease fix your mistakes.",
                 "tool_call_id": tool_call["id"],
+                "status": "error",
             }
             for tool_call in tool_calls
         ]

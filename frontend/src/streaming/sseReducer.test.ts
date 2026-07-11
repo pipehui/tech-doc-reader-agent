@@ -5,7 +5,6 @@ import { parseSseData, parseSseMessage } from "./sseEnvelope";
 import type { SseEventType } from "../sseContract";
 import {
   createStreamReducerState,
-  inferToolStatus,
   reduceSseMessage
 } from "./sseReducer";
 import type {
@@ -268,12 +267,17 @@ describe("pure SSE reducer", () => {
     const result = reduce(
       initialState("primary", { "call-1": existing }),
       "tool_result",
-      { tool_call_id: "call-1", content: "TimeoutError: failed" },
+      {
+        tool_call_id: "call-1",
+        content: "request failed without a magic keyword",
+        status: "error",
+        error: "request failed without a magic keyword"
+      },
       options("2026-07-11T00:00:00.000Z")
     );
     expect(result.state.toolCalls["call-1"]).toEqual({
       ...existing,
-      result: "TimeoutError: failed",
+      result: "request failed without a magic keyword",
       status: "error",
       updatedAt: "2026-07-11T00:00:00.000Z"
     });
@@ -281,7 +285,13 @@ describe("pure SSE reducer", () => {
     const outOfOrder = reduce(
       initialState(),
       "tool_result",
-      { tool_call_id: "missing", tool: "web_search", content: "ok" }
+      {
+        tool_call_id: "missing",
+        tool: "web_search",
+        content: "Traceback appears in successful documentation text",
+        status: "success",
+        error: null
+      }
     );
     expect(outOfOrder.state.toolCalls.missing).toEqual(
       expect.objectContaining({
@@ -291,8 +301,6 @@ describe("pure SSE reducer", () => {
         status: "done"
       })
     );
-    expect(inferToolStatus("traceback follows")).toBe("error");
-    expect(inferToolStatus("completed")).toBe("done");
   });
 
   it.each([
@@ -349,7 +357,9 @@ function actionTypes(actions: StreamAction[]) {
 it("keeps record-before-effect ordering for observable events", () => {
   const result = reduce(initialState(), "tool_result", {
     tool_call_id: "call-1",
-    content: "ok"
+    content: "ok",
+    status: "success",
+    error: null
   });
   expect(actionTypes(result.actions)).toEqual([
     "record_event",

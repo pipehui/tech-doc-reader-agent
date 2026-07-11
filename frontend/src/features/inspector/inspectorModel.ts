@@ -53,7 +53,7 @@ export function laneMarkerClass(event: TraceEvent) {
   }
   if (
     event.type === "tool_result"
-    && /error|exception|traceback/i.test(String(event.data.content || ""))
+    && event.data.status === "error"
   ) {
     return "tool_result tool_result_error";
   }
@@ -64,7 +64,9 @@ export function laneMarkerClass(event: TraceEvent) {
 export function eventSummary(event: TraceEvent) {
   const data = event.data;
   if (event.type === "tool_call") return `${String(data.tool || "tool")} call`;
-  if (event.type === "tool_result") return `${String(data.tool || "tool")} result`;
+  if (event.type === "tool_result") {
+    return `${String(data.tool || "tool")} ${data.status === "error" ? "error" : "result"}`;
+  }
   if (event.type === "agent_transition") {
     return `${String(data.phase || "")} ${normalizeAgent(data.agent)}`;
   }

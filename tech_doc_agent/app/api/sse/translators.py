@@ -92,6 +92,21 @@ def extract_text_from_content(content) -> str:
     return str(content) if content is not None else ""
 
 
+def _tool_result_payload(message, node_name: str) -> dict:
+    content = extract_text_from_content(getattr(message, "content", ""))
+    raw_status = getattr(message, "status", "success")
+    status = "error" if raw_status == "error" else "success"
+    return {
+        "agent": node_name,
+        "node": node_name,
+        "tool": getattr(message, "name", None),
+        "tool_call_id": getattr(message, "tool_call_id", None),
+        "content": content,
+        "status": status,
+        "error": content if status == "error" else None,
+    }
+
+
 def _agent_transition_payload(node_name: str) -> dict | None:
     for prefix, phase in TRANSITION_PREFIXES:
         if not node_name.startswith(prefix):
@@ -221,11 +236,5 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
             elif raw_type == "tool":
                 yield sse_event(
                     "tool_result",
-                    {
-                        "agent": node_name,
-                        "node": node_name,
-                        "tool": getattr(message, "name", None),
-                        "tool_call_id": getattr(message, "tool_call_id", None),
-                        "content": extract_text_from_content(getattr(message, "content", "")),
-                    },
+                    _tool_result_payload(message, node_name),
                 )

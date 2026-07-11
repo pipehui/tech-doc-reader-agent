@@ -77,8 +77,18 @@ describe("inspector model", () => {
       phase: "leave"
     }))).toBe("agent_transition transition-leave");
     expect(laneMarkerClass(event("tool_result", "2026-07-12", {
-      content: "Traceback: failed"
+      content: "failure without diagnostic keywords",
+      status: "error",
+      error: "failure without diagnostic keywords"
     }))).toBe("tool_result tool_result_error");
+    expect(eventSummary(event("tool_result", "2026-07-12", {
+      tool: "search",
+      status: "error"
+    }))).toBe("search error");
+    expect(laneMarkerClass(event("tool_result", "2026-07-12", {
+      content: "Traceback documentation",
+      status: "success"
+    }))).toBe("tool_result");
   });
 
   it("builds a tenant-scoped deterministic trace export", () => {

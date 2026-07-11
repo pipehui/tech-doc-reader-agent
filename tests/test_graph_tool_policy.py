@@ -34,6 +34,7 @@ def test_repeated_tool_policy_blocks_third_identical_call():
 
     assert blocked is not None
     assert blocked["messages"][0].tool_call_id == "call-3"
+    assert blocked["messages"][0].status == "error"
     assert "Blocked repeated identical tool call" in blocked["messages"][0].content
 
 
@@ -66,6 +67,7 @@ def test_parser_budget_blocks_call_after_configured_total():
 
     assert blocked is not None
     assert blocked["messages"][0].tool_call_id == "call-3"
+    assert blocked["messages"][0].status == "error"
     assert "parser retrieval budget overflow" in blocked["messages"][0].content
 
 

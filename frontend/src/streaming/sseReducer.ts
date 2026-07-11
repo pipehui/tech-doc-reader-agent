@@ -217,7 +217,7 @@ export function reduceSseEvent(
         tool: typeof data.tool === "string" ? data.tool : existing?.tool || "tool",
         args: existing?.args || {},
         result: content,
-        status: inferToolStatus(content),
+        status: data.status === "error" ? "error" : "done",
         createdAt: existing?.createdAt || options.now,
         updatedAt: options.now
       };
@@ -266,11 +266,6 @@ export function reduceSseEvent(
     default:
       return assertNever(envelope);
   }
-}
-
-
-export function inferToolStatus(content: string): ToolCall["status"] {
-  return /error|exception|traceback/i.test(content) ? "error" : "done";
 }
 
 

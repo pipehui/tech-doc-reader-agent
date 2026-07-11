@@ -55,6 +55,7 @@ def _rejection_tool_message(snapshot: StateSnapshot, feedback: str) -> ToolMessa
     feedback = feedback or "用户未提供原因"
     return ToolMessage(
         tool_call_id=tool_call_id,
+        status="error",
         content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
     )
 

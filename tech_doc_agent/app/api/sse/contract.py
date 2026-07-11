@@ -18,3 +18,6 @@ SseEventName = Literal[
 ]
 
 SSE_EVENT_NAMES: frozenset[str] = frozenset(get_args(SseEventName))
+
+ToolResultStatus = Literal["success", "error"]
+TOOL_RESULT_STATUSES: frozenset[str] = frozenset(get_args(ToolResultStatus))

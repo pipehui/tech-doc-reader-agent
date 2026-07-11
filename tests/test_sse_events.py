@@ -194,6 +194,43 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert structured_event.data["result"]["topic"] == "LangGraph StateGraph"
     assert structured_event.data["parsed"] is True
 
+    tool_result_event = next(event for event in events if event.event == "tool_result")
+    assert tool_result_event.data["status"] == "success"
+    assert tool_result_event.data["error"] is None
+
+
+def test_iter_update_events_emits_explicit_tool_error_status_and_message():
+    events = list(
+        iter_update_events(
+            {
+                "data": {
+                    "parser_assistant_safe_tools": {
+                        "messages": [
+                            ToolMessage(
+                                content="request rejected",
+                                name="read_docs",
+                                tool_call_id="call-error",
+                                status="error",
+                            )
+                        ]
+                    }
+                }
+            }
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].event == "tool_result"
+    assert events[0].data == {
+        "agent": "parser_assistant_safe_tools",
+        "node": "parser_assistant_safe_tools",
+        "tool": "read_docs",
+        "tool_call_id": "call-error",
+        "content": "request rejected",
+        "status": "error",
+        "error": "request rejected",
+    }
+
 
 def test_iter_update_events_accepts_langgraph_tuple_updates():
     events = list(

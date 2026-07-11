@@ -12,7 +12,7 @@ export interface SsePayloadMap {
   plan_update: SsePayload & { plan?: unknown; plan_index?: unknown; learning_target?: unknown };
   structured_result: SsePayload & { node?: unknown; result_key?: unknown; result?: unknown; parsed?: unknown };
   tool_call: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; args?: unknown; tool_call_id?: unknown };
-  tool_result: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; content?: unknown; tool_call_id?: unknown };
+  tool_result: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; content?: unknown; tool_call_id?: unknown; status?: unknown; error?: unknown };
   guardrail_blocked: SsePayload & { message?: unknown; findings?: unknown };
   interrupt_required: SsePayload & { pending?: unknown; session_id?: unknown };
   no_pending_interrupt: SsePayload & { session_id?: unknown };
