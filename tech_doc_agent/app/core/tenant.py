@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.core.observability import get_trace_context
 
 
@@ -18,12 +19,16 @@ class TenantContext:
     user_id: str = DEFAULT_USER_ID
     namespace: str = DEFAULT_NAMESPACE
 
+    def __post_init__(self) -> None:
+        _parse_tenant_value(self.user_id, DEFAULT_USER_ID, "user_id")
+        _parse_tenant_value(self.namespace, DEFAULT_NAMESPACE, "namespace")
+
     @property
     def thread_prefix(self) -> str:
         return f"{self.user_id}:{self.namespace}"
 
 
-def normalize_tenant_value(value: Any, default: str) -> str:
+def _normalize_tenant_value(value: Any, default: str) -> str:
     if value is None:
         return default
 
@@ -34,7 +39,30 @@ def normalize_tenant_value(value: Any, default: str) -> str:
     return text if _TENANT_ID_RE.fullmatch(text) else default
 
 
-def tenant_from_values(
+def _parse_tenant_value(value: Any, default: str, field: str) -> str:
+    if value is None:
+        return default
+    if not isinstance(value, str) or _TENANT_ID_RE.fullmatch(value) is None:
+        raise ValidationError(
+            "The tenant identifier is invalid.",
+            code="invalid_tenant",
+            dependency="tenant_context",
+            cause_type=f"InvalidTenant{field.title().replace('_', '')}",
+        )
+    return value
+
+
+def normalize_tenant(
+    user_id: Any = None,
+    namespace: Any = None,
+) -> TenantContext:
+    return TenantContext(
+        user_id=_normalize_tenant_value(user_id, DEFAULT_USER_ID),
+        namespace=_normalize_tenant_value(namespace, DEFAULT_NAMESPACE),
+    )
+
+
+def parse_tenant(
     user_id: Any = None,
     namespace: Any = None,
     *,
@@ -42,12 +70,18 @@ def tenant_from_values(
 ) -> TenantContext:
     if prefer_context:
         context = get_trace_context()
-        user_id = context.get("user_id") or user_id
-        namespace = context.get("namespace") or namespace
+        if context.get("user_id") is not None:
+            user_id = context["user_id"]
+        if context.get("namespace") is not None:
+            namespace = context["namespace"]
 
     return TenantContext(
-        user_id=normalize_tenant_value(user_id, DEFAULT_USER_ID),
-        namespace=normalize_tenant_value(namespace, DEFAULT_NAMESPACE),
+        user_id=_parse_tenant_value(user_id, DEFAULT_USER_ID, "user_id"),
+        namespace=_parse_tenant_value(
+            namespace,
+            DEFAULT_NAMESPACE,
+            "namespace",
+        ),
     )
 
 
@@ -56,7 +90,7 @@ def current_tenant(
     fallback_user_id: Any = None,
     fallback_namespace: Any = None,
 ) -> TenantContext:
-    return tenant_from_values(
+    return parse_tenant(
         fallback_user_id,
         fallback_namespace,
         prefer_context=True,
@@ -79,10 +113,18 @@ def tenant_from_config(config: Any) -> TenantContext:
             metadata = raw_metadata
 
     context = get_trace_context()
-    user_id = metadata.get("user_id") or context.get("user_id")
-    namespace = metadata.get("namespace") or context.get("namespace")
+    user_id = (
+        metadata.get("user_id")
+        if metadata.get("user_id") is not None
+        else context.get("user_id")
+    )
+    namespace = (
+        metadata.get("namespace")
+        if metadata.get("namespace") is not None
+        else context.get("namespace")
+    )
 
-    return tenant_from_values(user_id, namespace)
+    return parse_tenant(user_id, namespace)
 
 
 def session_id_from_config(config: Any) -> str | None:

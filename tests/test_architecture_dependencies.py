@@ -141,6 +141,16 @@ def test_global_app_resource_locator_symbols_are_removed():
     assert violations == []
 
 
+def test_ambiguous_tenant_fallback_api_is_removed():
+    violations = []
+    for path in sorted(APP_DIR.rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "tenant_from_values" in source:
+            violations.append(str(path.relative_to(APP_DIR)))
+
+    assert violations == []
+
+
 def test_retrieval_metadata_helpers_follow_one_way_dependency_direction():
     package = "tech_doc_agent.app.services.retrieval"
     assert _dependency_violations(

@@ -12,7 +12,11 @@ from typing import Any
 
 from tech_doc_agent.app.application.learning_state import LearningStateUnitOfWork
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.core.tenant import (
+    TenantContext,
+    normalize_tenant,
+    parse_tenant,
+)
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
     LearningStateSnapshotRepository,
 )
@@ -57,7 +61,7 @@ class LearningStore:
         tenant: TenantContext | None = None,
         reviewtimes: int = 1,
     ) -> dict[str, Any]:
-        tenant = tenant or tenant_from_values()
+        tenant = tenant or parse_tenant()
         return {
             "knowledge": knowledge,
             "timestamp": timestamp,
@@ -76,8 +80,8 @@ class LearningStore:
         *,
         fallback_tenant: TenantContext | None = None,
     ) -> dict[str, Any]:
-        fallback_tenant = fallback_tenant or tenant_from_values()
-        tenant = tenant_from_values(
+        fallback_tenant = fallback_tenant or normalize_tenant()
+        tenant = normalize_tenant(
             record.get("user_id") or fallback_tenant.user_id,
             record.get("namespace") or fallback_tenant.namespace,
         )
@@ -102,7 +106,7 @@ class LearningStore:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> list[dict[str, Any]]:
-        tenant = tenant_from_values(user_id, namespace)
+        tenant = parse_tenant(user_id, namespace)
         result = []
         for record in self.records:
             if not self._record_matches_tenant(record, tenant):
@@ -116,7 +120,7 @@ class LearningStore:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> list[dict[str, Any]]:
-        tenant = tenant_from_values(user_id, namespace)
+        tenant = parse_tenant(user_id, namespace)
         return [
             self._normalize_record(record, fallback_tenant=tenant)
             for record in self.records
@@ -172,7 +176,7 @@ class LearningStore:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> str:
-        tenant = tenant_from_values(user_id, namespace)
+        tenant = parse_tenant(user_id, namespace)
         records, message = self.prepare_upsert_record(
             self.records,
             knowledge=knowledge,

@@ -2,6 +2,7 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from tech_doc_agent.app.api.routes.learning import router
 from tech_doc_agent.app.api.routes.learning import _needs_review
@@ -108,6 +109,7 @@ def test_learning_routes_filter_by_tenant_query_params():
     response = TestClient(app).get(
         "/learning/overview",
         params={"user_id": "user-a", "namespace": "tenant-docs"},
+        headers={"x-user-id": "../ignored-header"},
     )
 
     assert response.status_code == 200
@@ -162,3 +164,33 @@ def test_learning_profile_route_resolves_tenant():
     assert payload["user_id"] == "user-a"
     assert payload["namespace"] == "tenant-docs"
     assert payload["known_topics"] == ["StateGraph"]
+
+
+@pytest.mark.parametrize(
+    ("params", "headers"),
+    [
+        ({"user_id": "../invalid"}, {}),
+        ({"namespace": "docs/private"}, {}),
+        ({"user_id": ""}, {"x-user-id": "valid-header"}),
+        ({}, {"x-user-id": "../invalid"}),
+        ({}, {"x-namespace": "docs/private"}),
+    ],
+)
+def test_learning_routes_reject_invalid_query_or_header_tenant(
+    params,
+    headers,
+):
+    app = FastAPI()
+    app.include_router(router)
+
+    response = TestClient(app).get(
+        "/learning/overview",
+        params=params,
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "invalid_tenant",
+        "message": "The tenant identifier is invalid.",
+    }

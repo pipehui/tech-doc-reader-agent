@@ -1,3 +1,6 @@
+import pytest
+
+from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
 
@@ -69,3 +72,25 @@ def test_learning_store_backfills_default_tenant_for_old_records(tmp_path):
 
     assert store.records[0]["reviewtimes"] == 1
     assert store.records[0]["score"] == 0.9
+
+
+def test_learning_store_only_normalizes_invalid_tenant_in_legacy_records(tmp_path):
+    store = LearningStore(settings=Settings(DATA_PATH=str(tmp_path)))
+    store.records = [
+        {
+            "knowledge": "Legacy Invalid Tenant",
+            "timestamp": "2026-04-28T00:00:00Z",
+            "score": 0.7,
+            "reviewtimes": 1,
+            "user_id": "../legacy-user",
+            "namespace": "docs/private",
+        }
+    ]
+
+    records = store.read_overview()
+
+    assert records[0]["user_id"] == "default"
+    assert records[0]["namespace"] == "tech_docs"
+
+    with pytest.raises(ValidationError):
+        store.read_overview(user_id="../request-user")

@@ -10,6 +10,7 @@ from tech_doc_agent.app.api.schemas import (
     HistoryViewResponse,
     SessionStateResponse,
 )
+from tech_doc_agent.app.api.tenant import resolve_request_tenant
 from tech_doc_agent.app.api.sse import (
     aiter_with_trace_context,
     astream_parts_as_sse,
@@ -26,7 +27,6 @@ from tech_doc_agent.app.core.observability import (
     new_trace_id,
     trace_context,
 )
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
 
@@ -49,17 +49,6 @@ def get_runtime(request: Request) -> ChatRuntime:
 
 def resolve_trace_id(body_trace_id: str | None, request: Request) -> str:
     return body_trace_id or request.headers.get("x-trace-id") or new_trace_id()
-
-
-def resolve_tenant(
-    request: Request,
-    user_id: str | None = None,
-    namespace: str | None = None,
-) -> TenantContext:
-    return tenant_from_values(
-        user_id or request.headers.get("x-user-id"),
-        namespace or request.headers.get("x-namespace"),
-    )
 
 
 def _risk_payload(risk: InputRisk) -> dict:
@@ -327,7 +316,7 @@ async def astream_approval_events(
 async def chat(body: ChatRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
-    tenant = resolve_tenant(request, body.user_id, body.namespace)
+    tenant = resolve_request_tenant(request, body.user_id, body.namespace)
     with trace_context(
         trace_id=trace_id,
         session_id=body.session_id,
@@ -389,7 +378,7 @@ async def chat(body: ChatRequest, request: Request):
 async def approve(body: ApproveRequest, request: Request):
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
-    tenant = resolve_tenant(request, body.user_id, body.namespace)
+    tenant = resolve_request_tenant(request, body.user_id, body.namespace)
     if body.feedback:
         with trace_context(
             trace_id=trace_id,
@@ -435,7 +424,7 @@ def get_history(
     namespace: str | None = None,
 ):
     runtime = get_runtime(request)
-    tenant = resolve_tenant(request, user_id, namespace)
+    tenant = resolve_request_tenant(request, user_id, namespace)
     history = runtime.get_history_view(
         session_id,
         include_tools=include_tools,
@@ -453,7 +442,7 @@ def get_session_state(
     namespace: str | None = None,
 ):
     runtime = get_runtime(request)
-    tenant = resolve_tenant(request, user_id, namespace)
+    tenant = resolve_request_tenant(request, user_id, namespace)
     state = runtime.get_session_state(
         session_id,
         user_id=tenant.user_id,

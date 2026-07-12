@@ -10,7 +10,7 @@ from langgraph.types import StateSnapshot
 from tech_doc_agent.app.core.errors import PermissionDenied
 from tech_doc_agent.app.core.langfuse_tracing import flush_langfuse
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
 from tech_doc_agent.app.runtime.approvals import ApprovalService
 from tech_doc_agent.app.runtime.sessions import GraphProvider, SessionConfigBuilder, SessionQueryService
 from tech_doc_agent.app.runtime.telemetry import OperationTrace, RuntimeOperationTelemetry
@@ -139,7 +139,7 @@ class GraphExecutionService:
         *,
         async_runtime: bool,
     ) -> Iterator[Any]:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         trace = self.telemetry.start_chat(
             session_id,
             tenant,
@@ -212,7 +212,7 @@ class GraphExecutionService:
         *,
         async_runtime: bool,
     ) -> Iterator[Any]:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         trace = self.telemetry.start_approval(
             session_id,
             tenant,

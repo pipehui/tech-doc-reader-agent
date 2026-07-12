@@ -4,7 +4,7 @@ from typing import Any
 from tech_doc_agent.app.core.langfuse_tracing import build_langfuse_trace, langfuse_metadata
 from tech_doc_agent.app.core.observability import get_trace_context
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.core.tenant import tenant_from_values, tenant_thread_id
+from tech_doc_agent.app.core.tenant import parse_tenant, tenant_thread_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +21,7 @@ class SessionConfigFactory:
         operation: str = "state",
         with_callbacks: bool = False,
     ) -> dict[str, Any]:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         context = get_trace_context()
         trace_id = context.get("trace_id")
         langfuse_trace = (

@@ -7,7 +7,11 @@ from uuid import uuid4
 
 from tech_doc_agent.app.application.learning_state import LearningStateUnitOfWork
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.core.tenant import (
+    TenantContext,
+    normalize_tenant,
+    parse_tenant,
+)
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
     LearningStateSnapshotRepository,
 )
@@ -61,8 +65,8 @@ class MemoryStore:
         *,
         fallback_tenant: TenantContext | None = None,
     ) -> dict[str, Any]:
-        fallback_tenant = fallback_tenant or tenant_from_values()
-        tenant = tenant_from_values(
+        fallback_tenant = fallback_tenant or normalize_tenant()
+        tenant = normalize_tenant(
             memory.get("user_id") or fallback_tenant.user_id,
             memory.get("namespace") or fallback_tenant.namespace,
         )
@@ -159,7 +163,7 @@ class MemoryStore:
         namespace: str | None = None,
         timestamp: str | None = None,
     ) -> dict[str, Any]:
-        tenant = tenant_from_values(user_id, namespace)
+        tenant = parse_tenant(user_id, namespace)
         memories, memory = self.prepare_upsert_memory(
             self.memories,
             kind=kind,
@@ -198,7 +202,7 @@ class MemoryStore:
         namespace: str | None = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        tenant = tenant_from_values(user_id, namespace)
+        tenant = parse_tenant(user_id, namespace)
         matched = []
 
         for memory in self.memories:

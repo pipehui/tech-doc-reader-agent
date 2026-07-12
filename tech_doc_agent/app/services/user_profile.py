@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import quote
 
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, TenantContext, tenant_from_values
+from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, TenantContext, parse_tenant
 from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
 
 
@@ -74,7 +74,7 @@ def get_user_profile_summary(
     *,
     settings: Settings | None = None,
 ) -> str:
-    tenant = tenant_from_values(user_id, namespace)
+    tenant = parse_tenant(user_id, namespace)
     profile = get_user_profile(tenant.user_id, tenant.namespace, settings=settings)
 
     summary = (
@@ -107,7 +107,7 @@ def get_user_context_summary(
     settings: Settings | None = None,
     memory_store: Any | None = None,
 ) -> str:
-    tenant = tenant_from_values(user_id, namespace)
+    tenant = parse_tenant(user_id, namespace)
     summary = get_user_profile_summary(
         user_id=tenant.user_id,
         namespace=tenant.namespace,
@@ -139,7 +139,7 @@ def get_user_profile(
     *,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
-    tenant = tenant_from_values(user_id, namespace)
+    tenant = parse_tenant(user_id, namespace)
     return _normalize_profile(
         {
             **DEFAULT_PROFILE,
@@ -164,7 +164,7 @@ def update_user_profile(
     evidence: str | None = None,
     settings: Settings | None = None,
 ) -> dict[str, Any]:
-    tenant = tenant_from_values(user_id, namespace)
+    tenant = parse_tenant(user_id, namespace)
     settings = settings or get_settings()
     profile = get_user_profile(tenant.user_id, tenant.namespace, settings=settings)
 

@@ -5,7 +5,7 @@ from langchain_core.runnables import RunnableConfig, RunnableLambda
 
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.structured_outputs import ResultKind, parse_structured_result
-from tech_doc_agent.app.core.tenant import tenant_from_values
+from tech_doc_agent.app.core.tenant import parse_tenant
 from tech_doc_agent.app.services.message_scope import build_scoped_state
 
 from .state import State
@@ -27,7 +27,7 @@ def assistant_node(assistant, scoped_messages: bool = False):
 def create_user_info_node(context_provider: Callable[..., str]) -> Callable:
     def user_info(state: State, config: RunnableConfig):
         metadata = (config or {}).get("metadata", {}) if isinstance(config, dict) else {}
-        tenant = tenant_from_values(
+        tenant = parse_tenant(
             state.get("user_id") or metadata.get("user_id"),
             state.get("namespace") or metadata.get("namespace"),
         )

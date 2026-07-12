@@ -4,7 +4,7 @@ from typing import Any, Protocol
 
 from langgraph.types import StateSnapshot
 
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
+from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
 from tech_doc_agent.app.runtime.serialization import MessageSerializer
 
 
@@ -77,7 +77,7 @@ class SessionQueryService:
         user_id: str | None,
         namespace: str | None,
     ) -> _SessionRead:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         pending_guardrail = self.pending_guardrail_checker(
             session_id,
             user_id=tenant.user_id,

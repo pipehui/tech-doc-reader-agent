@@ -6,7 +6,7 @@ from typing import Protocol
 from langchain_core.messages import AIMessage
 
 from tech_doc_agent.app.core.observability import log_event
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values, tenant_thread_id
+from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant, tenant_thread_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +72,7 @@ class ApprovalService:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> GuardrailApprovalRequest:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         request = GuardrailApprovalRequest(
             session_id=session_id,
             user_input=user_input,
@@ -100,7 +100,7 @@ class ApprovalService:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> GuardrailApprovalRequest | None:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         return self.repository.get(self._key(session_id, tenant))
 
     def has_pending_guardrail_approval(
@@ -124,7 +124,7 @@ class ApprovalService:
         user_id: str | None = None,
         namespace: str | None = None,
     ) -> GuardrailApprovalRequest | None:
-        tenant = tenant_from_values(user_id, namespace, prefer_context=True)
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
         return self.repository.pop(self._key(session_id, tenant))
 
     def rejection_part(

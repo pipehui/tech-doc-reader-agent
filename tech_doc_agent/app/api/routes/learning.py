@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
 from tech_doc_agent.app.api.schemas import (
     LearningMemoryResponse,
     LearningOverviewResponse,
@@ -10,6 +9,8 @@ from tech_doc_agent.app.api.schemas import (
     MemoryRecord,
     UserProfileResponse,
 )
+from tech_doc_agent.app.api.tenant import resolve_request_tenant
+from tech_doc_agent.app.core.tenant import TenantContext
 
 
 router = APIRouter()
@@ -39,17 +40,6 @@ def _needs_review(record: LearningRecord, now: datetime) -> bool:
     return now - parsed_timestamp > REVIEW_AGE
 
 
-def _resolve_tenant(
-    request: Request,
-    user_id: str | None = None,
-    namespace: str | None = None,
-) -> TenantContext:
-    return tenant_from_values(
-        user_id or request.headers.get("x-user-id"),
-        namespace or request.headers.get("x-namespace"),
-    )
-
-
 def _runtime_resources(request: Request):
     runtime = getattr(request.app.state, "runtime", None)
     resources = getattr(runtime, "resources", None)
@@ -77,7 +67,7 @@ def get_learning_overview(
     user_id: str | None = None,
     namespace: str | None = None,
 ):
-    tenant = _resolve_tenant(request, user_id, namespace)
+    tenant = resolve_request_tenant(request, user_id, namespace)
     records = _read_records(_runtime_resources(request), tenant)
     total = len(records)
     average_score = sum(record.score for record in records) / total if total else 0.0
@@ -99,7 +89,7 @@ def get_learning_records(
     user_id: str | None = None,
     namespace: str | None = None,
 ):
-    tenant = _resolve_tenant(request, user_id, namespace)
+    tenant = resolve_request_tenant(request, user_id, namespace)
     return _read_records(_runtime_resources(request), tenant)
 
 
@@ -111,7 +101,7 @@ def get_learning_memory(
     query: str = "",
     limit: int = 20,
 ):
-    tenant = _resolve_tenant(request, user_id, namespace)
+    tenant = resolve_request_tenant(request, user_id, namespace)
     resources = _runtime_resources(request)
     memories = [
         MemoryRecord(**memory)
@@ -136,7 +126,7 @@ def get_learning_profile(
     user_id: str | None = None,
     namespace: str | None = None,
 ):
-    tenant = _resolve_tenant(request, user_id, namespace)
+    tenant = resolve_request_tenant(request, user_id, namespace)
     resources = _runtime_resources(request)
     return UserProfileResponse(
         **resources.profile_service.get_profile(

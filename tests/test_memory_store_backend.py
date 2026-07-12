@@ -1,3 +1,6 @@
+import pytest
+
+from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
 
@@ -80,3 +83,25 @@ def test_memory_store_persists_to_json(tmp_path):
     assert reloaded.load()
 
     assert reloaded.read_by_query("Depends")[0]["topic"] == "FastAPI Depends"
+
+
+def test_memory_store_only_normalizes_invalid_tenant_in_legacy_memory(tmp_path):
+    store = MemoryStore(settings=Settings(DATA_PATH=str(tmp_path)))
+    store.memories = [
+        {
+            "id": "legacy-memory",
+            "kind": "learned",
+            "topic": "Legacy Invalid Tenant",
+            "content": "legacy",
+            "user_id": "../legacy-user",
+            "namespace": "docs/private",
+        }
+    ]
+
+    memories = store.read_by_query("Legacy")
+
+    assert memories[0]["user_id"] == "default"
+    assert memories[0]["namespace"] == "tech_docs"
+
+    with pytest.raises(ValidationError):
+        store.read_by_query("Legacy", namespace="docs/private")

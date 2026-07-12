@@ -41,6 +41,7 @@
 | 2026-07-12 | Phase 4：日志、Langfuse、eval/benchmark artifact 共享 redaction 与 keyed pseudonym | 当前出口完成，R6 replay 接入继续 | [2026-07-12-shared-redaction-policy.md](2026-07-12-shared-redaction-policy.md) |
 | 2026-07-12 | Phase 4：FAISS generation snapshot、原子 manifest 与内存候选发布 | 完成，multi-worker lock 与 generation GC 继续 | [2026-07-12-faiss-snapshot-generations.md](2026-07-12-faiss-snapshot-generations.md) |
 | 2026-07-12 | Phase 4：LearningState command/service/UoW、组合 generation 与 tool-call 幂等 | 完成，multi-worker 与 retention 继续 | [2026-07-12-learning-state-transaction.md](2026-07-12-learning-state-transaction.md) |
+| 2026-07-12 | Phase 4：Tenant strict parse、legacy normalize 与共享 HTTP resolver | 完成，真实 AuthN/AuthZ 仍属 D6 | [2026-07-12-strict-tenant-parsing.md](2026-07-12-strict-tenant-parsing.md) |
 
 ## 本地任务单策略
 

@@ -8,6 +8,7 @@
 
 - `/chat`、`/chat/approve`：请求体可传 `user_id`、`namespace`，也可用 `x-user-id`、`x-namespace` header。
 - `/sessions/{id}/history`、`/sessions/{id}/state`、`/learning/*`：可用 query param 或 `x-user-id`、`x-namespace` header。
+- body/query 显式值优先于 header；只有字段完全未提供时才使用默认值。显式空值、非法字符、路径分隔符或非字符串不会回退 default，而是返回 `422 invalid_tenant`。
 - LangGraph checkpointer 的实际 `thread_id` 为 `user_id:namespace:session_id`。
 - 会话状态和学习记录会按当前 `user_id + namespace` 隔离。
 - 文档库是共享知识库，不按租户隔离；所有租户都能读取同一批本地技术资料。
