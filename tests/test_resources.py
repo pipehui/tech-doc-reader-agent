@@ -1,6 +1,7 @@
 import json
 
 from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.resources import AppResources
@@ -104,6 +105,18 @@ class FakeLearningStore:
             if record.get("user_id") == user_id and record.get("namespace") == namespace
         ]
 
+    def query_records(self, query: str, *, user_id: str, namespace: str):
+        return [
+            LearningRecord.from_payload(record)
+            for record in self.read_by_query(query, user_id, namespace)
+        ]
+
+    def list_records(self, *, user_id: str, namespace: str):
+        return [
+            LearningRecord.from_payload(record)
+            for record in self.read_overview(user_id, namespace)
+        ]
+
     def upsert_record(
         self,
         knowledge: str,
@@ -161,6 +174,24 @@ class FakeMemoryStore:
             and memory.get("namespace") == namespace
             and (not query or query in memory.get("topic", "") or query in memory.get("content", ""))
         ][:limit]
+
+    def query_memories(
+        self,
+        query: str = "",
+        *,
+        user_id: str,
+        namespace: str,
+        limit: int = 5,
+    ):
+        return [
+            MemoryFragment.from_payload(memory)
+            for memory in self.read_by_query(
+                query,
+                user_id,
+                namespace,
+                limit,
+            )
+        ]
 
     def upsert_memory(
         self,
@@ -250,9 +281,30 @@ def test_learning_tools_use_bound_dependencies():
     memory_store = FakeMemoryStore()
     tools = _learning_tools(learning_store, memory_store)
 
-    assert json.loads(tools.read_learning_history.invoke({"query": "LangGraph"}))
-    assert json.loads(tools.read_all_learning_history.invoke({}))
-    assert json.loads(tools.read_user_memory.invoke({"query": "StateGraph"}))
+    history = json.loads(tools.read_learning_history.invoke({"query": "LangGraph"}))
+    overview = json.loads(tools.read_all_learning_history.invoke({}))
+    memories = json.loads(tools.read_user_memory.invoke({"query": "StateGraph"}))
+    assert set(history[0]) == {
+        "knowledge",
+        "timestamp",
+        "score",
+        "reviewtimes",
+        "user_id",
+        "namespace",
+    }
+    assert overview == history
+    assert set(memories[0]) == {
+        "id",
+        "user_id",
+        "namespace",
+        "kind",
+        "topic",
+        "content",
+        "confidence",
+        "source_session_id",
+        "created_at",
+        "updated_at",
+    }
     history_result = tools.upsert_learning_history.invoke(
         {
             "name": "upsert_learning_history",

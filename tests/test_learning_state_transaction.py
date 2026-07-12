@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.application.learning_state import (
     LearningStateService,
     LearningStateUnitOfWork,
@@ -66,12 +67,16 @@ def _manifest(repository: LearningStateSnapshotRepository) -> dict:
     return json.loads(repository.manifest_path.read_text(encoding="utf-8"))
 
 
+def _state_payload(repository: LearningStateSnapshotRepository) -> dict:
+    generation = _manifest(repository)["generation"]
+    state_path = repository.generations_dir / generation / "state.json"
+    return json.loads(state_path.read_text(encoding="utf-8"))
+
+
 def _reload(tmp_path: Path):
     stack = _stack(tmp_path)
-    _, unit_of_work, learning_store, memory_store, _ = stack
+    _, unit_of_work, _, _, _ = stack
     assert unit_of_work.load() is True
-    learning_store.normalize_records()
-    memory_store.normalize_memories()
     return stack
 
 
@@ -118,6 +123,82 @@ def test_learning_and_memory_commit_as_one_idempotent_generation(tmp_path):
     assert reloaded_learning.records[0]["reviewtimes"] == 2
     assert len(reloaded_memory.memories) == 1
     assert reloaded_uow.processed_command_count == 2
+
+
+def test_generation_keeps_json_schema_and_reloads_domain_models(tmp_path):
+    repository, _, _, _, service = _stack(tmp_path)
+
+    result = service.update(_command())
+    payload = _state_payload(repository)
+
+    assert payload["schema_version"] == 1
+    assert payload["records"] == [
+        {
+            "knowledge": "LangGraph Reducer",
+            "timestamp": "2026-07-12T10:00:00Z",
+            "score": 0.8,
+            "reviewtimes": 1,
+            "user_id": "user-a",
+            "namespace": "tenant-docs",
+        }
+    ]
+    assert payload["memories"][0] == {
+        "id": result.memory_id,
+        "user_id": "user-a",
+        "namespace": "tenant-docs",
+        "kind": "learned",
+        "topic": "LangGraph Reducer",
+        "content": _command().memory_content,
+        "confidence": 0.9,
+        "source_session_id": "session-1",
+        "created_at": payload["memories"][0]["created_at"],
+        "updated_at": payload["memories"][0]["updated_at"],
+    }
+
+    snapshot = repository.load()
+
+    assert snapshot is not None
+    assert isinstance(snapshot.records[0], LearningRecord)
+    assert isinstance(snapshot.memories[0], MemoryFragment)
+    assert snapshot.records[0].to_payload() == payload["records"][0]
+    assert snapshot.memories[0].to_payload() == payload["memories"][0]
+
+
+def test_compatibility_views_cannot_mutate_active_domain_state(tmp_path):
+    _, _, learning_store, memory_store, service = _stack(tmp_path)
+    service.update(_command())
+
+    record_rows = learning_store.records
+    memory_rows = memory_store.memories
+    record_rows[0]["score"] = 0.1
+    record_rows.clear()
+    memory_rows[0]["content"] = "mutated outside the unit of work"
+    memory_rows.clear()
+
+    assert len(learning_store.record_models) == 1
+    assert learning_store.record_models[0].score == 0.8
+    assert len(memory_store.memory_models) == 1
+    assert memory_store.memory_models[0].content == _command().memory_content
+
+
+def test_corrupt_reload_keeps_published_in_memory_snapshot(tmp_path):
+    repository, unit_of_work, learning_store, _, service = _stack(tmp_path)
+    service.update(_command(memory_content=None))
+    generation = unit_of_work.generation
+    records = unit_of_work.records
+    state_path = repository.generations_dir / str(generation) / "state.json"
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    payload["records"] = [42]
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError) as raised:
+        unit_of_work.load()
+
+    assert raised.value.code == "learning_state_corrupt"
+    assert raised.value.cause_type == "InvalidRecords"
+    assert unit_of_work.generation == generation
+    assert unit_of_work.records == records
+    assert learning_store.record_models == records
 
 
 def test_same_idempotency_key_rejects_different_payload(tmp_path):
@@ -269,8 +350,6 @@ def test_legacy_json_pair_migrates_on_first_transaction(tmp_path):
 
     repository, unit_of_work, learning_store, memory_store, service = _stack(tmp_path)
     assert unit_of_work.load() is True
-    learning_store.normalize_records()
-    memory_store.normalize_memories()
     assert unit_of_work.generation is None
     assert learning_store.records[0]["knowledge"] == "Legacy Topic"
 

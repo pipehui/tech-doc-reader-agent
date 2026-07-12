@@ -7,6 +7,7 @@ from tech_doc_agent.app.application.learning_state import (
     UpdateLearningStateCommand,
     UpdateLearningStateResult,
 )
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 
 
@@ -27,34 +28,34 @@ class WebSearchPort(Protocol):
 
 
 class LearningStorePort(Protocol):
-    def read_by_query(
+    def query_records(
         self,
         query: str,
         *,
         user_id: str,
         namespace: str,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[LearningRecord]: ...
 
-    def read_overview(self, *, user_id: str, namespace: str) -> list[dict[str, Any]]: ...
+    def list_records(self, *, user_id: str, namespace: str) -> list[LearningRecord]: ...
 
 
 class MemoryStorePort(Protocol):
-    def read_by_query(
+    def query_memories(
         self,
         query: str,
         *,
         user_id: str,
         namespace: str,
         limit: int,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[MemoryFragment]: ...
 
-    def read_recent(
+    def recent_memories(
         self,
         *,
         user_id: str,
         namespace: str,
         limit: int,
-    ) -> list[dict[str, Any]]: ...
+    ) -> list[MemoryFragment]: ...
 
 
 class LearningStateServicePort(Protocol):

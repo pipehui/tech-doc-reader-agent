@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 import re
@@ -9,6 +10,7 @@ from tech_doc_agent.app.application.learning_state import (
     LearningStateSnapshot,
     UpdateLearningStateResult,
 )
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.core.errors import ApplicationError, ValidationError, classify_error
 from tech_doc_agent.app.infrastructure.persistence.atomic_json import read_json, write_json_atomic
 from tech_doc_agent.app.infrastructure.persistence.generations import (
@@ -89,8 +91,8 @@ class LearningStateSnapshotRepository:
             memories = read_json(self.legacy_memories_path)
 
         snapshot = LearningStateSnapshot(
-            records=_rows(records, "InvalidLegacyRecords"),
-            memories=_rows(memories, "InvalidLegacyMemories"),
+            records=_learning_rows(records, "InvalidLegacyRecords"),
+            memories=_memory_rows(memories, "InvalidLegacyMemories"),
         )
         self._validate_snapshot(snapshot, expected_manifest=None)
         return snapshot
@@ -109,8 +111,8 @@ class LearningStateSnapshotRepository:
         ):
             raise _corrupt_learning_state("InvalidProcessedCommands")
         return LearningStateSnapshot(
-            records=_rows(value.get("records"), "InvalidRecords"),
-            memories=_rows(value.get("memories"), "InvalidMemories"),
+            records=_learning_rows(value.get("records"), "InvalidRecords"),
+            memories=_memory_rows(value.get("memories"), "InvalidMemories"),
             processed_commands={key: dict(command) for key, command in processed_commands.items()},
             generation=generation,
         )
@@ -121,8 +123,8 @@ class LearningStateSnapshotRepository:
     ) -> dict[str, Any]:
         return {
             "schema_version": LEARNING_STATE_SCHEMA_VERSION,
-            "records": snapshot.records,
-            "memories": snapshot.memories,
+            "records": [record.to_payload() for record in snapshot.records],
+            "memories": [memory.to_payload() for memory in snapshot.memories],
             "processed_commands": snapshot.processed_commands,
         }
 
@@ -163,9 +165,9 @@ class LearningStateSnapshotRepository:
         snapshot: LearningStateSnapshot,
         expected_manifest: dict[str, Any] | None,
     ) -> None:
-        if any(not isinstance(record, dict) for record in snapshot.records):
+        if any(not isinstance(record, LearningRecord) for record in snapshot.records):
             raise _corrupt_learning_state("InvalidRecords")
-        if any(not isinstance(memory, dict) for memory in snapshot.memories):
+        if any(not isinstance(memory, MemoryFragment) for memory in snapshot.memories):
             raise _corrupt_learning_state("InvalidMemories")
 
         for key, command in snapshot.processed_commands.items():
@@ -203,10 +205,22 @@ class LearningStateSnapshotRepository:
         draft.publish(manifest)
 
 
-def _rows(value: Any, cause_type: str) -> list[dict[str, Any]]:
-    if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
+def _learning_rows(value: Any, cause_type: str) -> list[LearningRecord]:
+    if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
         raise _corrupt_learning_state(cause_type)
-    return [dict(row) for row in value]
+    try:
+        return [LearningRecord.from_payload(row) for row in value]
+    except (TypeError, ValueError) as exc:
+        raise _corrupt_learning_state(cause_type) from exc
+
+
+def _memory_rows(value: Any, cause_type: str) -> list[MemoryFragment]:
+    if not isinstance(value, list) or any(not isinstance(row, Mapping) for row in value):
+        raise _corrupt_learning_state(cause_type)
+    try:
+        return [MemoryFragment.from_payload(row) for row in value]
+    except (TypeError, ValueError) as exc:
+        raise _corrupt_learning_state(cause_type) from exc
 
 
 def _is_non_negative_int(value: Any) -> bool:

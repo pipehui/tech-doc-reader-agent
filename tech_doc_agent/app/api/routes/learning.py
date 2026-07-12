@@ -53,8 +53,8 @@ def _runtime_resources(request: Request):
 
 def _read_records(resources, tenant: TenantContext) -> list[LearningRecord]:
     return [
-        LearningRecord(**record)
-        for record in resources.learning_store.read_overview(
+        LearningRecord(**record.to_payload())
+        for record in resources.learning_store.list_records(
             user_id=tenant.user_id,
             namespace=tenant.namespace,
         )
@@ -104,8 +104,8 @@ def get_learning_memory(
     tenant = resolve_request_tenant(request, user_id, namespace)
     resources = _runtime_resources(request)
     memories = [
-        MemoryRecord(**memory)
-        for memory in resources.memory_store.read_by_query(
+        MemoryRecord(**memory.to_payload())
+        for memory in resources.memory_store.query_memories(
             query,
             user_id=tenant.user_id,
             namespace=tenant.namespace,

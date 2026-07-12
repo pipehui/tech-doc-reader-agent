@@ -1,8 +1,10 @@
 import json
 from types import SimpleNamespace
 
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
 from tech_doc_agent.app.core.observability import trace_context
+from tech_doc_agent.app.core.tenant import TenantContext
 from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
@@ -56,6 +58,19 @@ class FakeLearningStore:
     def read_overview(self, *, user_id, namespace):
         return [{"knowledge": "overview", "user_id": user_id, "namespace": namespace}]
 
+    def query_records(self, query, *, user_id, namespace):
+        return [
+            LearningRecord.create(
+                knowledge=query,
+                timestamp="2026-07-12T00:00:00Z",
+                score=0.5,
+                tenant=TenantContext(user_id, namespace),
+            )
+        ]
+
+    def list_records(self, *, user_id, namespace):
+        return self.query_records("overview", user_id=user_id, namespace=namespace)
+
     def upsert_record(self, knowledge, timestamp, score, *, user_id, namespace):
         self.records.append(
             {
@@ -89,6 +104,28 @@ class FakeMemoryStore:
 
     def read_recent(self, *, user_id, namespace, limit):
         return self.read_by_query("recent", user_id=user_id, namespace=namespace, limit=limit)
+
+    def query_memories(self, query, *, user_id, namespace, limit):
+        return [
+            MemoryFragment.create(
+                kind="learned",
+                topic=query,
+                content=namespace,
+                confidence=0.7,
+                source_session_id=None,
+                tenant=TenantContext(user_id, namespace),
+                timestamp="2026-07-12T00:00:00Z",
+                memory_id="memory-query",
+            )
+        ][:limit]
+
+    def recent_memories(self, *, user_id, namespace, limit):
+        return self.query_memories(
+            "recent",
+            user_id=user_id,
+            namespace=namespace,
+            limit=limit,
+        )
 
     def upsert_memory(self, **values):
         memory = {"id": f"memory-{len(self.memories) + 1}", **values}

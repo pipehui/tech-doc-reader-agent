@@ -7,6 +7,10 @@ import pytest
 from tech_doc_agent.app.api.routes.learning import router
 from tech_doc_agent.app.api.routes.learning import _needs_review
 from tech_doc_agent.app.api.schemas import LearningRecord
+from tech_doc_agent.app.application.learning_models import (
+    LearningRecord as DomainLearningRecord,
+    MemoryFragment,
+)
 from tech_doc_agent.app.core.settings import Settings
 
 
@@ -40,7 +44,7 @@ def record_timestamp(value: str):
 
 def test_learning_routes_filter_by_tenant_query_params():
     class FakeStore:
-        def read_overview(self, user_id: str | None = None, namespace: str | None = None):
+        def list_records(self, user_id: str | None = None, namespace: str | None = None):
             records = [
                 {
                     "knowledge": "Tenant A",
@@ -60,13 +64,13 @@ def test_learning_routes_filter_by_tenant_query_params():
                 },
             ]
             return [
-                record
+                DomainLearningRecord.from_payload(record)
                 for record in records
                 if record["user_id"] == user_id and record["namespace"] == namespace
             ]
 
     class FakeMemoryStore:
-        def read_by_query(
+        def query_memories(
             self,
             query: str = "",
             user_id: str | None = None,
@@ -88,7 +92,7 @@ def test_learning_routes_filter_by_tenant_query_params():
                 }
             ]
             return [
-                memory
+                MemoryFragment.from_payload(memory)
                 for memory in memories
                 if memory["user_id"] == user_id
                 and memory["namespace"] == namespace
@@ -118,6 +122,14 @@ def test_learning_routes_filter_by_tenant_query_params():
     assert payload["namespace"] == "tenant-docs"
     assert payload["total"] == 1
     assert payload["records"][0]["knowledge"] == "Tenant A"
+    assert set(payload["records"][0]) == {
+        "knowledge",
+        "timestamp",
+        "score",
+        "reviewtimes",
+        "user_id",
+        "namespace",
+    }
 
     memory_response = TestClient(app).get(
         "/learning/memory",
@@ -129,6 +141,18 @@ def test_learning_routes_filter_by_tenant_query_params():
     assert memory_payload["user_id"] == "user-a"
     assert memory_payload["total"] == 1
     assert memory_payload["memories"][0]["kind"] == "stuck_point"
+    assert set(memory_payload["memories"][0]) == {
+        "id",
+        "user_id",
+        "namespace",
+        "kind",
+        "topic",
+        "content",
+        "confidence",
+        "source_session_id",
+        "created_at",
+        "updated_at",
+    }
 
 
 def test_learning_profile_route_resolves_tenant():

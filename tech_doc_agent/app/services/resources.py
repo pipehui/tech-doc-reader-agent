@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from tech_doc_agent.app.application.learning_models import LearningRecord
 from tech_doc_agent.app.application.learning_state import (
     LearningStateService,
     LearningStateUnitOfWork,
@@ -142,28 +143,27 @@ def _initialize_learning_state(
     memory_store = MemoryStore(settings=settings, unit_of_work=unit_of_work)
 
     if unit_of_work.load():
-        learning_store.normalize_records()
-        memory_store.normalize_memories()
         log_event(
             "resources.learning_store.loaded",
-            records=len(learning_store.records),
+            records=len(learning_store.record_models),
         )
         log_event(
             "resources.memory_store.loaded",
-            memories=len(memory_store.memories),
+            memories=len(memory_store.memory_models),
         )
     else:
-        learning_store.records = [dict(record) for record in SEED_LEARNING_HISTORY]
-        memory_store.memories = []
-        learning_store.normalize_records()
+        unit_of_work.replace_records(
+            [LearningRecord.from_payload(record) for record in SEED_LEARNING_HISTORY]
+        )
+        unit_of_work.replace_memories(())
         unit_of_work.save()
         log_event(
             "resources.learning_store.seeded",
-            records=len(learning_store.records),
+            records=len(learning_store.record_models),
         )
         log_event(
             "resources.memory_store.initialized",
-            memories=len(memory_store.memories),
+            memories=len(memory_store.memory_models),
         )
 
     service = LearningStateService(

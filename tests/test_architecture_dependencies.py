@@ -44,6 +44,23 @@ def test_learning_tools_delegate_writes_to_application_service():
     assert "memory_store.save()" not in source
 
 
+def test_learning_state_uses_domain_models_until_delivery_serialization():
+    state_source = (APPLICATION_DIR / "learning_state.py").read_text(encoding="utf-8")
+    tool_source = (TOOLS_DIR / "learning.py").read_text(encoding="utf-8")
+    api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
+
+    assert "records: list[LearningRecord]" in state_source
+    assert "memories: list[MemoryFragment]" in state_source
+    assert "learning_store.query_records(" in tool_source
+    assert "learning_store.list_records(" in tool_source
+    assert "memory_store.query_memories(" in tool_source
+    assert "learning_store.read_by_query(" not in tool_source
+    assert "learning_store.read_overview(" not in tool_source
+    assert "memory_store.read_by_query(" not in tool_source
+    assert "learning_store.list_records(" in api_source
+    assert "memory_store.query_memories(" in api_source
+
+
 def test_runtime_does_not_depend_on_api_or_legacy_services():
     assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
 

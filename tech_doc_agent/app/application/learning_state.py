@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -11,19 +12,20 @@ from typing import Any, Callable, Protocol
 
 from tech_doc_agent.app.core.errors import Conflict, ValidationError
 from tech_doc_agent.app.core.tenant import TenantContext
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 
 
 @dataclass(slots=True)
 class LearningStateSnapshot:
-    records: list[dict[str, Any]] = field(default_factory=list)
-    memories: list[dict[str, Any]] = field(default_factory=list)
+    records: list[LearningRecord] = field(default_factory=list)
+    memories: list[MemoryFragment] = field(default_factory=list)
     processed_commands: dict[str, dict[str, Any]] = field(default_factory=dict)
     generation: str | None = None
 
     def clone(self) -> LearningStateSnapshot:
         return LearningStateSnapshot(
-            records=deepcopy(self.records),
-            memories=deepcopy(self.memories),
+            records=list(self.records),
+            memories=list(self.memories),
             processed_commands=deepcopy(self.processed_commands),
             generation=self.generation,
         )
@@ -130,19 +132,19 @@ class LearningStateRepositoryPort(Protocol):
 class LearningRecordUpdaterPort(Protocol):
     def prepare_upsert_record(
         self,
-        records: list[dict[str, Any]],
+        records: Sequence[LearningRecord],
         *,
         knowledge: str,
         timestamp: str,
         score: float | None,
         tenant: TenantContext,
-    ) -> tuple[list[dict[str, Any]], str]: ...
+    ) -> tuple[list[LearningRecord], str]: ...
 
 
 class MemoryUpdaterPort(Protocol):
     def prepare_upsert_memory(
         self,
-        memories: list[dict[str, Any]],
+        memories: Sequence[MemoryFragment],
         *,
         kind: str,
         topic: str,
@@ -151,7 +153,7 @@ class MemoryUpdaterPort(Protocol):
         source_session_id: str,
         tenant: TenantContext,
         timestamp: str,
-    ) -> tuple[list[dict[str, Any]], dict[str, Any]]: ...
+    ) -> tuple[list[MemoryFragment], MemoryFragment]: ...
 
 
 class LearningStateUnitOfWork:
@@ -163,14 +165,14 @@ class LearningStateUnitOfWork:
         self._lock = threading.Lock()
 
     @property
-    def records(self) -> list[dict[str, Any]]:
+    def records(self) -> tuple[LearningRecord, ...]:
         with self._lock:
-            return self._snapshot.records
+            return tuple(self._snapshot.records)
 
     @property
-    def memories(self) -> list[dict[str, Any]]:
+    def memories(self) -> tuple[MemoryFragment, ...]:
         with self._lock:
-            return self._snapshot.memories
+            return tuple(self._snapshot.memories)
 
     @property
     def generation(self) -> str | None:
@@ -182,16 +184,16 @@ class LearningStateUnitOfWork:
         with self._lock:
             return len(self._snapshot.processed_commands)
 
-    def replace_records(self, records: list[dict[str, Any]]) -> None:
+    def replace_records(self, records: Sequence[LearningRecord]) -> None:
         with self._lock:
             candidate = self._snapshot.clone()
-            candidate.records = records
+            candidate.records = list(records)
             self._snapshot = candidate
 
-    def replace_memories(self, memories: list[dict[str, Any]]) -> None:
+    def replace_memories(self, memories: Sequence[MemoryFragment]) -> None:
         with self._lock:
             candidate = self._snapshot.clone()
-            candidate.memories = memories
+            candidate.memories = list(memories)
             self._snapshot = candidate
 
     def load(self) -> bool:
@@ -280,7 +282,7 @@ class LearningStateService:
                     tenant=command.tenant,
                     timestamp=datetime.now(UTC).isoformat(),
                 )
-                memory_id = str(memory["id"])
+                memory_id = memory.id
                 memory_message = f"Memory '{memory_id}' has been upserted."
 
             return UpdateLearningStateResult(

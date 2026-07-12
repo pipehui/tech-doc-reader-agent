@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolCallId, tool
 
+from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.application.learning_state import UpdateLearningStateCommand
 from tech_doc_agent.app.core.tenant import session_id_from_config, tenant_from_config
 from tech_doc_agent.app.tools.dependencies import ToolDependencies
@@ -19,6 +20,20 @@ class LearningTools:
     upsert_learning_state: BaseTool
 
 
+def _serialize_records(records: list[LearningRecord]) -> str:
+    return json.dumps(
+        [record.to_payload() for record in records],
+        ensure_ascii=False,
+    )
+
+
+def _serialize_memories(memories: list[MemoryFragment]) -> str:
+    return json.dumps(
+        [memory.to_payload() for memory in memories],
+        ensure_ascii=False,
+    )
+
+
 def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
     @tool
     def read_learning_history(query: str, config: RunnableConfig) -> str:
@@ -31,12 +46,12 @@ def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
         """
 
         tenant = tenant_from_config(config)
-        history = dependencies.learning_store.read_by_query(
+        history = dependencies.learning_store.query_records(
             query,
             user_id=tenant.user_id,
             namespace=tenant.namespace,
         )
-        return json.dumps(history, ensure_ascii=False)
+        return _serialize_records(history)
 
     @tool
     def read_all_learning_history(config: RunnableConfig) -> str:
@@ -47,11 +62,11 @@ def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
         """
 
         tenant = tenant_from_config(config)
-        history = dependencies.learning_store.read_overview(
+        history = dependencies.learning_store.list_records(
             user_id=tenant.user_id,
             namespace=tenant.namespace,
         )
-        return json.dumps(history, ensure_ascii=False)
+        return _serialize_records(history)
 
     @tool
     def read_user_memory(config: RunnableConfig, query: str = "", limit: int = 5) -> str:
@@ -62,13 +77,13 @@ def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
         """
 
         tenant = tenant_from_config(config)
-        memories = dependencies.memory_store.read_by_query(
+        memories = dependencies.memory_store.query_memories(
             query,
             user_id=tenant.user_id,
             namespace=tenant.namespace,
             limit=limit,
         )
-        return json.dumps(memories, ensure_ascii=False)
+        return _serialize_memories(memories)
 
     @tool
     def upsert_learning_history(
