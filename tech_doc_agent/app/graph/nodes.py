@@ -6,7 +6,7 @@ from langchain_core.runnables import RunnableConfig, RunnableLambda
 from tech_doc_agent.app.core.errors import Conflict
 from tech_doc_agent.app.core.execution_budget import ExecutionBudgetExceeded
 from tech_doc_agent.app.core.observability import log_event
-from tech_doc_agent.app.core.structured_outputs import ResultKind, parse_structured_result
+from tech_doc_agent.app.core.structured_outputs import parse_structured_result
 from tech_doc_agent.app.core.tenant import parse_tenant
 from tech_doc_agent.app.services.message_scope import build_assistant_state
 
@@ -15,6 +15,7 @@ from .budgeting import WorkflowBudgetTracker
 from .context_metrics import ContextMetricsTracker
 from .messages import extract_last_message_text
 from .reflection import reflection_active_reset, reflection_request_reset
+from .specs import CompletionPolicy
 
 
 def _prepare_assistant_call(
@@ -290,10 +291,9 @@ def create_exit_node() -> Callable:
     return exit_node
 
 
-def create_finish_node(
-    result_key: str | None = None,
-    structured_kind: ResultKind | None = None,
-) -> Callable:
+def create_finish_node(completion: CompletionPolicy | None = None) -> Callable:
+    policy = completion or CompletionPolicy()
+
     def finish_node(state: State) -> dict:
         update = {
             "dialog_state": "pop",
@@ -301,19 +301,19 @@ def create_finish_node(
             **reflection_active_reset(),
         }
 
-        if result_key is not None:
+        if policy.result_key is not None:
             raw_text = extract_last_message_text(state)
-            if structured_kind is not None:
-                result = parse_structured_result(structured_kind, raw_text)
+            if policy.structured_kind is not None:
+                result = parse_structured_result(policy.structured_kind, raw_text)
                 log_event(
                     "assistant.structured_result",
-                    result_key=result_key,
-                    result_kind=structured_kind,
+                    result_key=policy.result_key,
+                    result_kind=policy.structured_kind,
                     parsed=result.get("parsed", False),
                 )
-                update[result_key] = result
+                update[policy.result_key] = result
             else:
-                update[result_key] = raw_text
+                update[policy.result_key] = raw_text
 
         return update
 

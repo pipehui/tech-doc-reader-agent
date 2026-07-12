@@ -110,10 +110,7 @@ def register_subagent(
     builder.add_edge(spec.leave_node, "primary_assistant")
     builder.add_node(
         spec.finish_node,
-        create_finish_node(
-            spec.completion.result_key,
-            structured_kind=spec.completion.structured_kind,
-        ),
+        create_finish_node(spec.completion),
     )
     builder.add_conditional_edges(spec.finish_node, route_next_step, NEXT_STEP_ROUTE_MAP)
 

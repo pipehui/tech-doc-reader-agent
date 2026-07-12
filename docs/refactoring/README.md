@@ -61,6 +61,7 @@
 | 2026-07-12 | Phase 4：Mypy check-untyped-defs 与 app/evals 全范围 CI gate | 136 个源文件全绿，strict 分项继续 | [2026-07-12-mypy-full-app-gate.md](2026-07-12-mypy-full-app-gate.md) |
 | 2026-07-12 | Phase 4：SSE 逐事件 Pydantic/TypeScript payload contract、golden parity 与异常策略 | 17 种 event 双端运行时校验完成，schema/codegen 后续评估 | [2026-07-12-sse-payload-contract.md](2026-07-12-sse-payload-contract.md) |
 | 2026-07-12 | Phase 4：FastAPI async runtime surface 与 CLI sync facade 分界 | route 同步重复编排删除，native async graph benchmark 后续独立执行 | [2026-07-12-fastapi-async-runtime-boundary.md](2026-07-12-fastapi-async-runtime-boundary.md) |
+| 2026-07-12 | Phase 4：Graph finish 行为契约与 CompletionPolicy 值对象收口 | 五个 Agent 终态更新锁定，B7 provider spike 继续 | [2026-07-12-graph-finish-contract.md](2026-07-12-graph-finish-contract.md) |
 
 ## 本地任务单策略
 

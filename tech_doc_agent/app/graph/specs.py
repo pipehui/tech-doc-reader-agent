@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from tech_doc_agent.app.core.structured_outputs import ResultKind
 from tech_doc_agent.app.core.execution_budget import ExecutionBudget
@@ -54,10 +54,30 @@ class ExecutionPolicy:
     reflection: ReflectionPolicy
 
 
+CompletionResultKey = Literal[
+    "parser_result",
+    "relation_result",
+    "examination_context",
+]
+
+
 @dataclass(frozen=True)
 class CompletionPolicy:
-    result_key: str | None = None
+    result_key: CompletionResultKey | None = None
     structured_kind: ResultKind | None = None
+
+    def __post_init__(self) -> None:
+        valid_combinations = {
+            (None, None),
+            ("parser_result", "parser"),
+            ("relation_result", "relation"),
+            ("examination_context", None),
+        }
+        if (self.result_key, self.structured_kind) not in valid_combinations:
+            raise ValueError(
+                "CompletionPolicy result_key and structured_kind must describe "
+                "one supported state result."
+            )
 
 
 @dataclass(frozen=True)

@@ -5,6 +5,7 @@ from tech_doc_agent.app.core.structured_outputs import (
     parse_relation_result,
 )
 from tech_doc_agent.app.graph.nodes import create_finish_node
+from tech_doc_agent.app.graph.specs import CompletionPolicy
 
 
 PARSER_TEXT = """
@@ -113,7 +114,9 @@ def test_parse_result_preserves_raw_text_when_sections_are_missing():
 
 
 def test_finish_node_stores_structured_parser_result():
-    finish = create_finish_node("parser_result", structured_kind="parser")
+    finish = create_finish_node(
+        CompletionPolicy(result_key="parser_result", structured_kind="parser")
+    )
     state = {
         "messages": [AIMessage(content=PARSER_TEXT, name="parser")],
         "dialog_state": ["parser"],
