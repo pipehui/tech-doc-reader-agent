@@ -3,6 +3,7 @@ from pathlib import Path
 
 
 APP_DIR = Path(__file__).resolve().parents[1] / "tech_doc_agent" / "app"
+APPLICATION_DIR = APP_DIR / "application"
 CORE_DIR = APP_DIR / "core"
 RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
@@ -20,6 +21,27 @@ FORBIDDEN_RUNTIME_DEPENDENCIES = (
 
 def test_core_does_not_depend_on_api_or_services():
     assert _dependency_violations(CORE_DIR, FORBIDDEN_CORE_DEPENDENCIES) == []
+
+
+def test_application_use_cases_do_not_depend_on_adapters_or_delivery_layers():
+    assert _dependency_violations(
+        APPLICATION_DIR,
+        (
+            "tech_doc_agent.app.api",
+            "tech_doc_agent.app.infrastructure",
+            "tech_doc_agent.app.services",
+            "tech_doc_agent.app.tools",
+        ),
+    ) == []
+
+
+def test_learning_tools_delegate_writes_to_application_service():
+    source = (TOOLS_DIR / "learning.py").read_text(encoding="utf-8")
+    assert "learning_state_service.update(" in source
+    assert "learning_store.upsert_record(" not in source
+    assert "memory_store.upsert_memory(" not in source
+    assert "learning_store.save()" not in source
+    assert "memory_store.save()" not in source
 
 
 def test_runtime_does_not_depend_on_api_or_legacy_services():

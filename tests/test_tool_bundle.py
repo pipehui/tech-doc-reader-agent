@@ -1,6 +1,7 @@
 import json
 from types import SimpleNamespace
 
+from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
@@ -86,6 +87,26 @@ class FakeMemoryStore:
         self.save_calls += 1
 
 
+class FakeLearningStateService:
+    def __init__(self, learning_store, memory_store):
+        self.learning_store = learning_store
+        self.memory_store = memory_store
+
+    def update(self, command):
+        learning_message = self.learning_store.upsert_record(
+            command.knowledge,
+            command.timestamp,
+            command.score,
+            user_id=command.tenant.user_id,
+            namespace=command.tenant.namespace,
+        )
+        self.learning_store.save()
+        return UpdateLearningStateResult(
+            learning_message,
+            "No memory fragment written.",
+        )
+
+
 class FakeWebSearch:
     def __init__(self, label):
         self.label = label
@@ -103,11 +124,17 @@ class FakeProfileService:
 
 
 def _dependencies(tmp_path, label):
+    learning_store = FakeLearningStore()
+    memory_store = FakeMemoryStore()
     return ToolDependencies(
         document_store=FakeDocumentStore(),
         document_retriever=FakeRetriever(label),
-        learning_store=FakeLearningStore(),
-        memory_store=FakeMemoryStore(),
+        learning_store=learning_store,
+        memory_store=memory_store,
+        learning_state_service=FakeLearningStateService(
+            learning_store,
+            memory_store,
+        ),
         profile_service=FakeProfileService(),
         web_search=FakeWebSearch(label),
     )
@@ -178,11 +205,21 @@ def test_learning_tools_use_runnable_config_tenant_without_global_resources(tmp_
     with trace_context(user_id="context-user", namespace="context-ns"):
         tools.upsert_learning_history.invoke(
             {
-                "knowledge": "LangGraph",
-                "timestamp": "2026-07-11T00:00:00Z",
-                "score": 0.8,
+                "name": "upsert_learning_history",
+                "id": "call-learning",
+                "type": "tool_call",
+                "args": {
+                    "knowledge": "LangGraph",
+                    "timestamp": "2026-07-11T00:00:00Z",
+                    "score": 0.8,
+                },
             },
-            config=config,
+            config={
+                "metadata": {
+                    **config["metadata"],
+                    "session_id": "session-learning",
+                }
+            },
         )
 
     assert dependencies.learning_store.records == [
@@ -203,6 +240,7 @@ def test_tool_dependencies_can_be_adapted_from_resource_container(tmp_path):
         hybrid_retriever=dependencies.document_retriever,
         learning_store=dependencies.learning_store,
         memory_store=dependencies.memory_store,
+        learning_state_service=dependencies.learning_state_service,
         profile_service=dependencies.profile_service,
         web_search_backend=dependencies.web_search,
     )

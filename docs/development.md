@@ -161,10 +161,11 @@ tests/
 运行时数据默认位于：
 
 - `tech_doc_agent/data/faiss_store`
-- `tech_doc_agent/data/learning_store`
-- `tech_doc_agent/data/memory_store`
+- `tech_doc_agent/data/learning_state`（learning records、memories 与幂等 outcome 的 generation snapshot）
 - `tech_doc_agent/data/user_profiles`
 - `tech_doc_agent/data/web_search`
 - `tech_doc_agent/data/redis`
 
 这些目录通常不应提交到 Git。
+
+旧版 `learning_store/records.json` 和 `memory_store/memories.json` 仍作为只读兼容输入；第一次 learning-state 保存会发布新 generation。不要直接编辑 `learning_state/generations/*/state.json`，也不要单独删除 `current.json`。

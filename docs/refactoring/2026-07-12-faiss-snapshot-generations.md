@@ -29,7 +29,7 @@ faiss_store/
 3. 用共享 `write_json_atomic` 写 documents 和 chunk metadata。
 4. 从磁盘重新读取刚写出的三件套并执行一致性校验。
 5. 只有全部成功，才用 `os.replace` 原子发布 `current.json`。
-6. 发布前失败会尽力删除不可达 generation；即使进程直接退出留下 orphan，loader 也只读取 manifest 指向的 generation。
+6. manifest 发布调用开始前的失败会尽力删除不可达 generation；一旦原子发布开始，为避免中断窗口误删 current，可能保留 orphan。loader 始终只读取 manifest 指向的 generation。
 
 Manifest 带 `schema_version`、generation、创建时间、dimension，以及 vector/document/chunk 三种 count。generation 只接受 32 位小写十六进制 ID，不能通过 manifest 构造目录穿越路径。
 
@@ -84,7 +84,7 @@ Manifest 带 `schema_version`、generation、创建时间、dimension，以及 v
 
 每次成功发布后立即清理旧 generation 看似节省空间，但两个没有 process lock 的 writer 可能交错发布；一个 writer 的清理动作可能删除另一个 writer 刚设为 current 的目录。
 
-处理：当前只删除本次已知发布失败且不可达的 generation，不自动删除成功历史。待 process lock 或明确 single-writer 后，再实现 retention/GC。磁盘增长风险已加入本地 TODO，而不是用不安全清理掩盖。
+处理：当前只在 manifest 发布尚未开始时删除本次已知不可达 generation；发布开始后的歧义 generation 和成功历史均不自动删除。待 process lock 或明确 single-writer 后，再实现 retention/GC。磁盘增长风险已加入本地 TODO，而不是用不安全清理掩盖。
 
 ## 测试与门禁
 

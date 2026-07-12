@@ -14,6 +14,7 @@ def test_user_profile_tools_use_current_tenant(tmp_path):
             document_retriever=None,
             learning_store=None,
             memory_store=None,
+            learning_state_service=None,
             profile_service=UserProfileService(settings),
             web_search=None,
         )

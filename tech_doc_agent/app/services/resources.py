@@ -1,10 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
+from tech_doc_agent.app.application.learning_state import (
+    LearningStateService,
+    LearningStateUnitOfWork,
+)
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
+from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
+    LearningStateSnapshotRepository,
+)
 from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
@@ -54,6 +62,7 @@ class AppResources:
     hybrid_retriever: HybridRetriever
     learning_store: LearningStore
     memory_store: MemoryStore
+    learning_state_service: LearningStateService
     profile_service: UserProfileService
     web_search_backend: WebSearchBackend
 
@@ -61,14 +70,14 @@ class AppResources:
     def create(cls, settings: Settings | None = None) -> AppResources:
         settings = settings or get_settings()
         faiss_store = _initialize_faiss_store(settings)
-        learning_store = _initialize_learning_store(settings)
-        memory_store = _initialize_memory_store(settings)
+        learning_store, memory_store, learning_state_service = _initialize_learning_state(settings)
         return cls(
             settings=settings,
             faiss_store=faiss_store,
             hybrid_retriever=HybridRetriever(faiss_store, settings=settings),
             learning_store=learning_store,
             memory_store=memory_store,
+            learning_state_service=learning_state_service,
             profile_service=UserProfileService(settings, memory_store),
             web_search_backend=WebSearchBackend(settings=settings),
         )
@@ -124,24 +133,42 @@ def _initialize_faiss_store(settings: Settings) -> FaissStore:
     return store
 
 
-def _initialize_learning_store(settings: Settings) -> LearningStore:
-    store = LearningStore(settings=settings)
-    if store.load():
-        log_event("resources.learning_store.loaded", records=len(store.records))
-        return store
+def _initialize_learning_state(
+    settings: Settings,
+) -> tuple[LearningStore, MemoryStore, LearningStateService]:
+    repository = LearningStateSnapshotRepository(Path(settings.DATA_PATH))
+    unit_of_work = LearningStateUnitOfWork(repository)
+    learning_store = LearningStore(settings=settings, unit_of_work=unit_of_work)
+    memory_store = MemoryStore(settings=settings, unit_of_work=unit_of_work)
 
-    store.records = [dict(record) for record in SEED_LEARNING_HISTORY]
-    store.save()
-    log_event("resources.learning_store.seeded", records=len(store.records))
-    return store
+    if unit_of_work.load():
+        learning_store.normalize_records()
+        memory_store.normalize_memories()
+        log_event(
+            "resources.learning_store.loaded",
+            records=len(learning_store.records),
+        )
+        log_event(
+            "resources.memory_store.loaded",
+            memories=len(memory_store.memories),
+        )
+    else:
+        learning_store.records = [dict(record) for record in SEED_LEARNING_HISTORY]
+        memory_store.memories = []
+        learning_store.normalize_records()
+        unit_of_work.save()
+        log_event(
+            "resources.learning_store.seeded",
+            records=len(learning_store.records),
+        )
+        log_event(
+            "resources.memory_store.initialized",
+            memories=len(memory_store.memories),
+        )
 
-
-def _initialize_memory_store(settings: Settings) -> MemoryStore:
-    store = MemoryStore(settings=settings)
-    if store.load():
-        log_event("resources.memory_store.loaded", memories=len(store.memories))
-        return store
-
-    store.save()
-    log_event("resources.memory_store.initialized", memories=len(store.memories))
-    return store
+    service = LearningStateService(
+        unit_of_work,
+        learning_store,
+        memory_store,
+    )
+    return learning_store, memory_store, service

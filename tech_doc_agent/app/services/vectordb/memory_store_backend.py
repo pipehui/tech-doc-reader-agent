@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from tech_doc_agent.app.application.learning_state import LearningStateUnitOfWork
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
-from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
+from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
+    LearningStateSnapshotRepository,
+)
 from tech_doc_agent.app.services.vectordb.text_match import query_matches
 
 
@@ -20,24 +23,34 @@ def _utc_now() -> str:
 
 
 class MemoryStore:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        unit_of_work: LearningStateUnitOfWork | None = None,
+    ) -> None:
         settings = settings or get_settings()
-        self.store_dir = Path(settings.DATA_PATH) / "memory_store"
-        self.memories_path = self.store_dir / "memories.json"
-        self.memories: list[dict[str, Any]] = []
+        data_path = Path(settings.DATA_PATH)
+        self.store_dir = data_path / "learning_state"
+        self.unit_of_work = unit_of_work or LearningStateUnitOfWork(LearningStateSnapshotRepository(data_path))
+
+    @property
+    def memories(self) -> list[dict[str, Any]]:
+        return self.unit_of_work.memories
+
+    @memories.setter
+    def memories(self, value: list[dict[str, Any]]) -> None:
+        self.unit_of_work.replace_memories(value)
 
     def load(self) -> bool:
-        if not self.memories_path.exists():
+        if not self.unit_of_work.load():
             return False
-        loaded = read_json(self.memories_path)
-        self.memories = loaded if isinstance(loaded, list) else []
         self.normalize_memories()
         return True
 
     def save(self) -> bool:
         self.normalize_memories()
-        write_json_atomic(self.memories_path, self.memories)
-        return True
+        return self.unit_of_work.save()
 
     def normalize_memories(self) -> None:
         self.memories = [self._normalize_memory(memory) for memory in self.memories]
@@ -78,9 +91,61 @@ class MemoryStore:
             "updated_at": updated_at,
         }
 
-    def _matches_tenant(self, memory: dict[str, Any], tenant: TenantContext) -> bool:
+    def _matches_tenant(
+        self,
+        memory: dict[str, Any],
+        tenant: TenantContext,
+    ) -> bool:
         normalized = self._normalize_memory(memory)
         return normalized["user_id"] == tenant.user_id and normalized["namespace"] == tenant.namespace
+
+    def prepare_upsert_memory(
+        self,
+        memories: list[dict[str, Any]],
+        *,
+        kind: str,
+        topic: str,
+        content: str,
+        confidence: float | None,
+        source_session_id: str,
+        tenant: TenantContext,
+        timestamp: str,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        candidate = [self._normalize_memory(memory) for memory in memories]
+        incoming = self._normalize_memory(
+            {
+                "kind": kind,
+                "topic": topic,
+                "content": content,
+                "confidence": confidence if confidence is not None else 0.7,
+                "source_session_id": source_session_id,
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            },
+            fallback_tenant=tenant,
+        )
+
+        index = self._find_memory_index(candidate, incoming, tenant)
+        if index == -1:
+            candidate.append(incoming)
+            return candidate, incoming
+
+        existing = self._normalize_memory(
+            candidate[index],
+            fallback_tenant=tenant,
+        )
+        existing.update(
+            {
+                "kind": incoming["kind"],
+                "topic": incoming["topic"],
+                "content": incoming["content"],
+                "confidence": incoming["confidence"],
+                "source_session_id": incoming["source_session_id"] or existing.get("source_session_id"),
+                "updated_at": timestamp,
+            }
+        )
+        candidate[index] = existing
+        return candidate, existing
 
     def upsert_memory(
         self,
@@ -95,42 +160,30 @@ class MemoryStore:
         timestamp: str | None = None,
     ) -> dict[str, Any]:
         tenant = tenant_from_values(user_id, namespace)
-        now = timestamp or _utc_now()
-        incoming = self._normalize_memory(
-            {
-                "kind": kind,
-                "topic": topic,
-                "content": content,
-                "confidence": confidence if confidence is not None else 0.7,
-                "source_session_id": source_session_id,
-                "created_at": now,
-                "updated_at": now,
-            },
-            fallback_tenant=tenant,
+        memories, memory = self.prepare_upsert_memory(
+            self.memories,
+            kind=kind,
+            topic=topic,
+            content=content,
+            confidence=confidence,
+            source_session_id=source_session_id or "",
+            tenant=tenant,
+            timestamp=timestamp or _utc_now(),
         )
+        self.memories = memories
+        return memory
 
-        idx = self._find_memory_index(incoming, tenant)
-        if idx == -1:
-            self.memories.append(incoming)
-            return incoming
-
-        existing = self._normalize_memory(self.memories[idx], fallback_tenant=tenant)
-        existing.update(
-            {
-                "kind": incoming["kind"],
-                "topic": incoming["topic"],
-                "content": incoming["content"],
-                "confidence": incoming["confidence"],
-                "source_session_id": incoming["source_session_id"] or existing.get("source_session_id"),
-                "updated_at": now,
-            }
-        )
-        self.memories[idx] = existing
-        return existing
-
-    def _find_memory_index(self, incoming: dict[str, Any], tenant: TenantContext) -> int:
-        for index, memory in enumerate(self.memories):
-            normalized = self._normalize_memory(memory, fallback_tenant=tenant)
+    def _find_memory_index(
+        self,
+        memories: list[dict[str, Any]],
+        incoming: dict[str, Any],
+        tenant: TenantContext,
+    ) -> int:
+        for index, memory in enumerate(memories):
+            normalized = self._normalize_memory(
+                memory,
+                fallback_tenant=tenant,
+            )
             if normalized["user_id"] != tenant.user_id or normalized["namespace"] != tenant.namespace:
                 continue
             if normalized["kind"] == incoming["kind"] and normalized["topic"] == incoming["topic"]:
@@ -151,12 +204,24 @@ class MemoryStore:
         for memory in self.memories:
             if not self._matches_tenant(memory, tenant):
                 continue
-            normalized = self._normalize_memory(memory, fallback_tenant=tenant)
-            if not query_matches(query, normalized["kind"], normalized["topic"], normalized["content"]):
+            normalized = self._normalize_memory(
+                memory,
+                fallback_tenant=tenant,
+            )
+            if not query_matches(
+                query,
+                normalized["kind"],
+                normalized["topic"],
+                normalized["content"],
+            ):
                 continue
             matched.append(normalized)
 
-        return sorted(matched, key=lambda item: item["updated_at"], reverse=True)[: max(1, limit)]
+        return sorted(
+            matched,
+            key=lambda item: item["updated_at"],
+            reverse=True,
+        )[: max(1, limit)]
 
     def read_recent(
         self,
@@ -165,7 +230,12 @@ class MemoryStore:
         namespace: str | None = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
-        return self.read_by_query("", user_id=user_id, namespace=namespace, limit=limit)
+        return self.read_by_query(
+            "",
+            user_id=user_id,
+            namespace=namespace,
+            limit=limit,
+        )
 
 
 def _string_or_none(value: Any) -> str | None:

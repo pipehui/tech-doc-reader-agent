@@ -172,6 +172,7 @@ qdrant_storage
 .snow/
 faiss_store/
 learning_store/
+learning_state/
 web_search/
 redis/
 tech_doc_agent/data/

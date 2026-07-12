@@ -40,6 +40,7 @@
 | 2026-07-12 | Phase 4：统一错误分类、provider/repository 映射与安全 ToolMessage/SSE 边界 | 完成，R1 retry 与 R4 业务字段脱敏继续 | [2026-07-12-unified-error-model.md](2026-07-12-unified-error-model.md) |
 | 2026-07-12 | Phase 4：日志、Langfuse、eval/benchmark artifact 共享 redaction 与 keyed pseudonym | 当前出口完成，R6 replay 接入继续 | [2026-07-12-shared-redaction-policy.md](2026-07-12-shared-redaction-policy.md) |
 | 2026-07-12 | Phase 4：FAISS generation snapshot、原子 manifest 与内存候选发布 | 完成，multi-worker lock 与 generation GC 继续 | [2026-07-12-faiss-snapshot-generations.md](2026-07-12-faiss-snapshot-generations.md) |
+| 2026-07-12 | Phase 4：LearningState command/service/UoW、组合 generation 与 tool-call 幂等 | 完成，multi-worker 与 retention 继续 | [2026-07-12-learning-state-transaction.md](2026-07-12-learning-state-transaction.md) |
 
 ## 本地任务单策略
 

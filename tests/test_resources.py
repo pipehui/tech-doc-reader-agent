@@ -1,5 +1,6 @@
 import json
 
+from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.resources import AppResources
@@ -30,6 +31,11 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
     assert resources.hybrid_retriever.search("StateGraph")
     assert resources.learning_store.records
     assert resources.memory_store.memories == []
+    assert (
+        resources.learning_store.unit_of_work
+        is resources.memory_store.unit_of_work
+        is resources.learning_state_service.unit_of_work
+    )
     assert resources.profile_service.memory_store is resources.memory_store
     assert resources.web_search_backend.store_dir == tmp_path / "web_search"
 
@@ -187,12 +193,52 @@ class FakeMemoryStore:
         return True
 
 
+class FakeLearningStateService:
+    def __init__(self, learning_store, memory_store):
+        self.learning_store = learning_store
+        self.memory_store = memory_store
+
+    def update(self, command):
+        learning_message = self.learning_store.upsert_record(
+            command.knowledge,
+            command.timestamp,
+            command.score,
+            user_id=command.tenant.user_id,
+            namespace=command.tenant.namespace,
+        )
+        self.learning_store.save()
+        memory_message = "No memory fragment written."
+        memory_id = None
+        if command.memory_content and command.memory_content.strip():
+            memory = self.memory_store.upsert_memory(
+                kind=command.memory_kind or "learned",
+                topic=command.memory_topic or command.knowledge,
+                content=command.memory_content,
+                confidence=command.memory_confidence,
+                source_session_id=command.session_id,
+                user_id=command.tenant.user_id,
+                namespace=command.tenant.namespace,
+            )
+            self.memory_store.save()
+            memory_id = memory["id"]
+            memory_message = f"Memory '{memory_id}' has been upserted."
+        return UpdateLearningStateResult(
+            learning_message,
+            memory_message,
+            memory_id,
+        )
+
+
 def _learning_tools(learning_store, memory_store):
     dependencies = ToolDependencies(
         document_store=None,
         document_retriever=None,
         learning_store=learning_store,
         memory_store=memory_store,
+        learning_state_service=FakeLearningStateService(
+            learning_store,
+            memory_store,
+        ),
         profile_service=None,
         web_search=None,
     )
@@ -207,24 +253,38 @@ def test_learning_tools_use_bound_dependencies():
     assert json.loads(tools.read_learning_history.invoke({"query": "LangGraph"}))
     assert json.loads(tools.read_all_learning_history.invoke({}))
     assert json.loads(tools.read_user_memory.invoke({"query": "StateGraph"}))
-    assert tools.upsert_learning_history.invoke(
+    history_result = tools.upsert_learning_history.invoke(
         {
-            "knowledge": "FastAPI Depends",
-            "timestamp": "2026-04-28T00:00:00Z",
-            "score": 0.9,
-        }
-    ) == "ok"
-    assert "Memory" in tools.upsert_learning_state.invoke(
-        {
-            "knowledge": "LangGraph StateGraph",
-            "timestamp": "2026-04-28T00:00:00Z",
-            "score": 0.85,
-            "memory_kind": "stuck_point",
-            "memory_topic": "LangGraph StateGraph",
-            "memory_content": "用户需要继续区分 reducer 和覆盖更新。",
-            "memory_confidence": 0.8,
-        }
+            "name": "upsert_learning_history",
+            "id": "call-history",
+            "type": "tool_call",
+            "args": {
+                "knowledge": "FastAPI Depends",
+                "timestamp": "2026-04-28T00:00:00Z",
+                "score": 0.9,
+            },
+        },
+        config={"metadata": {"session_id": "session-default"}},
     )
+    assert history_result.content == "ok"
+    state_result = tools.upsert_learning_state.invoke(
+        {
+            "name": "upsert_learning_state",
+            "id": "call-state",
+            "type": "tool_call",
+            "args": {
+                "knowledge": "LangGraph StateGraph",
+                "timestamp": "2026-04-28T00:00:00Z",
+                "score": 0.85,
+                "memory_kind": "stuck_point",
+                "memory_topic": "LangGraph StateGraph",
+                "memory_content": "用户需要继续区分 reducer 和覆盖更新。",
+                "memory_confidence": 0.8,
+            },
+        },
+        config={"metadata": {"session_id": "session-default"}},
+    )
+    assert "Memory" in state_result.content
 
     assert learning_store.saved is True
     assert memory_store.saved is True
@@ -253,13 +313,20 @@ def test_learning_tools_use_trace_context_tenant():
     with trace_context(user_id="user-a", namespace="tenant-docs"):
         assert json.loads(tools.read_learning_history.invoke({"query": "Tenant"}))[0]["knowledge"] == "Tenant Only"
         assert json.loads(tools.read_all_learning_history.invoke({}))[0]["user_id"] == "user-a"
-        assert tools.upsert_learning_history.invoke(
+        result = tools.upsert_learning_history.invoke(
             {
-                "knowledge": "Tenant Upsert",
-                "timestamp": "2026-04-28T00:00:00Z",
-                "score": 0.9,
-            }
-        ) == "ok"
+                "name": "upsert_learning_history",
+                "id": "call-tenant",
+                "type": "tool_call",
+                "args": {
+                    "knowledge": "Tenant Upsert",
+                    "timestamp": "2026-04-28T00:00:00Z",
+                    "score": 0.9,
+                },
+            },
+            config={"metadata": {"session_id": "session-tenant"}},
+        )
+        assert result.content == "ok"
 
     assert learning_store.records[-1]["user_id"] == "user-a"
     assert learning_store.records[-1]["namespace"] == "tenant-docs"
@@ -277,11 +344,21 @@ def test_learning_tools_prefer_runnable_config_over_trace_context():
     with trace_context(user_id="ctx-user", namespace="ctx-ns"):
         tools.upsert_learning_history.invoke(
             {
-                "knowledge": "Config Wins",
-                "timestamp": "2026-04-28T00:00:00Z",
-                "score": 0.5,
+                "name": "upsert_learning_history",
+                "id": "call-config",
+                "type": "tool_call",
+                "args": {
+                    "knowledge": "Config Wins",
+                    "timestamp": "2026-04-28T00:00:00Z",
+                    "score": 0.5,
+                },
             },
-            config=config,
+            config={
+                "metadata": {
+                    **config["metadata"],
+                    "session_id": "session-config",
+                }
+            },
         )
 
     assert learning_store.records[-1]["user_id"] == "config-user"

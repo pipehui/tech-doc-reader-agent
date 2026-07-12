@@ -1,37 +1,54 @@
 """
 LearningStore backend:
-- 负责学习记录的本地持久化
-- 不暴露 @tool
-- tool 层在 learning_store.py
+- 负责学习记录的查询和领域归一化
+- 通过共享 LearningStateUnitOfWork 持久化，不暴露 @tool
+- tool schema 与写入用例位于 application/tools 层
 """
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
-from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.core.settings import get_settings
+from tech_doc_agent.app.application.learning_state import LearningStateUnitOfWork
+from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
-from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
+from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
+    LearningStateSnapshotRepository,
+)
 from tech_doc_agent.app.services.vectordb.text_match import query_matches
 
+
 class LearningStore:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        unit_of_work: LearningStateUnitOfWork | None = None,
+    ) -> None:
         settings = settings or get_settings()
-        self.store_dir = Path(settings.DATA_PATH) / "learning_store"
-        self.records_path = self.store_dir / "records.json"
-        self.records: list[dict[str, Any]] = []
+        data_path = Path(settings.DATA_PATH)
+        self.store_dir = data_path / "learning_state"
+        self.unit_of_work = unit_of_work or LearningStateUnitOfWork(LearningStateSnapshotRepository(data_path))
+
+    @property
+    def records(self) -> list[dict[str, Any]]:
+        return self.unit_of_work.records
+
+    @records.setter
+    def records(self, value: list[dict[str, Any]]) -> None:
+        self.unit_of_work.replace_records(value)
 
     def load(self) -> bool:
-        if not self.records_path.exists():
+        if not self.unit_of_work.load():
             return False
-        self.records = read_json(self.records_path)
         self.normalize_records()
         return True
-    
+
     def save(self) -> bool:
         self.normalize_records()
-        write_json_atomic(self.records_path, self.records)
-        return True
-    
+        return self.unit_of_work.save()
+
     def _make_record(
         self,
         knowledge: str,
@@ -49,7 +66,7 @@ class LearningStore:
             "user_id": tenant.user_id,
             "namespace": tenant.namespace,
         }
-    
+
     def normalize_records(self) -> None:
         self.records = [self._normalize_record(record) for record in self.records]
 
@@ -71,7 +88,11 @@ class LearningStore:
         normalized["namespace"] = tenant.namespace
         return normalized
 
-    def _record_matches_tenant(self, record: dict[str, Any], tenant: TenantContext) -> bool:
+    def _record_matches_tenant(
+        self,
+        record: dict[str, Any],
+        tenant: TenantContext,
+    ) -> bool:
         normalized = self._normalize_record(record)
         return normalized["user_id"] == tenant.user_id and normalized["namespace"] == tenant.namespace
 
@@ -82,14 +103,13 @@ class LearningStore:
         namespace: str | None = None,
     ) -> list[dict[str, Any]]:
         tenant = tenant_from_values(user_id, namespace)
-        res = []
+        result = []
         for record in self.records:
             if not self._record_matches_tenant(record, tenant):
                 continue
             if query_matches(query, record.get("knowledge", "")):
-                res.append(self._normalize_record(record, fallback_tenant=tenant))
-
-        return res
+                result.append(self._normalize_record(record, fallback_tenant=tenant))
+        return result
 
     def read_overview(
         self,
@@ -102,7 +122,48 @@ class LearningStore:
             for record in self.records
             if self._record_matches_tenant(record, tenant)
         ]
-    
+
+    def prepare_upsert_record(
+        self,
+        records: list[dict[str, Any]],
+        *,
+        knowledge: str,
+        timestamp: str,
+        score: float | None,
+        tenant: TenantContext,
+    ) -> tuple[list[dict[str, Any]], str]:
+        candidate = [self._normalize_record(record) for record in records]
+        index = next(
+            (
+                position
+                for position, record in enumerate(candidate)
+                if knowledge == record.get("knowledge") and self._record_matches_tenant(record, tenant)
+            ),
+            -1,
+        )
+        if index == -1:
+            candidate.append(self._make_record(knowledge, timestamp, score, tenant))
+            return (
+                candidate,
+                f"Learning record for '{knowledge}' has been added successfully.",
+            )
+
+        updated = self._normalize_record(
+            candidate[index],
+            fallback_tenant=tenant,
+        )
+        updated["timestamp"] = timestamp
+        if score is not None:
+            updated["score"] = score
+        updated["reviewtimes"] += 1
+        updated["user_id"] = tenant.user_id
+        updated["namespace"] = tenant.namespace
+        candidate[index] = updated
+        return (
+            candidate,
+            f"Learning record for '{knowledge}' has been updated successfully.",
+        )
+
     def upsert_record(
         self,
         knowledge: str,
@@ -112,21 +173,12 @@ class LearningStore:
         namespace: str | None = None,
     ) -> str:
         tenant = tenant_from_values(user_id, namespace)
-        idx = -1
-        for i, record in enumerate(self.records):
-            if knowledge == record["knowledge"] and self._record_matches_tenant(record, tenant):
-                idx = i
-                break
-        if idx == -1:
-            self.records.append(self._make_record(knowledge, timestamp, score, tenant))
-            return f"Learning record for '{knowledge}' has been added successfully."
-
-        updated = self._normalize_record(self.records[idx], fallback_tenant=tenant)
-        updated["timestamp"] = timestamp
-        if score is not None:
-            updated["score"] = score
-        updated["reviewtimes"] += 1
-        updated["user_id"] = tenant.user_id
-        updated["namespace"] = tenant.namespace
-        self.records[idx] = updated
-        return f"Learning record for '{knowledge}' has been updated successfully."
+        records, message = self.prepare_upsert_record(
+            self.records,
+            knowledge=knowledge,
+            timestamp=timestamp,
+            score=score,
+            tenant=tenant,
+        )
+        self.records = records
+        return message

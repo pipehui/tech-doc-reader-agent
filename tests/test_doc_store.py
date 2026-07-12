@@ -52,6 +52,7 @@ def _document_tools(store, retriever=None):
         document_retriever=retriever or HybridRetriever(store, settings=settings),
         learning_store=None,
         memory_store=None,
+        learning_state_service=None,
         profile_service=None,
         web_search=None,
     )

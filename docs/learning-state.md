@@ -4,8 +4,8 @@
 
 | Layer | Storage | Updated By | Purpose |
 |---|---|---|---|
-| 学习记录 | `tech_doc_agent/data/learning_store` | `summary` / `examination` / 用户显式记录请求，经审批写入 | 记录学过什么、最近学习时间、掌握度和复习次数 |
-| 学习轨迹 memory | `tech_doc_agent/data/memory_store` | `summary` 在有明确证据时，经审批写入 | 记录卡点、误解、已掌握点和复习提示，供后续相关问题检索 |
+| 学习记录 | `tech_doc_agent/data/learning_state` 组合快照中的 `records` | `summary` / `examination` / 用户显式记录请求，经审批写入 | 记录学过什么、最近学习时间、掌握度和复习次数 |
+| 学习轨迹 memory | 同一组合快照中的 `memories` | `summary` 在有明确证据时，经审批写入 | 记录卡点、误解、已掌握点和复习提示，供后续相关问题检索 |
 | 长期用户画像 | `tech_doc_agent/data/user_profiles` | 仅当用户主动要求更新能力或偏好时，由 `primary` 读取学习记录和 memory 后，经审批写入 | 记录经验水平、解释风格、解释深度、熟悉主题和薄弱主题 |
 
 ## Boundaries
@@ -14,7 +14,7 @@
 - `primary` 只有在用户明确提出“更新我的能力信息 / 用户画像 / 解释偏好”时，才会调用 `update_user_profile`。
 - `update_user_profile` 是 sensitive tool，会触发 `interrupt_required`，用户批准后才落盘。
 - 会话、学习记录和 memory 按 `user_id + namespace` 隔离。
-- 长期用户画像按 `user_id` 保存，同一个用户在不同 namespace 下共享画像。
+- 长期用户画像同样按 `user_id + namespace` 隔离。
 - 文档库是共享知识库，不按租户隔离。
 
 ## Tools
@@ -36,7 +36,9 @@
 1. `summary` 读取已有学习记录和 memory。
 2. 如果有明确证据，`summary` 调用 `upsert_learning_state`。
 3. 系统进入 HITL interrupt，等待用户批准。
-4. 批准后更新 learning store 和 memory store。
+4. 批准后，learning record、可选 memory 和 tool-call outcome 作为一个 generation 原子提交。
+
+同一 `user_id + namespace + session_id + tool_call_id` 被恢复或重放时，系统返回首次提交的 outcome，不重复增加 `reviewtimes`。相同 call id 携带不同 payload 会被拒绝。旧版 `learning_store/records.json` 与 `memory_store/memories.json` 可继续读取，第一次保存时迁移为组合快照，旧文件不会在启动时自动删除，也不会继续双写。
 
 用户主动要求更新画像时：
 

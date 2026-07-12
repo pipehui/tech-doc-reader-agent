@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 import os
-import re
-import shutil
 import tempfile
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 import faiss
 
 from tech_doc_agent.app.core.errors import ApplicationError, ValidationError, classify_error
 from tech_doc_agent.app.infrastructure.persistence.atomic_json import read_json, write_json_atomic
+from tech_doc_agent.app.infrastructure.persistence.generations import (
+    GenerationDraft,
+    GenerationStore,
+    is_generation_id,
+)
 
 
 SNAPSHOT_SCHEMA_VERSION = 1
-_GENERATION_PATTERN = re.compile(r"[0-9a-f]{32}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,8 +35,9 @@ class FaissSnapshotRepository:
 
     def __init__(self, store_dir: Path) -> None:
         self.store_dir = store_dir
-        self.generations_dir = store_dir / "generations"
-        self.manifest_path = store_dir / "current.json"
+        self._generations = GenerationStore(store_dir)
+        self.generations_dir = self._generations.generations_dir
+        self.manifest_path = self._generations.manifest_path
         self.legacy_index_path = store_dir / "index.faiss"
         self.legacy_documents_path = store_dir / "documents.json"
         self.legacy_metadata_path = store_dir / "chunk_metadata.json"
@@ -46,47 +48,42 @@ class FaissSnapshotRepository:
         documents: list[dict[str, Any]],
         chunk_metadata: list[dict[str, Any]],
     ) -> str:
-        generation = uuid4().hex
-        generation_dir = self.generations_dir / generation
-        generation_created = False
-        published = False
         try:
-            manifest = self._build_manifest(
-                generation,
-                index,
-                documents,
-                chunk_metadata,
-            )
-            candidate = FaissSnapshot(index, documents, chunk_metadata, generation)
-            self._validate_snapshot(candidate, manifest)
-            generation_dir.mkdir(parents=True, exist_ok=False)
-            generation_created = True
-            self._write_index(index, generation_dir / "index.faiss")
-            self._write_documents(documents, generation_dir / "documents.json")
-            self._write_chunk_metadata(
-                chunk_metadata,
-                generation_dir / "chunk_metadata.json",
-            )
+            with self._generations.draft() as draft:
+                manifest = self._build_manifest(
+                    draft.generation,
+                    index,
+                    documents,
+                    chunk_metadata,
+                )
+                candidate = FaissSnapshot(
+                    index,
+                    documents,
+                    chunk_metadata,
+                    draft.generation,
+                )
+                self._validate_snapshot(candidate, manifest)
+                self._write_index(index, draft.path / "index.faiss")
+                self._write_documents(documents, draft.path / "documents.json")
+                self._write_chunk_metadata(
+                    chunk_metadata,
+                    draft.path / "chunk_metadata.json",
+                )
 
-            # Validate the exact bytes that will become current, not only the in-memory state.
-            self._load_generation(manifest)
-            self._publish_manifest(manifest)
-            published = True
-            return generation
+                # Validate the exact bytes that will become current, not only the in-memory state.
+                self._load_generation(manifest)
+                self._publish_manifest(draft, manifest)
+                return draft.generation
         except ApplicationError:
             raise
         except Exception as exc:
             raise classify_error(exc, dependency="file_repository") from exc
-        finally:
-            if generation_created and not published:
-                # A failed generation is unreachable because current.json was not switched.
-                with suppress(OSError):
-                    shutil.rmtree(generation_dir)
 
     def load(self) -> FaissSnapshot | None:
         try:
-            if self.manifest_path.exists():
-                manifest = self._read_manifest()
+            if self._generations.has_current_manifest():
+                manifest_value = self._generations.read_current_manifest()
+                manifest = self._read_manifest(manifest_value)
                 return self._load_generation(manifest)
 
             legacy_paths = (
@@ -143,8 +140,7 @@ class FaissSnapshotRepository:
         chunk_metadata = _rows(read_json(metadata_path), "InvalidChunkMetadata")
         return FaissSnapshot(index, documents, chunk_metadata, generation)
 
-    def _read_manifest(self) -> dict[str, Any]:
-        value = read_json(self.manifest_path)
+    def _read_manifest(self, value: Any) -> dict[str, Any]:
         if not isinstance(value, dict):
             raise _corrupt_snapshot("InvalidManifest")
 
@@ -152,8 +148,7 @@ class FaissSnapshotRepository:
         counts = value.get("counts")
         if (
             value.get("schema_version") != SNAPSHOT_SCHEMA_VERSION
-            or not isinstance(generation, str)
-            or _GENERATION_PATTERN.fullmatch(generation) is None
+            or not is_generation_id(generation)
             or not isinstance(value.get("created_at"), str)
             or not isinstance(counts, dict)
             or not _is_non_negative_int(counts.get("vectors"))
@@ -259,8 +254,12 @@ class FaissSnapshotRepository:
     ) -> None:
         write_json_atomic(path, chunk_metadata)
 
-    def _publish_manifest(self, manifest: dict[str, Any]) -> None:
-        write_json_atomic(self.manifest_path, manifest)
+    def _publish_manifest(
+        self,
+        draft: GenerationDraft,
+        manifest: dict[str, Any],
+    ) -> None:
+        draft.publish(manifest)
 
 
 def _rows(value: Any, cause_type: str) -> list[dict[str, Any]]:

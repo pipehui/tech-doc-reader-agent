@@ -20,9 +20,9 @@ TOOL_DEPENDENCIES = {
     "search_related_docs": "semantic_search",
     "read_learning_history": "learning_repository",
     "read_all_learning_history": "learning_repository",
-    "upsert_learning_history": "learning_repository",
+    "upsert_learning_history": "learning_state_repository",
     "read_user_memory": "memory_repository",
-    "upsert_learning_state": "memory_repository",
+    "upsert_learning_state": "learning_state_repository",
 }
 
 

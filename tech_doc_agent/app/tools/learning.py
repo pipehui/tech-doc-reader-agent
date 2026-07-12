@@ -1,10 +1,11 @@
 import json
 from dataclasses import dataclass
-from typing import Optional
+from typing import Annotated, Optional
 
 from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, InjectedToolCallId, tool
 
+from tech_doc_agent.app.application.learning_state import UpdateLearningStateCommand
 from tech_doc_agent.app.core.tenant import session_id_from_config, tenant_from_config
 from tech_doc_agent.app.tools.dependencies import ToolDependencies
 
@@ -74,6 +75,7 @@ def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
         knowledge: str,
         timestamp: str,
         config: RunnableConfig,
+        tool_call_id: Annotated[str, InjectedToolCallId],
         score: Optional[float] = None,
     ) -> str:
         """
@@ -82,21 +84,24 @@ def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
         """
 
         tenant = tenant_from_config(config)
-        message = dependencies.learning_store.upsert_record(
-            knowledge,
-            timestamp,
-            score,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
+        result = dependencies.learning_state_service.update(
+            UpdateLearningStateCommand(
+                tenant=tenant,
+                session_id=session_id_from_config(config) or "",
+                tool_call_id=tool_call_id,
+                knowledge=knowledge,
+                timestamp=timestamp,
+                score=score,
+            )
         )
-        dependencies.learning_store.save()
-        return message
+        return result.learning_message
 
     @tool
     def upsert_learning_state(
         knowledge: str,
         timestamp: str,
         config: RunnableConfig,
+        tool_call_id: Annotated[str, InjectedToolCallId],
         score: Optional[float] = None,
         memory_kind: Optional[str] = None,
         memory_topic: Optional[str] = None,
@@ -111,30 +116,21 @@ def build_learning_tools(dependencies: ToolDependencies) -> LearningTools:
         """
 
         tenant = tenant_from_config(config)
-        learning_message = dependencies.learning_store.upsert_record(
-            knowledge,
-            timestamp,
-            score,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-        )
-        dependencies.learning_store.save()
-
-        memory_message = "No memory fragment written."
-        if memory_content and memory_content.strip():
-            memory = dependencies.memory_store.upsert_memory(
-                kind=memory_kind or "learned",
-                topic=memory_topic or knowledge,
-                content=memory_content,
-                confidence=memory_confidence,
-                source_session_id=session_id_from_config(config),
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
+        result = dependencies.learning_state_service.update(
+            UpdateLearningStateCommand(
+                tenant=tenant,
+                session_id=session_id_from_config(config) or "",
+                tool_call_id=tool_call_id,
+                knowledge=knowledge,
+                timestamp=timestamp,
+                score=score,
+                memory_kind=memory_kind,
+                memory_topic=memory_topic,
+                memory_content=memory_content,
+                memory_confidence=memory_confidence,
             )
-            dependencies.memory_store.save()
-            memory_message = f"Memory '{memory['id']}' has been upserted."
-
-        return f"{learning_message} {memory_message}"
+        )
+        return result.message
 
     return LearningTools(
         read_learning_history=read_learning_history,

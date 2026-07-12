@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from tech_doc_agent.app.application.learning_state import (
+    UpdateLearningStateCommand,
+    UpdateLearningStateResult,
+)
+
 
 class DocumentStorePort(Protocol):
     def add_documents(self, documents: list[dict[str, Any]]) -> dict[str, Any]: ...
@@ -38,18 +43,6 @@ class LearningStorePort(Protocol):
 
     def read_overview(self, *, user_id: str, namespace: str) -> list[dict[str, Any]]: ...
 
-    def upsert_record(
-        self,
-        knowledge: str,
-        timestamp: str,
-        score: float | None,
-        *,
-        user_id: str,
-        namespace: str,
-    ) -> str: ...
-
-    def save(self) -> Any: ...
-
 
 class MemoryStorePort(Protocol):
     def read_by_query(
@@ -69,9 +62,12 @@ class MemoryStorePort(Protocol):
         limit: int,
     ) -> list[dict[str, Any]]: ...
 
-    def upsert_memory(self, **values: Any) -> dict[str, Any]: ...
 
-    def save(self) -> Any: ...
+class LearningStateServicePort(Protocol):
+    def update(
+        self,
+        command: UpdateLearningStateCommand,
+    ) -> UpdateLearningStateResult: ...
 
 
 class UserProfilePort(Protocol):
@@ -91,6 +87,7 @@ class ResourceContainer(Protocol):
     hybrid_retriever: DocumentRetrieverPort
     learning_store: LearningStorePort
     memory_store: MemoryStorePort
+    learning_state_service: LearningStateServicePort
     profile_service: UserProfilePort
     web_search_backend: WebSearchPort
 
@@ -101,6 +98,7 @@ class ToolDependencies:
     document_retriever: DocumentRetrieverPort
     learning_store: LearningStorePort
     memory_store: MemoryStorePort
+    learning_state_service: LearningStateServicePort
     profile_service: UserProfilePort
     web_search: WebSearchPort
 
@@ -111,6 +109,7 @@ class ToolDependencies:
             document_retriever=resources.hybrid_retriever,
             learning_store=resources.learning_store,
             memory_store=resources.memory_store,
+            learning_state_service=resources.learning_state_service,
             profile_service=resources.profile_service,
             web_search=resources.web_search_backend,
         )
