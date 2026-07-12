@@ -58,6 +58,7 @@
 | 2026-07-12 | Phase 4：ContextMetrics、checkpoint/prompt bytes 与 provider input-token 分桶 | 观测基础完成，安全 compaction 继续 | [2026-07-12-context-metrics.md](2026-07-12-context-metrics.md) |
 | 2026-07-12 | Phase 4：闭合历史压缩、版本化 ConversationSummary 与历史投影 | 机制完成且默认关闭，长会话 eval 后再决定启用 | [2026-07-12-safe-context-compaction.md](2026-07-12-safe-context-compaction.md) |
 | 2026-07-12 | Phase 4：长会话 compaction off/on 离线 recall/size/token-proxy 评估 | 离线基线完成，发现 raw-tool-only 信息损失，继续默认关闭 | [2026-07-12-context-compaction-eval.md](2026-07-12-context-compaction-eval.md) |
+| 2026-07-12 | Phase 4：Mypy check-untyped-defs 与 app/evals 全范围 CI gate | 136 个源文件全绿，strict 分项继续 | [2026-07-12-mypy-full-app-gate.md](2026-07-12-mypy-full-app-gate.md) |
 
 ## 本地任务单策略
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from typing import Any, Protocol
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, ToolCall, ToolMessage
 
 from tech_doc_agent.app.core.errors import Conflict
 from tech_doc_agent.app.core.execution_budget import BudgetDecision
@@ -71,7 +71,7 @@ def mark_budget_terminating(
 
 
 def budget_closed_tool_messages(
-    tool_calls: Iterable[dict[str, Any]],
+    tool_calls: Iterable[ToolCall],
     decision: BudgetDecision,
 ) -> list[ToolMessage]:
     results = []
@@ -99,7 +99,7 @@ def budget_closed_tool_messages(
     return results
 
 
-def last_ai_tool_calls(messages: Iterable[Any]) -> list[dict[str, Any]]:
+def last_ai_tool_calls(messages: Iterable[Any]) -> list[ToolCall]:
     for message in reversed(list(messages)):
         if isinstance(message, AIMessage):
             return list(message.tool_calls or [])

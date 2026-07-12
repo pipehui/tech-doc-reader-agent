@@ -216,19 +216,20 @@ def _simulate(
 
     for turn in range(case.turn_count):
         messages = _turn_messages(case, turn)
-        state["messages"] = add_messages(state["messages"], [messages[0]])
+        state["messages"] = add_messages(state["messages"], messages[0])
         if compactor is not None:
             started_at = time.perf_counter()
             update = compactor(cast(State, state))
             compaction_elapsed_s += time.perf_counter() - started_at
             state = _apply_graph_update(state, update)
-        state["messages"] = add_messages(state["messages"], messages[1:])
+        for message in messages[1:]:
+            state["messages"] = add_messages(state["messages"], message)
 
     final_message = HumanMessage(
         id=f"{case.id}-h-final",
         content="Recall the most recent relevant marker from our earlier discussion.",
     )
-    state["messages"] = add_messages(state["messages"], [final_message])
+    state["messages"] = add_messages(state["messages"], final_message)
     if compactor is not None:
         started_at = time.perf_counter()
         update = compactor(cast(State, state))

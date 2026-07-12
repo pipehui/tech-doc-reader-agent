@@ -23,7 +23,7 @@ jobs:
         run: ruff check tech_doc_agent tests evals
 
       - name: Mypy
-        run: mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py
+        run: mypy tech_doc_agent/app evals
 
       - name: Pytest
         run: pytest

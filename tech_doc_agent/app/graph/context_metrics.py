@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,7 +30,7 @@ class ContextMetricsTracker:
     def snapshot(
         self,
         state: State,
-        prompt_state: dict[str, Any],
+        prompt_state: Mapping[str, Any],
         *,
         agent: str,
         scope: ContextScope,

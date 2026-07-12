@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable
 
+from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, START, StateGraph
 
 from .nodes import (
@@ -31,8 +32,11 @@ from .state import State
 from .tool_nodes import create_tool_node_with_fallback
 
 
+GraphBuilder = StateGraph[State, None, State, State]
+
+
 def _register_tool_node(
-    builder: StateGraph,
+    builder: GraphBuilder,
     *,
     node_name: str,
     tools: tuple,
@@ -62,7 +66,7 @@ def _register_tool_node(
 
 
 def register_subagent(
-    builder: StateGraph,
+    builder: GraphBuilder,
     spec: AgentSpec,
     execution_policy: ExecutionPolicy,
     budget_tracker: WorkflowBudgetTracker,
@@ -125,11 +129,15 @@ def register_subagent(
     builder.add_conditional_edges(spec.key, make_subagent_router(spec), route_targets)
 
 
-def create_graph_builder(spec: GraphSpec) -> StateGraph:
-    builder = StateGraph(State)
+def create_graph_builder(spec: GraphSpec) -> GraphBuilder:
+    builder: GraphBuilder = StateGraph(State)
     builder.add_node(
         "budget_terminated",
-        create_budget_termination_node(spec.budget_tracker),
+        RunnableLambda(
+            create_budget_termination_node(spec.budget_tracker),
+            name="budget_terminated",
+        ),
+        input_schema=State,
     )
     builder.add_edge("budget_terminated", END)
     builder.add_node(

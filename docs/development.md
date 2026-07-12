@@ -6,7 +6,7 @@
 
 ```bash
 python -m ruff check tech_doc_agent tests evals
-python -m mypy tech_doc_agent/app/core tech_doc_agent/app/api/schemas.py
+python -m mypy tech_doc_agent/app evals
 python -m pytest
 cd frontend && npm run check && npm run test && npm run build
 python -m pytest tests/test_frontend_static.py -q

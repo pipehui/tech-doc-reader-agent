@@ -269,9 +269,11 @@ def create_exit_node() -> Callable:
 
             if state.get("reflection_status") == "finalizing":
                 messages = _reflection_closed_tool_messages(state)
+                dialog_state = state.get("dialog_state", [])
+                agent: str = dialog_state[-1] if dialog_state else "subagent"
                 log_event(
                     "reflection.terminated",
-                    agent=(state.get("dialog_state", []) or ["subagent"])[-1],
+                    agent=agent,
                     tool=messages[0].name if messages else "tool",
                     error_code="reflection_tool_chain_closed",
                     reflection_rounds_used=state.get("reflection_rounds_used", 0),
