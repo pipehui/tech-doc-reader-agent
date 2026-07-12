@@ -46,6 +46,7 @@ def build_assistant_definition(
             runnable,
             name=name,
             retry_executor=models.retry_executor,
+            default_provider=models.provider_id,
         ),
         safe_tools=safe_tools,
         prompt_id=prompt.prompt_id,

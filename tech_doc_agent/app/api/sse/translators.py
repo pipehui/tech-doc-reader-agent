@@ -193,6 +193,25 @@ def _structured_result_events(node_name: str, node_update: dict) -> Iterable[Ser
         )
 
 
+def _usage_update_event(node_name: str, node_update: dict) -> ServerSentEvent | None:
+    delta = node_update.get("budget_usage_delta")
+    usage = node_update.get("budget_usage")
+    if (
+        not isinstance(delta, dict)
+        or delta.get("kind") not in {"llm", "tool"}
+        or not isinstance(usage, dict)
+    ):
+        return None
+    return sse_event(
+        "usage_update",
+        {
+            "node": node_name,
+            "delta": delta,
+            "usage": usage,
+        },
+    )
+
+
 def stream_part_type_and_data(part) -> tuple[str | None, object]:
     if isinstance(part, dict):
         return part.get("type"), part.get("data")
@@ -238,6 +257,10 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
             yield sse_event("plan_update", plan_payload)
 
         yield from _structured_result_events(node_name, node_update)
+
+        usage_event = _usage_update_event(node_name, node_update)
+        if usage_event is not None:
+            yield usage_event
 
         messages = node_update.get("messages", [])
         for message in messages:

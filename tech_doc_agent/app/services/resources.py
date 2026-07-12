@@ -10,6 +10,7 @@ from tech_doc_agent.app.application.learning_state import (
 )
 from tech_doc_agent.app.application.profile_service import UserProfileService
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
+from tech_doc_agent.app.core.model_pricing import ModelPriceTable
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
@@ -18,6 +19,7 @@ from tech_doc_agent.app.infrastructure.persistence.learning_state_repository imp
 from tech_doc_agent.app.infrastructure.persistence.user_profile_repository import (
     JsonUserProfileRepository,
 )
+from tech_doc_agent.app.infrastructure.model_price_table import load_model_price_table
 from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
@@ -69,6 +71,7 @@ class AppResources:
     learning_state_service: LearningStateService
     profile_service: UserProfileService
     web_search_backend: WebSearchBackend
+    model_price_table: ModelPriceTable
 
     @classmethod
     def create(cls, settings: Settings | None = None) -> AppResources:
@@ -87,6 +90,7 @@ class AppResources:
                 memory_store=memory_store,
             ),
             web_search_backend=WebSearchBackend(settings=settings),
+            model_price_table=load_model_price_table(settings.MODEL_PRICE_TABLE_PATH),
         )
 
 

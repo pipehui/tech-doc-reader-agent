@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from tech_doc_agent.app.core.structured_outputs import ResultKind
+from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 
 from .state import WorkflowStep
 
@@ -92,6 +93,7 @@ class GraphSpec:
     user_info_node: Any
     tool_execution_policy: ToolExecutionPolicy
     reflection_policy: ReflectionPolicy
+    budget_tracker: WorkflowBudgetTracker
 
     @property
     def interrupt_nodes(self) -> tuple[str, ...]:

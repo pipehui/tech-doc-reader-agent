@@ -102,7 +102,10 @@ export function decodeSessionState(payload: unknown): SessionState {
     current_agent: nullableString(state.current_agent, "current_agent"),
     workflow_plan: arrayValue(state.workflow_plan, "workflow_plan")
       .map((item, index) => stringValue(item, `workflow_plan[${index}]`)),
-    plan_index: integerValue(state.plan_index, "plan_index")
+    plan_index: integerValue(state.plan_index, "plan_index"),
+    ...(state.budget_usage === undefined || state.budget_usage === null
+      ? {}
+      : { budget_usage: objectValue(state.budget_usage, "budget_usage") })
   };
 }
 

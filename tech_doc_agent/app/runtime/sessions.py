@@ -181,6 +181,7 @@ class SessionQueryService:
             "current_agent": current_agent,
             "workflow_plan": read.values.get("workflow_plan", []),
             "plan_index": read.values.get("plan_index", 0),
+            "budget_usage": read.values.get("budget_usage"),
         }
 
     async def aget_session_state(

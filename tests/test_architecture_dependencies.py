@@ -221,6 +221,7 @@ def test_graph_execution_policy_does_not_read_settings_at_runtime():
         ("tech_doc_agent.app.core.settings",),
         filenames=(
             "builder.py",
+            "budgeting.py",
             "reflection.py",
             "specs.py",
             "tool_nodes.py",

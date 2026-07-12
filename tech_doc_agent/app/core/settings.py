@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = ""
     PRIMARY_MODEL: str = ""
+    MODEL_PROVIDER_ID: str = "openai_compatible"
+    MODEL_PRICE_TABLE_PATH: str = ""
 
     DATA_PATH: str = "./tech_doc_agent/data"
     LOG_LEVEL: str = "DEBUG"
@@ -87,6 +89,13 @@ class Settings(BaseSettings):
         raw_value = value.get_secret_value()
         if raw_value and len(raw_value.encode("utf-8")) < 16:
             raise ValueError("TELEMETRY_PSEUDONYM_KEY must contain at least 16 bytes when configured.")
+        return value
+
+    @field_validator("MODEL_PROVIDER_ID")
+    @classmethod
+    def validate_model_provider_id(cls, value: str) -> str:
+        if not value or value != value.strip():
+            raise ValueError("MODEL_PROVIDER_ID must be a non-empty trimmed string.")
         return value
 
 

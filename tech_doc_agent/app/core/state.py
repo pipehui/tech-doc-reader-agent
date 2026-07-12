@@ -35,3 +35,5 @@ class State(TypedDict):
     reflection_tool: NotRequired[str]
     reflection_error_code: NotRequired[str]
     reflection_terminal_reason: NotRequired[str]
+    budget_usage: NotRequired[dict[str, Any]]
+    budget_usage_delta: NotRequired[dict[str, Any]]

@@ -31,6 +31,8 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
     assert spec_b.tool_execution_policy.max_identical_repeats == 2
     assert spec_b.tool_execution_policy.parser_max_retrieval_calls == 6
     assert spec_b.reflection_policy.max_rounds == 1
+    assert spec_a.budget_tracker.price_table is resources_a.model_price_table
+    assert spec_b.budget_tracker.price_table is resources_b.model_price_table
 
     graph = build_application_graph(MemorySaver(), resources_a)
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from tech_doc_agent.app.graph.builder import build_multi_agentic_graph
+from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.nodes import create_user_info_node
 from tech_doc_agent.app.graph.specs import (
     AgentSpec,
@@ -90,6 +91,7 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
         reflection_policy=ReflectionPolicy(
             max_rounds=resources.settings.MAX_REFLECTION_ROUNDS,
         ),
+        budget_tracker=WorkflowBudgetTracker(resources.model_price_table),
     )
 
 

@@ -21,6 +21,7 @@ class AssistantModelProvider:
     primary: Any
     backup: Any | None = None
     retry_executor: RetryExecutor | None = None
+    provider_id: str = "openai_compatible"
 
     def bind_tools(self, tools: list[Any], *, parallel_tool_calls: bool = False) -> Any:
         primary_bound = self.primary.bind_tools(
@@ -60,4 +61,5 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
         primary=primary,
         backup=backup,
         retry_executor=build_retry_executor(settings),
+        provider_id=settings.MODEL_PROVIDER_ID,
     )

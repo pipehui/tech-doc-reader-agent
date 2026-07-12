@@ -18,11 +18,13 @@ describe("REST response contracts", () => {
       message_count: 1,
       current_agent: "parser",
       workflow_plan: ["parser", "summary"],
-      plan_index: 1
+      plan_index: 1,
+      budget_usage: { llm_calls: 2, total_tokens: 120 }
     })).toMatchObject({
       session_id: "session-1",
       current_agent: "parser",
-      workflow_plan: ["parser", "summary"]
+      workflow_plan: ["parser", "summary"],
+      budget_usage: { llm_calls: 2, total_tokens: 120 }
     });
 
     expect(decodeHistoryResponse({

@@ -10,6 +10,8 @@ from tech_doc_agent.app.graph.commands import (
     ToRelationAssistant,
     ToSummaryAssistant,
 )
+from tech_doc_agent.app.core.model_pricing import ModelPriceTable
+from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.specs import (
     AgentSpec,
     CompletionPolicy,
@@ -145,4 +147,5 @@ def graph_spec() -> GraphSpec:
             parser_max_retrieval_calls=6,
         ),
         reflection_policy=ReflectionPolicy(max_rounds=1),
+        budget_tracker=WorkflowBudgetTracker(ModelPriceTable.empty()),
     )

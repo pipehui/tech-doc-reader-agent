@@ -154,6 +154,11 @@ def test_sync_and_async_session_state_views_are_equivalent():
             "dialog_state": ["primary", "relation"],
             "workflow_plan": ["parse", "relate"],
             "plan_index": 1,
+            "budget_usage": {
+                "schema_version": 1,
+                "llm_calls": 2,
+                "tool_calls": 1,
+            },
         },
     )
     runtime = _runtime_with_snapshot(snapshot)
@@ -175,4 +180,9 @@ def test_sync_and_async_session_state_views_are_equivalent():
         "current_agent": "relation",
         "workflow_plan": ["parse", "relate"],
         "plan_index": 1,
+        "budget_usage": {
+            "schema_version": 1,
+            "llm_calls": 2,
+            "tool_calls": 1,
+        },
     }

@@ -154,6 +154,25 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
                     },
                     "enter_parser": {},
                     "parser": {
+                        "budget_usage": {
+                            "schema_version": 1,
+                            "workflow_started_at": "2026-07-12T00:00:00+00:00",
+                            "llm_calls": 1,
+                            "tool_calls": 0,
+                            "input_tokens": 100,
+                            "output_tokens": 20,
+                            "total_tokens": 120,
+                            "estimated_cost_usd": None,
+                        },
+                        "budget_usage_delta": {
+                            "kind": "llm",
+                            "llm_calls": 1,
+                            "tool_calls": 0,
+                            "input_tokens": 100,
+                            "output_tokens": 20,
+                            "total_tokens": 120,
+                            "estimated_cost_usd": None,
+                        },
                         "messages": [
                             AIMessage(
                                 content="",
@@ -189,11 +208,17 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert "tool_call" in event_names
     assert "tool_result" in event_names
     assert "structured_result" in event_names
+    assert "usage_update" in event_names
 
     structured_event = next(event for event in events if event.event == "structured_result")
     assert structured_event.data["result_key"] == "parser_result"
     assert structured_event.data["result"]["topic"] == "LangGraph StateGraph"
     assert structured_event.data["parsed"] is True
+
+    usage_event = next(event for event in events if event.event == "usage_update")
+    assert usage_event.data["node"] == "parser"
+    assert usage_event.data["delta"]["total_tokens"] == 120
+    assert usage_event.data["usage"]["estimated_cost_usd"] is None
 
     tool_result_event = next(event for event in events if event.event == "tool_result")
     assert tool_result_event.data["status"] == "success"

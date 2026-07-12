@@ -9,6 +9,7 @@ from langgraph.prebuilt import ToolNode
 from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event, timed_node
 
+from .budgeting import WorkflowBudgetTracker
 from .reflection import apply_reflection_policy, safe_validation_repair_context
 from .specs import ReflectionPolicy, ToolExecutionPolicy
 from .state import State
@@ -151,6 +152,7 @@ def create_tool_node_with_fallback(
     tools: list,
     policy: ToolExecutionPolicy,
     reflection_policy: ReflectionPolicy | None = None,
+    budget_tracker: WorkflowBudgetTracker | None = None,
 ):
     reflection_policy = reflection_policy or ReflectionPolicy()
     tool_node = ToolNode(tools, handle_tool_errors=False)
@@ -182,6 +184,8 @@ def create_tool_node_with_fallback(
             elapsed_ms=_elapsed_ms(start),
             success=True,
         )
+        if budget_tracker is not None:
+            result = budget_tracker.record_tools(state, result, calls=len(tool_calls))
         return apply_reflection_policy(state, result, reflection_policy)
 
     async def aguarded_tool_node(state: State):
@@ -218,12 +222,21 @@ def create_tool_node_with_fallback(
             success=True,
             async_runtime=True,
         )
+        if budget_tracker is not None:
+            result = budget_tracker.record_tools(state, result, calls=len(tool_calls))
         return apply_reflection_policy(state, result, reflection_policy)
 
     def reflected_tool_error(state: State):
+        update = handle_tool_error(state)
+        if budget_tracker is not None:
+            update = budget_tracker.record_tools(
+                state,
+                update,
+                calls=len(_pending_tool_calls(state)),
+            )
         return apply_reflection_policy(
             state,
-            handle_tool_error(state),
+            update,
             reflection_policy,
         )
 

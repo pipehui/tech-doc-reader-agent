@@ -24,6 +24,7 @@ export interface SessionState {
   current_agent: string | null;
   workflow_plan: string[];
   plan_index: number;
+  budget_usage?: Record<string, unknown>;
 }
 
 export interface ChatMessage {

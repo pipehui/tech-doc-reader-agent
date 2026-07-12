@@ -39,6 +39,7 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
     )
     assert resources.profile_service.memory_store is resources.memory_store
     assert resources.web_search_backend.store_dir == tmp_path / "web_search"
+    assert resources.model_price_table.entries == ()
 
 
 def test_app_resources_skips_faiss_index_when_embedding_is_not_configured(tmp_path):

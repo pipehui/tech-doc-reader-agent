@@ -5,6 +5,7 @@ export const SSE_EVENT_TYPES = [
   "agent_transition",
   "plan_update",
   "structured_result",
+  "usage_update",
   "tool_call",
   "tool_result",
   "guardrail_blocked",

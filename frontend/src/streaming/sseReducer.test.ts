@@ -141,6 +141,32 @@ describe("pure SSE reducer", () => {
         })
       })
     ]);
+
+    const usagePayload = {
+      schema_version: 1,
+      llm_calls: 1,
+      tool_calls: 0,
+      total_tokens: 120,
+      estimated_cost_usd: null
+    };
+    const usage = reduce(plan.state, "usage_update", {
+      node: "parser",
+      delta: { kind: "llm", llm_calls: 1, total_tokens: 120 },
+      usage: usagePayload
+    });
+    expect(usage.actions).toEqual([
+      expect.objectContaining({
+        type: "record_event",
+        event: expect.objectContaining({
+          type: "usage_update",
+          agent: "parser"
+        })
+      }),
+      {
+        type: "set_session_state",
+        state: { budget_usage: usagePayload }
+      }
+    ]);
   });
 
   it("tracks duplicate token metadata and finalizes the agent message", () => {

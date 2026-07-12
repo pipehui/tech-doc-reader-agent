@@ -10,18 +10,34 @@ from tech_doc_agent.app.core.tenant import parse_tenant
 from tech_doc_agent.app.services.message_scope import build_scoped_state
 
 from .state import State
+from .budgeting import WorkflowBudgetTracker
 from .messages import extract_last_message_text
 from .reflection import reflection_active_reset, reflection_request_reset
 
 
-def assistant_node(assistant, scoped_messages: bool = False):
+def assistant_node(
+    assistant,
+    scoped_messages: bool = False,
+    budget_tracker: WorkflowBudgetTracker | None = None,
+):
     def invoke(state: State, config: RunnableConfig | None = None):
         assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
-        return _complete_reflection_state(state, assistant(assistant_state, config))
+        current_usage = budget_tracker.current(state) if budget_tracker is not None else None
+        update = assistant(assistant_state, config)
+        if budget_tracker is not None:
+            update = budget_tracker.record_assistant(state, update, current=current_usage)
+        else:
+            update.pop("_llm_usage", None)
+        return _complete_reflection_state(state, update)
 
     async def ainvoke(state: State, config: RunnableConfig | None = None):
         assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
+        current_usage = budget_tracker.current(state) if budget_tracker is not None else None
         result = await assistant.ainvoke(assistant_state, config)
+        if budget_tracker is not None:
+            result = budget_tracker.record_assistant(state, result, current=current_usage)
+        else:
+            result.pop("_llm_usage", None)
         return _complete_reflection_state(state, result)
 
     return RunnableLambda(invoke, afunc=ainvoke, name=assistant.name)

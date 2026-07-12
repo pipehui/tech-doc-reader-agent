@@ -24,6 +24,7 @@ def test_settings_parses_typed_values():
         PARSER_MAX_RETRIEVAL_CALLS="9",
         MAX_REFLECTION_ROUNDS="1",
         TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
+        MODEL_PROVIDER_ID="provider-a",
     )
 
     assert settings.TAVILY_DAILY_LIMIT == 7
@@ -48,11 +49,18 @@ def test_settings_parses_typed_values():
     assert settings.LANGFUSE_ENABLED is True
     assert settings.LANGFUSE_FLUSH_ON_REQUEST is True
     assert settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value() == "controlled-key-with-32-random-bytes"
+    assert settings.MODEL_PROVIDER_ID == "provider-a"
 
 
 def test_settings_rejects_weak_telemetry_pseudonym_key():
     with pytest.raises(ValueError, match="at least 16 bytes"):
         Settings(TELEMETRY_PSEUDONYM_KEY="short")
+
+
+@pytest.mark.parametrize("provider_id", ["", " provider "])
+def test_settings_rejects_invalid_model_provider_id(provider_id):
+    with pytest.raises(ValueError, match="MODEL_PROVIDER_ID"):
+        Settings(MODEL_PROVIDER_ID=provider_id)
 
 
 @pytest.mark.parametrize(

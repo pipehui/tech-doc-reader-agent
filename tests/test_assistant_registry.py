@@ -170,6 +170,7 @@ def test_model_provider_disables_sdk_retries_and_owns_shared_transport_policy(mo
             PRIMARY_MODEL="primary-model",
             BACKUP_API_KEY="backup-key",
             BACKUP_MODEL="backup-model",
+            MODEL_PROVIDER_ID="provider-a",
             TRANSPORT_RETRY_MAX_ATTEMPTS=4,
         )
     )
@@ -179,6 +180,7 @@ def test_model_provider_disables_sdk_retries_and_owns_shared_transport_policy(mo
     assert created[1].kwargs["max_retries"] == 0
     assert provider.retry_executor is not None
     assert provider.retry_executor.policy.max_attempts == 4
+    assert provider.provider_id == "provider-a"
 
 
 def test_model_visible_command_names_and_required_fields_are_stable():

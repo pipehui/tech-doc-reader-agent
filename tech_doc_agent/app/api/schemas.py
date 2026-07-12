@@ -1,7 +1,7 @@
 '''
 设置数据进出格式
 '''
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 from tech_doc_agent.app.core.tenant import TENANT_ID_PATTERN
@@ -71,6 +71,7 @@ class SessionStateResponse(BaseModel):
     current_agent: str | None = None
     workflow_plan: list[str] = Field(default_factory=list)
     plan_index: int = 0
+    budget_usage: dict[str, Any] | None = None
 
 class LearningRecord(BaseModel):
     knowledge: str
