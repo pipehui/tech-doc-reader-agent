@@ -85,6 +85,7 @@
 | 2026-07-12 | Phase 4：Learning/Memory/Profile capability ports 归位 application | tools 重复 Protocol 删除，Learning API resource view 类型化 | [2026-07-12-learning-application-ports.md](2026-07-12-learning-application-ports.md) |
 | 2026-07-12 | Phase 4：Assistant execution 与 graph lifecycle nodes 分离 | invocation/accounting/reflection 模板独立，node topology 不变 | [2026-07-12-assistant-execution-node-boundary.md](2026-07-12-assistant-execution-node-boundary.md) |
 | 2026-07-12 | Phase 4：删除 Chat Route 的 SSE 临时兼容出口 | route 保留私有消费依赖，helper 事实源唯一归属 api/sse | [2026-07-12-chat-sse-facade-removal.md](2026-07-12-chat-sse-facade-removal.md) |
+| 2026-07-12 | Phase 4：Chat request、guardrail decision 与 delivery 边界 | route 收敛为 80 行 facade，布尔 guardrail 旁路删除 | [2026-07-12-chat-delivery-boundary.md](2026-07-12-chat-delivery-boundary.md) |
 
 ## 本地任务单策略
 

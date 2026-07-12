@@ -18,6 +18,10 @@
 tech_doc_agent
 ├── app
 │   ├── api
+│   │   ├── chat_delivery.py
+│   │   ├── routes
+│   │   │   └── chat.py
+│   │   └── sse
 │   ├── agents
 │   │   ├── definition.py
 │   │   ├── identity.py
@@ -27,6 +31,7 @@ tech_doc_agent
 │   │   └── registry.py
 │   ├── application
 │   │   ├── conversation_summarizer.py
+│   │   ├── input_guardrails.py
 │   │   ├── learning_state.py
 │   │   ├── profile_service.py
 │   │   └── retrieval.py
@@ -96,7 +101,7 @@ tech_doc_agent
 
 ### `app/application`
 
-保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract，以及确定性的 `ExtractiveConversationSummarizer`。`LearningRecordReaderPort`、`MemoryReaderPort`、`LearningStateCommandPort` 与 `UserProfileServicePort` 是 tools/API 共用的 capability 事实源；Learning API 只在 runtime 边界 cast 成窄 `LearningApiResources`，后续不裸读 `Any`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
+保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract、输入 guardrail decision，以及确定性的 `ExtractiveConversationSummarizer`。`input_guardrails.py` 只评估一次输入风险并记录 application-level warning/blocked disposition，不构造 HTTP/SSE response。`LearningRecordReaderPort`、`MemoryReaderPort`、`LearningStateCommandPort` 与 `UserProfileServicePort` 是 tools/API 共用的 capability 事实源；Learning API 只在 runtime 边界 cast 成窄 `LearningApiResources`，后续不裸读 `Any`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 
@@ -126,7 +131,11 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 - `GET /sessions/{id}/history`
 - `GET /sessions/{id}/state`
 
-该 route 只负责 HTTP/tenant/trace/guardrail/runtime 编排；SSE contract、translator、trace-context iterator 与 encoder 统一由 `app/api/sse/` 拥有。route 通过私有 `_sse` 模块依赖调用它们，不提供 SSE helper 兼容 re-export；测试与其他模块应直接 import `tech_doc_agent.app.api.sse`。
+该 route 只负责请求参数、tenant、trace ID 和 delivery use case 调用；顶层函数集合由 architecture test 锁定，不再定义 guardrail payload、stream generator 或 response wrapper。
+
+### `app/api/chat_delivery.py`
+
+提供 route 唯一使用的 `chat_response` 与 `approval_response`。模块内部负责 guardrail 的 JSON/SSE 投影、审批暂停事件、chat/approval stream 编排和 trace-context response wrapping；私有细节不从 route re-export。SSE contract、translator、iterator 与 encoder 仍统一由 `app/api/sse/` 拥有，delivery 仅通过私有 `_sse` 依赖消费。
 
 ### `app/agents`
 

@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from tech_doc_agent.app.api.routes.chat import router
+from tech_doc_agent.app.api import chat_delivery
+from tech_doc_agent.app.api.routes import chat as chat_route
 from tech_doc_agent.app.api.sse import (
     aiter_with_trace_context,
     astream_parts_as_sse,
@@ -16,6 +17,9 @@ from tech_doc_agent.app.api.sse import (
 from tech_doc_agent.app.api.sse.streaming import events_from_stream_part
 from tech_doc_agent.app.core.observability import get_trace_context
 from tech_doc_agent.app.core.errors import Timeout
+
+
+router = chat_route.router
 
 
 class FakeRuntime:
@@ -795,6 +799,37 @@ def test_chat_route_returns_async_sse_stream():
     assert "tenant-docs" in response.text
     assert runtime.request_starts[0][0] == "chat"
     assert runtime.request_starts[0][1] is not None
+
+
+def test_chat_route_evaluates_guardrail_once_before_delivery(monkeypatch):
+    original_evaluator = chat_delivery.evaluate_input_guardrail
+    calls = []
+
+    def record_evaluation(text, *, source):
+        calls.append((text, source))
+        return original_evaluator(text, source=source)
+
+    monkeypatch.setattr(
+        chat_delivery,
+        "evaluate_input_guardrail",
+        record_evaluation,
+    )
+    app = FastAPI()
+    app.state.runtime = FakeRouteRuntime()
+    app.include_router(router)
+
+    response = TestClient(app).post(
+        "/chat",
+        json={
+            "session_id": "session-single-check",
+            "message": "hi",
+            "trace_id": "trace-single-check",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "event: done" in response.text
+    assert calls == [("hi", "chat.message")]
 
 
 def test_session_query_routes_use_async_runtime_surface():

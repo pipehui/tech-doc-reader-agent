@@ -80,3 +80,5 @@ api.routes.chat ----------------private module dependency-> api.sse
 - 后续拆分 guardrail/chat/approval application use case 时，保持 HTTP route 与 SSE protocol 两条边界独立。
 
 本批提交主题：`refactor: remove chat SSE compatibility exports`。
+
+后续同日批次进一步把 route 的私有 SSE 消费下沉到 `api/chat_delivery.py`，因此 `routes/chat.py` 已不再直接 import `_sse`；见 [2026-07-12-chat-delivery-boundary.md](2026-07-12-chat-delivery-boundary.md)。本日志保留的是提交 `765390b` 当时的准确阶段状态。

@@ -372,10 +372,46 @@ def test_fastapi_chat_routes_only_use_async_runtime_surface():
 
 def test_chat_route_does_not_reexport_sse_internal_helpers():
     source = (APP_DIR / "api" / "routes" / "chat.py").read_text(encoding="utf-8")
+    delivery_source = (APP_DIR / "api" / "chat_delivery.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "__all__" not in source
     assert "from tech_doc_agent.app.api.sse import" not in source
-    assert "from tech_doc_agent.app.api import sse as _sse" in source
+    assert "from tech_doc_agent.app.api import sse as _sse" not in source
+    assert "from tech_doc_agent.app.api import sse as _sse" in delivery_source
+
+
+def test_chat_route_only_owns_http_endpoint_functions():
+    path = APP_DIR / "api" / "routes" / "chat.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    functions = [
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    ]
+    assert functions == [
+        "get_runtime",
+        "resolve_trace_id",
+        "chat",
+        "approve",
+        "get_history",
+        "get_session_state",
+    ]
+
+    delivery_path = APP_DIR / "api" / "chat_delivery.py"
+    delivery_source = delivery_path.read_text(encoding="utf-8")
+    delivery_tree = ast.parse(delivery_source, filename=str(delivery_path))
+    public_delivery_functions = [
+        node.name
+        for node in delivery_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    ]
+
+    assert "guardrail_checked" not in delivery_source
+    assert public_delivery_functions == ["chat_response", "approval_response"]
 
 
 def test_runtime_package_init_does_not_eagerly_load_components():
