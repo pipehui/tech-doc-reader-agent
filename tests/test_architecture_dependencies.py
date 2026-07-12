@@ -201,6 +201,16 @@ def test_composition_roots_do_not_reintroduce_services_imports():
     ) == []
 
 
+def test_composition_depends_on_a_structural_resource_protocol_not_app_resources():
+    source = (APP_DIR / "composition.py").read_text(encoding="utf-8")
+    bootstrap_source = (APP_DIR / "bootstrap.py").read_text(encoding="utf-8")
+
+    assert "class CompositionResources(ToolResourceContainer, Protocol):" in source
+    assert "resources: Any" not in source
+    assert "infrastructure.resources" not in source
+    assert "def _create_app_resources(settings: Settings) -> CompositionResources:" in bootstrap_source
+
+
 def test_context_summarizer_is_an_application_policy_not_a_service():
     source = (APP_DIR / "composition.py").read_text(encoding="utf-8")
 

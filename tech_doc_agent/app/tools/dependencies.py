@@ -82,15 +82,37 @@ class UserProfilePort(Protocol):
         evidence: str | None = None,
     ) -> UserProfileUpdateResult: ...
 
+    def context_summary(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        memory_query: str = "",
+        memory_limit: int = 5,
+    ) -> str: ...
 
-class ResourceContainer(Protocol):
-    faiss_store: DocumentStorePort
-    hybrid_retriever: DocumentRetrieverPort
-    learning_store: LearningStorePort
-    memory_store: MemoryStorePort
-    learning_state_service: LearningStateServicePort
-    profile_service: UserProfilePort
-    web_search_backend: WebSearchPort
+
+class ToolResourceContainer(Protocol):
+    @property
+    def faiss_store(self) -> DocumentStorePort: ...
+
+    @property
+    def hybrid_retriever(self) -> DocumentRetrieverPort: ...
+
+    @property
+    def learning_store(self) -> LearningStorePort: ...
+
+    @property
+    def memory_store(self) -> MemoryStorePort: ...
+
+    @property
+    def learning_state_service(self) -> LearningStateServicePort: ...
+
+    @property
+    def profile_service(self) -> UserProfilePort: ...
+
+    @property
+    def web_search_backend(self) -> WebSearchPort: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +126,7 @@ class ToolDependencies:
     web_search: WebSearchPort
 
     @classmethod
-    def from_container(cls, resources: ResourceContainer) -> ToolDependencies:
+    def from_container(cls, resources: ToolResourceContainer) -> ToolDependencies:
         return cls(
             document_store=resources.faiss_store,
             document_retriever=resources.hybrid_retriever,

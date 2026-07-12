@@ -81,6 +81,7 @@
 | 2026-07-12 | Phase 4：WebSearchBackend 归位 infrastructure 并删除 services/vectordb | provider/fallback/cache 所有权明确，delivery 字段兼容 | [2026-07-12-web-search-infrastructure-boundary.md](2026-07-12-web-search-infrastructure-boundary.md) |
 | 2026-07-12 | Phase 4：AppResources/RetrievalResources concrete aggregate 归位 | bootstrap 选择 factory、lifecycle 调用、composition 消费三层分离 | [2026-07-12-infrastructure-resource-container.md](2026-07-12-infrastructure-resource-container.md) |
 | 2026-07-12 | Phase 4：Services compatibility boundary 与不可增长门禁 | 九组 contract 完成，services 只保留三个受控 facade 文件 | [2026-07-12-services-compatibility-boundary.md](2026-07-12-services-compatibility-boundary.md) |
+| 2026-07-12 | Phase 4：Tool/Composition structural resource Protocol 与 concrete conformance | composition resources Any 清零，bootstrap 建立静态检查点 | [2026-07-12-typed-composition-resources.md](2026-07-12-typed-composition-resources.md) |
 
 ## 本地任务单策略
 

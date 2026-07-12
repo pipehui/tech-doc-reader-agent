@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
 from tech_doc_agent.app.application.conversation_summarizer import (
     ExtractiveConversationSummarizer,
@@ -12,6 +12,8 @@ from tech_doc_agent.app.graph.context_compaction import ContextCompactor
 from tech_doc_agent.app.graph.provider_retries import ProviderRetryUsageTracker
 from tech_doc_agent.app.core.context_compaction import build_context_compaction_policy
 from tech_doc_agent.app.core.execution_budget import build_execution_budget
+from tech_doc_agent.app.core.model_pricing import ModelPriceTable
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.graph.nodes import create_user_info_node
 from tech_doc_agent.app.graph.specs import (
     AgentSpec,
@@ -26,10 +28,22 @@ from tech_doc_agent.app.graph.specs import (
 from tech_doc_agent.app.agents.model_factory import build_assistant_model_provider
 from tech_doc_agent.app.agents.prompt_registry import build_prompt_registry
 from tech_doc_agent.app.agents.registry import AssistantRegistry, build_assistant_registry
-from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
+from tech_doc_agent.app.tools import (
+    ToolDependencies,
+    ToolResourceContainer,
+    build_tool_bundle,
+)
 
 
-def build_graph_spec(resources: Any) -> GraphSpec:
+class CompositionResources(ToolResourceContainer, Protocol):
+    @property
+    def settings(self) -> Settings: ...
+
+    @property
+    def model_price_table(self) -> ModelPriceTable: ...
+
+
+def build_graph_spec(resources: CompositionResources) -> GraphSpec:
     dependencies = ToolDependencies.from_container(resources)
     tools = build_tool_bundle(dependencies)
     models = build_assistant_model_provider(resources.settings)
@@ -38,7 +52,10 @@ def build_graph_spec(resources: Any) -> GraphSpec:
     return _graph_spec_from_registry(assistants, resources)
 
 
-def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> GraphSpec:
+def _graph_spec_from_registry(
+    assistants: AssistantRegistry,
+    resources: CompositionResources,
+) -> GraphSpec:
     execution_budget = build_execution_budget(resources.settings)
     return GraphSpec(
         primary=PrimarySpec(
@@ -117,5 +134,5 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
     )
 
 
-def build_application_graph(checkpointer: Any, resources: Any):
+def build_application_graph(checkpointer: Any, resources: CompositionResources):
     return build_multi_agentic_graph(checkpointer, build_graph_spec(resources))

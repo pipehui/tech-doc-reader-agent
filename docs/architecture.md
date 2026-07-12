@@ -129,7 +129,7 @@ Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`Searc
 
 WebSearchBackend 位于 `infrastructure/retrieval/web_search.py`：Tavily、DuckDuckGo fallback、daily usage cache 与 provider retry telemetry 由同一 concrete adapter 管理。`services/vectordb` 已无 tracked code；tools 仍只依赖 `WebSearchPort`，health payload 的 `web_search_backend` 字段保持外部兼容。
 
-`infrastructure/resources.py` 是 concrete resource aggregate：构造 Faiss/Hybrid/Web、Learning/Memory/Profile 与 model price table，并执行受 settings 控制的启动加载/seed。`bootstrap.py` 把 `AppResources.create` 注入 `RuntimeLifecycle`；runtime 只知道 `ResourceFactory` callable，composition 只消费已创建的 container。resource implementation 本身由 infrastructure contract 禁止依赖 services、runtime、graph、API、tools 或 agents。
+`infrastructure/resources.py` 是 concrete resource aggregate：构造 Faiss/Hybrid/Web、Learning/Memory/Profile 与 model price table，并执行受 settings 控制的启动加载/seed。tools 定义只读 `ToolResourceContainer` port，composition 用 `CompositionResources` 扩展 settings/model-price capability；所有具体属性访问不再使用 `Any`。`bootstrap.py` 的 typed `_create_app_resources` 让 mypy 验证 AppResources structural conformance，再把 callable 注入 `RuntimeLifecycle`。resource implementation 本身由 infrastructure contract 禁止依赖 services、runtime、graph、API、tools 或 agents。
 
 `services` 是显式 compatibility boundary，不再作为长期架构层：文件集合固定为根 `__init__.py`、retrieval package facade 与 user-profile facade；所有 app production layer 和 bootstrap/composition/main 都禁止反向 import。Facade 可以委托 application/core/infrastructure，但不能拥有新业务实现。删除条件是仓外 import 审计或明确 deprecation 完成。
 

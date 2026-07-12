@@ -99,7 +99,7 @@ tech_doc_agent
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 
-`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式选择 `infrastructure/resources.py` 的 concrete resource factory、Redis approval repository 与 `ChatRuntime`。`composition.py` 再把 runtime resources 组合为 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；`learning_store.py` 与 `memory_store.py` 是共享 snapshot UoW 的查询/兼容 adapter。runtime domain 不依赖这些具体实现。
+`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式选择 `infrastructure/resources.py` 的 concrete resource factory、Redis approval repository 与 `ChatRuntime`。`composition.py` 通过 `CompositionResources` structural Protocol 组合 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph，不 import `AppResources`；bootstrap 的 typed factory adapter 由 mypy 验证 concrete container 满足该协议。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；`learning_store.py` 与 `memory_store.py` 是共享 snapshot UoW 的查询/兼容 adapter。runtime domain 不依赖这些具体实现。
 
 ### `app/runtime`
 
