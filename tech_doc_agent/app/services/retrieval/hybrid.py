@@ -5,6 +5,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from tech_doc_agent.app.application.retrieval import (
+    MetadataFilter,
+    RetrievalMode,
+    SearchQuery,
+    SearchResult,
+)
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.services.retrieval.bm25 import BM25Index
@@ -28,12 +34,8 @@ from tech_doc_agent.app.services.retrieval.fusion import (
 from tech_doc_agent.app.services.retrieval.models import (
     FusedCandidate as FusedCandidate,
     IndexedDocument,
-    MetadataFilter,
     RankedCandidate,
     RetrievalStorePort,
-    RetrievalMode,
-    SearchQuery,
-    SearchResult,
 )
 from tech_doc_agent.app.services.retrieval.semantic import (
     SemanticRanker,

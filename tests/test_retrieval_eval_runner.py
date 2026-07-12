@@ -7,7 +7,7 @@ from evals.run_retrieval_eval import (
     score_case,
     summarize_results,
 )
-from tech_doc_agent.app.services.retrieval.models import (
+from tech_doc_agent.app.application.retrieval import (
     MatchType,
     SearchQuery,
     SearchResult,

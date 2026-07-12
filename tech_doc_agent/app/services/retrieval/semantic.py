@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from tech_doc_agent.app.application.retrieval import MetadataFilter
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.services.retrieval.documents import document_key
 from tech_doc_agent.app.services.retrieval.filters import metadata_matches
 from tech_doc_agent.app.services.retrieval.models import (
     IndexedDocument,
-    MetadataFilter,
     RankedCandidate,
     SemanticSearchPort,
 )

@@ -21,12 +21,12 @@ from evals.manifests import (
     retrieval_eval_settings,
 )
 from evals.retrieval_corpus import build_retrieval_corpus_identity
-from tech_doc_agent.app.services.retrieval import (
-    HybridRetriever,
+from tech_doc_agent.app.application.retrieval import (
     RetrievalMode,
     SearchQuery,
     SearchResult,
 )
+from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.resources import RetrievalResources
 
 

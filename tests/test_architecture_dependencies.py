@@ -96,6 +96,20 @@ API_DELIVERY_CONTRACT = DependencyContract(
         "tech_doc_agent.app.tools",
     ),
 )
+TOOLS_CONTRACT = DependencyContract(
+    name="tool adapter isolation",
+    source_prefixes=("tech_doc_agent.app.tools",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
+        "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.infrastructure",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.runtime",
+        "tech_doc_agent.app.services",
+    ),
+)
 
 
 def test_core_does_not_depend_on_api_or_services():
@@ -116,6 +130,10 @@ def test_infrastructure_adapters_do_not_depend_on_delivery_or_orchestration():
 
 def test_api_delivery_only_depends_on_runtime_facade_not_services_or_backends():
     assert API_DELIVERY_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_tool_adapters_depend_on_application_ports_not_service_implementations():
+    assert TOOLS_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
 def test_learning_tools_delegate_writes_to_application_service():

@@ -12,19 +12,13 @@ from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdateResult,
 )
-from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
+from tech_doc_agent.app.application.retrieval import DocumentRetrieverPort
 
 
 class DocumentStorePort(Protocol):
     def add_documents(self, documents: list[dict[str, Any]]) -> dict[str, Any]: ...
 
     def save(self) -> Any: ...
-
-
-class DocumentRetrieverPort(Protocol):
-    def retrieve(self, request: SearchQuery) -> list[SearchResult]: ...
-
-    def refresh(self) -> None: ...
 
 
 class WebSearchPort(Protocol):

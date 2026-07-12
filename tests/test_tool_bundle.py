@@ -7,9 +7,9 @@ from tech_doc_agent.app.application.profile_models import (
     UserProfileUpdate,
 )
 from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
+from tech_doc_agent.app.application.retrieval import SearchQuery, SearchResult
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.tenant import TenantContext
-from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
@@ -256,6 +256,29 @@ def test_related_document_tool_builds_typed_vector_query_at_boundary(tmp_path):
             top_k=3,
             mode="vector",
             filters={"category": "langgraph_core"},
+        )
+    ]
+
+
+def test_document_tool_leaves_taxonomy_normalization_to_retriever(tmp_path):
+    dependencies = _dependencies(tmp_path, "raw-filter")
+    tools = build_tool_bundle(dependencies)
+
+    tools.read_docs.invoke(
+        {
+            "query": "hybrid retrieval",
+            "category": "RAG",
+            "tags": ["Hybrid Search"],
+        }
+    )
+
+    assert dependencies.document_retriever.calls == [
+        SearchQuery(
+            query="hybrid retrieval",
+            filters={
+                "category": "RAG",
+                "tags": ["Hybrid Search"],
+            },
         )
     ]
 

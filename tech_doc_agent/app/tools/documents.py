@@ -3,8 +3,7 @@ from dataclasses import dataclass
 
 from langchain_core.tools import BaseTool, tool
 
-from tech_doc_agent.app.services.retrieval.filters import normalize_filter
-from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
+from tech_doc_agent.app.application.retrieval import SearchQuery, SearchResult
 from tech_doc_agent.app.tools.dependencies import ToolDependencies
 
 
@@ -22,13 +21,16 @@ def _build_filters(
     tags: list[str] | None = None,
     source: str | None = None,
 ) -> dict:
-    return normalize_filter(
-        {
-            "category": category,
-            "tags": tags,
-            "source": source,
-        }
-    )
+    filters = {
+        "category": category,
+        "tags": list(tags) if tags else None,
+        "source": source,
+    }
+    return {
+        key: value
+        for key, value in filters.items()
+        if value is not None and value != "" and value != []
+    }
 
 
 def _serialize_search_results(results: list[SearchResult]) -> str:

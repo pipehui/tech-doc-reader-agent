@@ -6,6 +6,11 @@ from typing import cast
 
 import pytest
 
+from tech_doc_agent.app.application.retrieval import (
+    RetrievalMode,
+    SearchQuery,
+    SearchResult,
+)
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.retrieval import hybrid as hybrid_module
@@ -16,9 +21,6 @@ from tech_doc_agent.app.services.retrieval.fusion import reciprocal_rank_fusion
 from tech_doc_agent.app.services.retrieval.models import (
     IndexedDocument,
     RankedCandidate,
-    RetrievalMode,
-    SearchQuery,
-    SearchResult,
 )
 from tech_doc_agent.app.services.retrieval.tokenization import tokenize
 
