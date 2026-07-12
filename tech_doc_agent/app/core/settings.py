@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from functools import lru_cache
 from typing import Annotated
 
@@ -47,6 +48,11 @@ class Settings(BaseSettings):
     TRANSPORT_RETRY_MAX_RETRY_AFTER_SECONDS: float = Field(default=30.0, ge=0)
     GUARDRAIL_APPROVAL_TTL_SECONDS: int = Field(default=900, gt=0)
     LANGGRAPH_RECURSION_LIMIT: int = 80
+    REQUEST_MAX_SECONDS: float = Field(default=300.0, ge=0)
+    WORKFLOW_MAX_LLM_CALLS: int = Field(default=32, ge=0)
+    WORKFLOW_MAX_TOOL_CALLS: int = Field(default=48, ge=0)
+    WORKFLOW_MAX_TOTAL_TOKENS: int = Field(default=0, ge=0)
+    WORKFLOW_MAX_ESTIMATED_COST_USD: Decimal = Field(default=Decimal("0"), ge=0)
     MAX_IDENTICAL_TOOL_REPEATS: int = Field(default=2, ge=0)
     PARSER_MAX_RETRIEVAL_CALLS: int = Field(default=6, ge=0)
     MAX_REFLECTION_ROUNDS: int = Field(default=1, ge=0)

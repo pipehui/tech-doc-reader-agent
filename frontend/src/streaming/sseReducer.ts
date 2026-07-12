@@ -130,6 +130,38 @@ export function reduceSseEvent(
           : [])
       ]);
 
+    case "budget_started":
+      return actionsOnly(state, [
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
+        {
+          type: "set_session_state",
+          state: {
+            budget_status: "active",
+            budget_termination: {},
+            ...(isObject(data.usage)
+              ? { budget_usage: data.usage }
+              : {})
+          }
+        }
+      ]);
+
+    case "budget_terminated":
+      return actionsOnly(state, [
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
+        {
+          type: "set_session_state",
+          state: {
+            budget_status: "terminated",
+            ...(isObject(data.termination)
+              ? { budget_termination: data.termination }
+              : {}),
+            ...(isObject(data.usage)
+              ? { budget_usage: data.usage }
+              : {})
+          }
+        }
+      ]);
+
     case "token": {
       const agent = normalizeAgent(data.agent || state.activeAgent);
       const text = typeof data.text === "string" ? data.text : "";

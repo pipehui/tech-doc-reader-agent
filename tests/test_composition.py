@@ -12,6 +12,11 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
         MAX_IDENTICAL_TOOL_REPEATS=4,
         PARSER_MAX_RETRIEVAL_CALLS=9,
         MAX_REFLECTION_ROUNDS=2,
+        REQUEST_MAX_SECONDS=12,
+        WORKFLOW_MAX_LLM_CALLS=7,
+        WORKFLOW_MAX_TOOL_CALLS=8,
+        WORKFLOW_MAX_TOTAL_TOKENS=900,
+        WORKFLOW_MAX_ESTIMATED_COST_USD="1.5",
     )
     settings_b = Settings(DATA_PATH=str(tmp_path / "b"), SEED_DOC_STORE_ON_EMPTY=False)
     resources_a = AppResources.create(settings_a)
@@ -25,12 +30,20 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
     assert [tool.name for tool in parser_a.tools.safe] == ["read_docs", "web_search"]
     assert parser_a.tools.safe[0] is not parser_b.tools.safe[0]
     assert parser_a.tools.safe[0].invoke({"query": "StateGraph"}) == "[]"
-    assert spec_a.tool_execution_policy.max_identical_repeats == 4
-    assert spec_a.tool_execution_policy.parser_max_retrieval_calls == 9
-    assert spec_a.reflection_policy.max_rounds == 2
-    assert spec_b.tool_execution_policy.max_identical_repeats == 2
-    assert spec_b.tool_execution_policy.parser_max_retrieval_calls == 6
-    assert spec_b.reflection_policy.max_rounds == 1
+    assert spec_a.execution_policy.tools.max_identical_repeats == 4
+    assert spec_a.execution_policy.tools.parser_max_retrieval_calls == 9
+    assert spec_a.execution_policy.reflection.max_rounds == 2
+    assert spec_a.execution_policy.budget.request_max_seconds == 12
+    assert spec_a.execution_policy.budget.workflow_max_llm_calls == 7
+    assert spec_a.execution_policy.budget.workflow_max_tool_calls == 8
+    assert spec_a.execution_policy.budget.workflow_max_total_tokens == 900
+    assert str(
+        spec_a.execution_policy.budget.workflow_max_estimated_cost_usd
+    ) == "1.5"
+    assert spec_a.budget_tracker.execution_budget is spec_a.execution_policy.budget
+    assert spec_b.execution_policy.tools.max_identical_repeats == 2
+    assert spec_b.execution_policy.tools.parser_max_retrieval_calls == 6
+    assert spec_b.execution_policy.reflection.max_rounds == 1
     assert spec_a.budget_tracker.price_table is resources_a.model_price_table
     assert spec_b.budget_tracker.price_table is resources_b.model_price_table
 

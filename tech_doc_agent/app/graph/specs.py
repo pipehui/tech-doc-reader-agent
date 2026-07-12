@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from tech_doc_agent.app.core.structured_outputs import ResultKind
+from tech_doc_agent.app.core.execution_budget import ExecutionBudget
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 
 from .state import WorkflowStep
@@ -42,6 +43,13 @@ class ReflectionPolicy:
             for code in self.repairable_error_codes
         ):
             raise ValueError("repairable_error_codes must contain non-empty strings.")
+
+
+@dataclass(frozen=True)
+class ExecutionPolicy:
+    budget: ExecutionBudget
+    tools: ToolExecutionPolicy
+    reflection: ReflectionPolicy
 
 
 @dataclass(frozen=True)
@@ -91,9 +99,14 @@ class GraphSpec:
     primary: PrimarySpec
     subagents: tuple[AgentSpec, ...]
     user_info_node: Any
-    tool_execution_policy: ToolExecutionPolicy
-    reflection_policy: ReflectionPolicy
+    execution_policy: ExecutionPolicy
     budget_tracker: WorkflowBudgetTracker
+
+    def __post_init__(self) -> None:
+        if self.budget_tracker.execution_budget != self.execution_policy.budget:
+            raise ValueError(
+                "Graph execution policy and budget tracker must share one budget."
+            )
 
     @property
     def interrupt_nodes(self) -> tuple[str, ...]:

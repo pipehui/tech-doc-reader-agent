@@ -19,12 +19,16 @@ describe("REST response contracts", () => {
       current_agent: "parser",
       workflow_plan: ["parser", "summary"],
       plan_index: 1,
-      budget_usage: { llm_calls: 2, total_tokens: 120 }
+      budget_usage: { llm_calls: 2, total_tokens: 120 },
+      budget_status: "terminated",
+      budget_termination: { dimension: "llm_calls", limit: 2 }
     })).toMatchObject({
       session_id: "session-1",
       current_agent: "parser",
       workflow_plan: ["parser", "summary"],
-      budget_usage: { llm_calls: 2, total_tokens: 120 }
+      budget_usage: { llm_calls: 2, total_tokens: 120 },
+      budget_status: "terminated",
+      budget_termination: { dimension: "llm_calls", limit: 2 }
     });
 
     expect(decodeHistoryResponse({
@@ -80,6 +84,20 @@ describe("REST response contracts", () => {
         content: "hello"
       }]
     })).toThrow("role has unsupported value alien");
+
+    expect(() => decodeSessionState({
+      session_id: "session-1",
+      user_id: null,
+      namespace: null,
+      exists: true,
+      pending_interrupt: false,
+      learning_target: null,
+      message_count: 0,
+      current_agent: null,
+      workflow_plan: [],
+      plan_index: 0,
+      budget_status: "paused"
+    })).toThrow("budget_status has unsupported value paused");
 
     expect(() => decodeLearningOverview({
       total: 1,

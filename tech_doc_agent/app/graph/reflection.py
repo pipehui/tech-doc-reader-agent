@@ -13,7 +13,7 @@ from .specs import ReflectionPolicy
 from .state import State
 
 
-ReflectionRoute = Literal["continue", "terminate"]
+ReflectionRoute = Literal["continue", "terminate", "budget_terminate"]
 ReflectionTerminalReason = Literal[
     "non_repairable_error",
     "max_rounds_exhausted",
@@ -210,6 +210,8 @@ def apply_reflection_policy(
 
 
 def route_after_tool_result(state: State) -> ReflectionRoute:
+    if state.get("budget_status") == "terminating":
+        return "budget_terminate"
     if state.get("reflection_status") == "terminal":
         return "terminate"
     return "continue"

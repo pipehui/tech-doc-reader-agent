@@ -4,10 +4,12 @@ from typing import Any
 
 from tech_doc_agent.app.graph.builder import build_multi_agentic_graph
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
+from tech_doc_agent.app.core.execution_budget import build_execution_budget
 from tech_doc_agent.app.graph.nodes import create_user_info_node
 from tech_doc_agent.app.graph.specs import (
     AgentSpec,
     CompletionPolicy,
+    ExecutionPolicy,
     GraphSpec,
     PrimarySpec,
     ReflectionPolicy,
@@ -30,6 +32,7 @@ def build_graph_spec(resources: Any) -> GraphSpec:
 
 
 def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> GraphSpec:
+    execution_budget = build_execution_budget(resources.settings)
     return GraphSpec(
         primary=PrimarySpec(
             assistant=assistants.primary.assistant,
@@ -84,14 +87,20 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
             ),
         ),
         user_info_node=create_user_info_node(resources.profile_service.context_summary),
-        tool_execution_policy=ToolExecutionPolicy(
-            max_identical_repeats=resources.settings.MAX_IDENTICAL_TOOL_REPEATS,
-            parser_max_retrieval_calls=resources.settings.PARSER_MAX_RETRIEVAL_CALLS,
+        execution_policy=ExecutionPolicy(
+            budget=execution_budget,
+            tools=ToolExecutionPolicy(
+                max_identical_repeats=resources.settings.MAX_IDENTICAL_TOOL_REPEATS,
+                parser_max_retrieval_calls=resources.settings.PARSER_MAX_RETRIEVAL_CALLS,
+            ),
+            reflection=ReflectionPolicy(
+                max_rounds=resources.settings.MAX_REFLECTION_ROUNDS,
+            ),
         ),
-        reflection_policy=ReflectionPolicy(
-            max_rounds=resources.settings.MAX_REFLECTION_ROUNDS,
+        budget_tracker=WorkflowBudgetTracker(
+            resources.model_price_table,
+            execution_budget=execution_budget,
         ),
-        budget_tracker=WorkflowBudgetTracker(resources.model_price_table),
     )
 
 

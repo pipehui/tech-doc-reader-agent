@@ -212,6 +212,45 @@ def _usage_update_event(node_name: str, node_update: dict) -> ServerSentEvent | 
     )
 
 
+def _budget_terminated_event(
+    node_name: str,
+    node_update: dict,
+) -> ServerSentEvent | None:
+    termination = node_update.get("budget_termination")
+    usage = node_update.get("budget_usage")
+    if (
+        node_update.get("budget_status") != "terminated"
+        or not isinstance(termination, dict)
+        or not termination
+    ):
+        return None
+    return sse_event(
+        "budget_terminated",
+        {
+            "node": node_name,
+            "termination": termination,
+            "usage": usage if isinstance(usage, dict) else None,
+        },
+    )
+
+
+def _budget_started_event(
+    node_name: str,
+    node_update: dict,
+) -> ServerSentEvent | None:
+    usage = node_update.get("budget_usage")
+    if node_update.get("budget_status") != "active" or not isinstance(usage, dict):
+        return None
+    return sse_event(
+        "budget_started",
+        {
+            "node": node_name,
+            "status": "active",
+            "usage": usage,
+        },
+    )
+
+
 def stream_part_type_and_data(part) -> tuple[str | None, object]:
     if isinstance(part, dict):
         return part.get("type"), part.get("data")
@@ -261,6 +300,14 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
         usage_event = _usage_update_event(node_name, node_update)
         if usage_event is not None:
             yield usage_event
+
+        budget_event = _budget_terminated_event(node_name, node_update)
+        if budget_event is not None:
+            yield budget_event
+
+        budget_started = _budget_started_event(node_name, node_update)
+        if budget_started is not None:
+            yield budget_started
 
         messages = node_update.get("messages", [])
         for message in messages:

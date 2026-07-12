@@ -12,7 +12,11 @@ from .nodes import (
     create_primary_tool_failure_node,
     store_plan,
 )
-from .budgeting import WorkflowBudgetTracker, budgeted_request_start_node
+from .budgeting import (
+    WorkflowBudgetTracker,
+    budgeted_request_start_node,
+)
+from .budget_termination import create_budget_termination_node
 from .reflection import route_after_tool_result
 from .routing import (
     NEXT_STEP_ROUTE_MAP,
@@ -21,7 +25,7 @@ from .routing import (
     route_after_user_info,
     route_next_step,
 )
-from .specs import AgentSpec, GraphSpec, ReflectionPolicy, ToolExecutionPolicy
+from .specs import AgentSpec, ExecutionPolicy, GraphSpec
 from .state import State
 from .tool_nodes import create_tool_node_with_fallback
 
@@ -31,8 +35,7 @@ def _register_tool_node(
     *,
     node_name: str,
     tools: tuple,
-    tool_execution_policy: ToolExecutionPolicy,
-    reflection_policy: ReflectionPolicy,
+    execution_policy: ExecutionPolicy,
     budget_tracker: WorkflowBudgetTracker,
     continue_node: str,
     terminate_node: str,
@@ -41,8 +44,8 @@ def _register_tool_node(
         node_name,
         create_tool_node_with_fallback(
             list(tools),
-            tool_execution_policy,
-            reflection_policy,
+            execution_policy.tools,
+            execution_policy.reflection,
             budget_tracker,
         ),
     )
@@ -52,6 +55,7 @@ def _register_tool_node(
         {
             "continue": continue_node,
             "terminate": terminate_node,
+            "budget_terminate": "budget_terminated",
         },
     )
 
@@ -59,8 +63,7 @@ def _register_tool_node(
 def register_subagent(
     builder: StateGraph,
     spec: AgentSpec,
-    tool_execution_policy: ToolExecutionPolicy,
-    reflection_policy: ReflectionPolicy,
+    execution_policy: ExecutionPolicy,
     budget_tracker: WorkflowBudgetTracker,
 ) -> None:
     builder.add_node(spec.entry_node, create_entry_node(spec.display_name, spec.key))
@@ -79,8 +82,7 @@ def register_subagent(
             builder,
             node_name=spec.safe_tool_node,
             tools=spec.tools.safe,
-            tool_execution_policy=tool_execution_policy,
-            reflection_policy=reflection_policy,
+            execution_policy=execution_policy,
             budget_tracker=budget_tracker,
             continue_node=spec.key,
             terminate_node=spec.leave_node,
@@ -91,8 +93,7 @@ def register_subagent(
             builder,
             node_name=spec.sensitive_tool_node,
             tools=spec.tools.sensitive,
-            tool_execution_policy=tool_execution_policy,
-            reflection_policy=reflection_policy,
+            execution_policy=execution_policy,
             budget_tracker=budget_tracker,
             continue_node=spec.key,
             terminate_node=spec.leave_node,
@@ -112,6 +113,7 @@ def register_subagent(
     route_targets: dict[Hashable, str] = {
         spec.leave_node: spec.leave_node,
         spec.finish_node: spec.finish_node,
+        "budget_terminated": "budget_terminated",
     }
     if spec.tools.safe:
         route_targets[spec.safe_tool_node] = spec.safe_tool_node
@@ -123,6 +125,11 @@ def register_subagent(
 def create_graph_builder(spec: GraphSpec) -> StateGraph:
     builder = StateGraph(State)
     builder.add_node(
+        "budget_terminated",
+        create_budget_termination_node(spec.budget_tracker),
+    )
+    builder.add_edge("budget_terminated", END)
+    builder.add_node(
         "fetch_user_info",
         budgeted_request_start_node(spec.user_info_node, spec.budget_tracker),
     )
@@ -132,8 +139,7 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         register_subagent(
             builder,
             subagent,
-            spec.tool_execution_policy,
-            spec.reflection_policy,
+            spec.execution_policy,
             spec.budget_tracker,
         )
 
@@ -145,8 +151,7 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         builder,
         node_name="primary_assistant_tools",
         tools=spec.primary.tools.safe,
-        tool_execution_policy=spec.tool_execution_policy,
-        reflection_policy=spec.reflection_policy,
+        execution_policy=spec.execution_policy,
         budget_tracker=spec.budget_tracker,
         continue_node="primary_assistant",
         terminate_node="primary_tool_failure",
@@ -155,8 +160,7 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         builder,
         node_name="primary_assistant_sensitive_tools",
         tools=spec.primary.tools.sensitive,
-        tool_execution_policy=spec.tool_execution_policy,
-        reflection_policy=spec.reflection_policy,
+        execution_policy=spec.execution_policy,
         budget_tracker=spec.budget_tracker,
         continue_node="primary_assistant",
         terminate_node="primary_tool_failure",
@@ -183,6 +187,7 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         "primary_assistant_tools": "primary_assistant_tools",
         "primary_assistant_sensitive_tools": "primary_assistant_sensitive_tools",
         "primary_tool_failure": "primary_tool_failure",
+        "budget_terminated": "budget_terminated",
         END: END,
     }
     sensitive_tool_names = frozenset(tool.name for tool in spec.primary.tools.sensitive)

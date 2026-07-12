@@ -114,6 +114,16 @@ def test_primary_router_uses_injected_sensitive_tool_names():
     assert route(_state_with_tool_call("read_user_profile")) == "primary_assistant_tools"
 
 
+def test_budget_termination_preempts_all_assistant_tool_routes(graph_spec):
+    state = {
+        **_state_with_tool_call("read_docs"),
+        "budget_status": "terminating",
+    }
+
+    assert _route(graph_spec, "parser")(state) == "budget_terminated"
+    assert make_primary_router(frozenset())(state) == "budget_terminated"
+
+
 def test_finalizing_subagent_cannot_enter_another_tool_node(graph_spec):
     state = {
         **_state_with_tool_call("read_docs"),

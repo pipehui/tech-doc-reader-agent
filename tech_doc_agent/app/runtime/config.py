@@ -1,6 +1,12 @@
+from collections.abc import Callable
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any
 
+from tech_doc_agent.app.core.execution_budget import (
+    REQUEST_BUDGET_METADATA_KEY,
+    build_execution_budget,
+)
 from tech_doc_agent.app.core.langfuse_tracing import build_langfuse_trace, langfuse_metadata
 from tech_doc_agent.app.core.observability import get_trace_context
 from tech_doc_agent.app.core.settings import Settings
@@ -12,6 +18,7 @@ class SessionConfigFactory:
     """Build tenant-scoped LangGraph configuration for one runtime operation."""
 
     settings: Settings
+    monotonic_clock: Callable[[], float] = monotonic
 
     def build(
         self,
@@ -20,6 +27,7 @@ class SessionConfigFactory:
         namespace: str | None = None,
         operation: str = "state",
         with_callbacks: bool = False,
+        request_started_monotonic: float | None = None,
     ) -> dict[str, Any]:
         tenant = parse_tenant(user_id, namespace, prefer_context=True)
         context = get_trace_context()
@@ -33,6 +41,7 @@ class SessionConfigFactory:
             "session_id": session_id,
             "user_id": tenant.user_id,
             "namespace": tenant.namespace,
+            "runtime_operation": operation,
             **langfuse_metadata(
                 session_id=session_id,
                 operation=operation,
@@ -40,6 +49,16 @@ class SessionConfigFactory:
                 langfuse_trace=langfuse_trace,
             ),
         }
+        if operation in {"chat", "approval"}:
+            request_window = build_execution_budget(self.settings).start_request(
+                now=(
+                    request_started_monotonic
+                    if request_started_monotonic is not None
+                    else self.monotonic_clock()
+                )
+            )
+            if request_window is not None:
+                metadata[REQUEST_BUDGET_METADATA_KEY] = request_window.to_metadata()
 
         config: dict[str, Any] = {
             "configurable": {

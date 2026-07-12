@@ -7,6 +7,7 @@ export type AgentKey =
   | "summary";
 
 export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type BudgetStatus = "active" | "terminating" | "terminated";
 
 export interface TenantScope {
   user_id: string;
@@ -25,6 +26,8 @@ export interface SessionState {
   workflow_plan: string[];
   plan_index: number;
   budget_usage?: Record<string, unknown>;
+  budget_status?: BudgetStatus;
+  budget_termination?: Record<string, unknown>;
 }
 
 export interface ChatMessage {

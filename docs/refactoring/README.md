@@ -54,6 +54,7 @@
 | 2026-07-12 | Phase 4：统一有限 Transport Retry、Retry-After 与 provider attempt telemetry | transport 完成，Reflection/ExecutionBudget 继续 | [2026-07-12-transport-retry-policy.md](2026-07-12-transport-retry-policy.md) |
 | 2026-07-12 | Phase 4：有限 Reflection、参数修复状态机与 recovery fault metrics | Reflection 完成，ExecutionBudget 继续 | [2026-07-12-reflection-policy.md](2026-07-12-reflection-policy.md) |
 | 2026-07-12 | Phase 4：Workflow BudgetUsage、真实 token metadata、versioned price table 与 usage SSE | 计量完成，强制预算继续 | [2026-07-12-budget-usage-accounting.md](2026-07-12-budget-usage-accounting.md) |
+| 2026-07-12 | Phase 4：ExecutionBudget、request deadline、resume recheck 与确定性 partial termination | 强制预算完成，provider-level retry 明细继续 | [2026-07-12-execution-budget-enforcement.md](2026-07-12-execution-budget-enforcement.md) |
 
 ## 本地任务单策略
 

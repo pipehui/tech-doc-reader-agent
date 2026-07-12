@@ -3,7 +3,7 @@ from __future__ import annotations
 from time import perf_counter
 
 from langchain_core.messages import ToolMessage
-from langchain_core.runnables import RunnableLambda
+from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langgraph.prebuilt import ToolNode
 
 from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
@@ -157,12 +157,23 @@ def create_tool_node_with_fallback(
     reflection_policy = reflection_policy or ReflectionPolicy()
     tool_node = ToolNode(tools, handle_tool_errors=False)
 
-    def guarded_tool_node(state: State):
+    def guarded_tool_node(
+        state: State,
+        config: RunnableConfig | None = None,
+    ):
+        tool_calls = _pending_tool_calls(state)
+        if budget_tracker is not None:
+            budget_block = budget_tracker.block_tools_before_execution(
+                state,
+                config,
+                calls=len(tool_calls),
+            )
+            if budget_block is not None:
+                return budget_block
         blocked = _blocked_tool_call_update(state, policy)
         if blocked is not None:
             return apply_reflection_policy(state, blocked, reflection_policy)
 
-        tool_calls = _pending_tool_calls(state)
         start = perf_counter()
 
         try:
@@ -185,15 +196,33 @@ def create_tool_node_with_fallback(
             success=True,
         )
         if budget_tracker is not None:
-            result = budget_tracker.record_tools(state, result, calls=len(tool_calls))
+            result = budget_tracker.record_tools(
+                state,
+                result,
+                calls=len(tool_calls),
+                config=config,
+            )
+            if result.get("budget_status") == "terminating":
+                return result
         return apply_reflection_policy(state, result, reflection_policy)
 
-    async def aguarded_tool_node(state: State):
+    async def aguarded_tool_node(
+        state: State,
+        config: RunnableConfig | None = None,
+    ):
+        tool_calls = _pending_tool_calls(state)
+        if budget_tracker is not None:
+            budget_block = budget_tracker.block_tools_before_execution(
+                state,
+                config,
+                calls=len(tool_calls),
+            )
+            if budget_block is not None:
+                return budget_block
         blocked = _blocked_tool_call_update(state, policy)
         if blocked is not None:
             return apply_reflection_policy(state, blocked, reflection_policy)
 
-        tool_calls = _pending_tool_calls(state)
         start = perf_counter()
 
         try:
@@ -223,17 +252,30 @@ def create_tool_node_with_fallback(
             async_runtime=True,
         )
         if budget_tracker is not None:
-            result = budget_tracker.record_tools(state, result, calls=len(tool_calls))
+            result = budget_tracker.record_tools(
+                state,
+                result,
+                calls=len(tool_calls),
+                config=config,
+            )
+            if result.get("budget_status") == "terminating":
+                return result
         return apply_reflection_policy(state, result, reflection_policy)
 
-    def reflected_tool_error(state: State):
+    def reflected_tool_error(
+        state: State,
+        config: RunnableConfig | None = None,
+    ):
         update = handle_tool_error(state)
         if budget_tracker is not None:
             update = budget_tracker.record_tools(
                 state,
                 update,
                 calls=len(_pending_tool_calls(state)),
+                config=config,
             )
+            if update.get("budget_status") == "terminating":
+                return update
         return apply_reflection_policy(
             state,
             update,

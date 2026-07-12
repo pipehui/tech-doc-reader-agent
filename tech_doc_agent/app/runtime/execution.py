@@ -1,7 +1,8 @@
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import suppress
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Any, Protocol
 
 from langchain_core.messages import ToolMessage
@@ -76,6 +77,7 @@ class GraphExecutionService:
     session_queries: SessionQueryService
     approvals: ApprovalService
     telemetry: RuntimeOperationTelemetry = field(default_factory=RuntimeOperationTelemetry)
+    monotonic_clock: Callable[[], float] = monotonic
 
     def _graph_input(self, user_input: str, tenant: TenantContext) -> dict[str, Any]:
         return {
@@ -138,7 +140,13 @@ class GraphExecutionService:
         namespace: str | None,
         *,
         async_runtime: bool,
+        request_started_monotonic: float | None = None,
     ) -> Iterator[Any]:
+        request_started_monotonic = (
+            request_started_monotonic
+            if request_started_monotonic is not None
+            else self.monotonic_clock()
+        )
         tenant = parse_tenant(user_id, namespace, prefer_context=True)
         trace = self.telemetry.start_chat(
             session_id,
@@ -156,6 +164,7 @@ class GraphExecutionService:
                     namespace=tenant.namespace,
                     operation="chat",
                     with_callbacks=True,
+                    request_started_monotonic=request_started_monotonic,
                 )
                 yield from graph.stream(
                     self._graph_input(user_input, tenant),
@@ -175,6 +184,7 @@ class GraphExecutionService:
         user_input: str,
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ) -> Iterator[Any]:
         yield from self._stream_user_message(
             session_id,
@@ -182,6 +192,7 @@ class GraphExecutionService:
             user_id,
             namespace,
             async_runtime=False,
+            request_started_monotonic=request_started_monotonic,
         )
 
     async def astream_user_message(
@@ -190,6 +201,7 @@ class GraphExecutionService:
         user_input: str,
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ) -> AsyncIterator[Any]:
         async for part in _aiter_sync_iterator(
             self._stream_user_message(
@@ -198,6 +210,7 @@ class GraphExecutionService:
                 user_id,
                 namespace,
                 async_runtime=True,
+                request_started_monotonic=request_started_monotonic,
             )
         ):
             yield part
@@ -211,7 +224,13 @@ class GraphExecutionService:
         namespace: str | None,
         *,
         async_runtime: bool,
+        request_started_monotonic: float | None = None,
     ) -> Iterator[Any]:
+        request_started_monotonic = (
+            request_started_monotonic
+            if request_started_monotonic is not None
+            else self.monotonic_clock()
+        )
         tenant = parse_tenant(user_id, namespace, prefer_context=True)
         trace = self.telemetry.start_approval(
             session_id,
@@ -239,6 +258,7 @@ class GraphExecutionService:
                         tenant.user_id,
                         tenant.namespace,
                         async_runtime=async_runtime,
+                        request_started_monotonic=request_started_monotonic,
                     )
                 else:
                     yield self.approvals.rejection_part(pending_guardrail, feedback)
@@ -260,6 +280,7 @@ class GraphExecutionService:
                 namespace=tenant.namespace,
                 operation="approval",
                 with_callbacks=True,
+                request_started_monotonic=request_started_monotonic,
             )
             graph = self.graph_provider()
 
@@ -290,6 +311,7 @@ class GraphExecutionService:
         feedback: str = "",
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ) -> Iterator[Any]:
         yield from self._stream_approval(
             session_id,
@@ -298,6 +320,7 @@ class GraphExecutionService:
             user_id,
             namespace,
             async_runtime=False,
+            request_started_monotonic=request_started_monotonic,
         )
 
     async def astream_approval(
@@ -307,6 +330,7 @@ class GraphExecutionService:
         feedback: str = "",
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ) -> AsyncIterator[Any]:
         async for part in _aiter_sync_iterator(
             self._stream_approval(
@@ -316,6 +340,7 @@ class GraphExecutionService:
                 user_id,
                 namespace,
                 async_runtime=True,
+                request_started_monotonic=request_started_monotonic,
             )
         ):
             yield part

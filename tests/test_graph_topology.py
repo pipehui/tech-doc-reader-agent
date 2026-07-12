@@ -71,31 +71,43 @@ def test_compiled_graph_preserves_subagent_topology_and_interrupts(graph_spec):
         "primary_assistant_tools",
         "primary_assistant_sensitive_tools",
         "primary_tool_failure",
+        "budget_terminated",
         *NEXT_STEP_TARGETS,
     }
     assert outgoing["store_plan"] == NEXT_STEP_TARGETS
     assert outgoing["primary_assistant_tools"] == {
         "primary_assistant",
         "primary_tool_failure",
+        "budget_terminated",
     }
     assert outgoing["primary_assistant_sensitive_tools"] == {
         "primary_assistant",
         "primary_tool_failure",
+        "budget_terminated",
     }
     assert outgoing["primary_tool_failure"] == {"__end__"}
+    assert outgoing["budget_terminated"] == {"__end__"}
 
     for agent, route_targets in SUBAGENT_ROUTE_TARGETS.items():
         assert outgoing[f"enter_{agent}"] == {agent}
-        assert outgoing[agent] == route_targets
+        assert outgoing[agent] == {*route_targets, "budget_terminated"}
         assert outgoing[f"leave_{agent}"] == {"primary_assistant"}
         assert outgoing[f"finish_{agent}"] == NEXT_STEP_TARGETS
 
         safe_node = f"{agent}_assistant_safe_tools"
-        assert outgoing[safe_node] == {agent, f"leave_{agent}"}
+        assert outgoing[safe_node] == {
+            agent,
+            f"leave_{agent}",
+            "budget_terminated",
+        }
 
         sensitive_node = f"{agent}_assistant_sensitive_tools"
         if sensitive_node in route_targets:
-            assert outgoing[sensitive_node] == {agent, f"leave_{agent}"}
+            assert outgoing[sensitive_node] == {
+                agent,
+                f"leave_{agent}",
+                "budget_terminated",
+            }
         else:
             assert sensitive_node not in graph_view.nodes
 

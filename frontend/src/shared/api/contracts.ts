@@ -1,4 +1,5 @@
 import type {
+  BudgetStatus,
   HistoryItem,
   HistoryResponse,
   LearningOverview,
@@ -73,6 +74,15 @@ function messageRole(value: unknown): MessageRole {
 }
 
 
+function budgetStatus(value: unknown): BudgetStatus {
+  const status = stringValue(value, "budget_status");
+  if (status !== "active" && status !== "terminating" && status !== "terminated") {
+    throw new Error(`budget_status has unsupported value ${status}`);
+  }
+  return status;
+}
+
+
 function decodeHistoryItem(payload: unknown): HistoryItem {
   const item = objectValue(payload, "history message");
   return {
@@ -105,7 +115,18 @@ export function decodeSessionState(payload: unknown): SessionState {
     plan_index: integerValue(state.plan_index, "plan_index"),
     ...(state.budget_usage === undefined || state.budget_usage === null
       ? {}
-      : { budget_usage: objectValue(state.budget_usage, "budget_usage") })
+      : { budget_usage: objectValue(state.budget_usage, "budget_usage") }),
+    ...(state.budget_status === undefined || state.budget_status === null
+      ? {}
+      : { budget_status: budgetStatus(state.budget_status) }),
+    ...(state.budget_termination === undefined || state.budget_termination === null
+      ? {}
+      : {
+          budget_termination: objectValue(
+            state.budget_termination,
+            "budget_termination"
+          )
+        })
   };
 }
 

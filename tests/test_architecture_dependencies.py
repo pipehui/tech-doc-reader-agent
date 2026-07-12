@@ -11,7 +11,11 @@ ASSISTANTS_DIR = APP_DIR / "services" / "assistants"
 RETRIEVAL_DIR = APP_DIR / "services" / "retrieval"
 FORBIDDEN_CORE_DEPENDENCIES = (
     "tech_doc_agent.app.api",
+    "tech_doc_agent.app.graph",
+    "tech_doc_agent.app.infrastructure",
+    "tech_doc_agent.app.runtime",
     "tech_doc_agent.app.services",
+    "tech_doc_agent.app.tools",
 )
 FORBIDDEN_RUNTIME_DEPENDENCIES = (
     "tech_doc_agent.app.api",
@@ -221,6 +225,7 @@ def test_graph_execution_policy_does_not_read_settings_at_runtime():
         ("tech_doc_agent.app.core.settings",),
         filenames=(
             "builder.py",
+            "budget_termination.py",
             "budgeting.py",
             "reflection.py",
             "specs.py",

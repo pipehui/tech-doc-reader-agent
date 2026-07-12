@@ -48,6 +48,7 @@ PrimaryRouteTarget = Literal[
     "enter_relation",
     "enter_examination",
     "enter_summary",
+    "budget_terminated",
     "__end__",
 ]
 
@@ -80,6 +81,8 @@ def make_subagent_router(spec: AgentSpec) -> Callable[[State], str]:
     safe_tool_names = frozenset(tool.name for tool in spec.tools.safe)
 
     def route_subagent(state: State) -> str:
+        if state.get("budget_status") == "terminating":
+            return "budget_terminated"
         route = tools_condition(cast(dict[str, Any], state))
         if route == END:
             return spec.finish_node
@@ -109,6 +112,8 @@ def make_subagent_router(spec: AgentSpec) -> Callable[[State], str]:
 
 def make_primary_router(sensitive_tool_names: frozenset[str]) -> Callable[[State], PrimaryRouteTarget]:
     def route_primary_assistant(state: State) -> PrimaryRouteTarget:
+        if state.get("budget_status") == "terminating":
+            return "budget_terminated"
         route = tools_condition(cast(dict[str, Any], state))
         if route == END:
             return cast(PrimaryRouteTarget, END)

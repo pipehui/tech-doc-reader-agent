@@ -11,10 +11,12 @@ from tech_doc_agent.app.graph.commands import (
     ToSummaryAssistant,
 )
 from tech_doc_agent.app.core.model_pricing import ModelPriceTable
+from tech_doc_agent.app.core.execution_budget import ExecutionBudget
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.specs import (
     AgentSpec,
     CompletionPolicy,
+    ExecutionPolicy,
     GraphSpec,
     PrimarySpec,
     ReflectionPolicy,
@@ -27,11 +29,13 @@ class StubAssistant:
     def __init__(self, name: str):
         self.name = name
 
-    def __call__(self, state, config=None):
+    def __call__(self, state, config=None, *, before_llm_attempt=None):
+        if before_llm_attempt is not None:
+            before_llm_attempt(())
         return {"messages": AIMessage(content="stub", name=self.name)}
 
-    async def ainvoke(self, state, config=None):
-        return self(state, config)
+    async def ainvoke(self, state, config=None, *, before_llm_attempt=None):
+        return self(state, config, before_llm_attempt=before_llm_attempt)
 
 
 def _named_tool(name: str) -> StructuredTool:
@@ -142,10 +146,16 @@ def graph_spec() -> GraphSpec:
             "namespace": state.get("namespace", "tech_docs"),
             "learning_target": state.get("learning_target", ""),
         },
-        tool_execution_policy=ToolExecutionPolicy(
-            max_identical_repeats=2,
-            parser_max_retrieval_calls=6,
+        execution_policy=ExecutionPolicy(
+            budget=ExecutionBudget(),
+            tools=ToolExecutionPolicy(
+                max_identical_repeats=2,
+                parser_max_retrieval_calls=6,
+            ),
+            reflection=ReflectionPolicy(max_rounds=1),
         ),
-        reflection_policy=ReflectionPolicy(max_rounds=1),
-        budget_tracker=WorkflowBudgetTracker(ModelPriceTable.empty()),
+        budget_tracker=WorkflowBudgetTracker(
+            ModelPriceTable.empty(),
+            execution_budget=ExecutionBudget(),
+        ),
     )

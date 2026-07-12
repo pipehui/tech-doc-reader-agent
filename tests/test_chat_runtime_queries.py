@@ -159,6 +159,11 @@ def test_sync_and_async_session_state_views_are_equivalent():
                 "llm_calls": 2,
                 "tool_calls": 1,
             },
+            "budget_status": "terminated",
+            "budget_termination": {
+                "schema_version": 1,
+                "dimension": "llm_calls",
+            },
         },
     )
     runtime = _runtime_with_snapshot(snapshot)
@@ -184,5 +189,10 @@ def test_sync_and_async_session_state_views_are_equivalent():
             "schema_version": 1,
             "llm_calls": 2,
             "tool_calls": 1,
+        },
+        "budget_status": "terminated",
+        "budget_termination": {
+            "schema_version": 1,
+            "dimension": "llm_calls",
         },
     }

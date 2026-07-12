@@ -5,6 +5,7 @@ from langchain_core.messages import AIMessage
 from redis.exceptions import BusyLoadingError
 
 from tech_doc_agent.app.core.observability import trace_context
+from tech_doc_agent.app.core.execution_budget import REQUEST_BUDGET_METADATA_KEY
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.runtime import config as runtime_config
 from tech_doc_agent.app.runtime import lifecycle as runtime_lifecycle
@@ -59,6 +60,30 @@ def test_build_config_omits_callbacks_for_state_reads():
     assert config["metadata"]["namespace"] == "tech_docs"
     assert config["metadata"]["langfuse_session_id"] == "session-1"
     assert config["run_name"] == "tech_doc_agent.state"
+    assert REQUEST_BUDGET_METADATA_KEY not in config["metadata"]
+
+
+def test_session_config_uses_injected_request_start_without_persisting_deadline():
+    factory = runtime_config.SessionConfigFactory(
+        Settings(REQUEST_MAX_SECONDS=5),
+        monotonic_clock=lambda: 99.0,
+    )
+
+    config = factory.build(
+        "session-budget",
+        operation="approval",
+        request_started_monotonic=10.0,
+    )
+    window = config["metadata"][REQUEST_BUDGET_METADATA_KEY]
+
+    assert config["metadata"]["runtime_operation"] == "approval"
+    assert window == {
+        "schema_version": 1,
+        "started_monotonic": 10.0,
+        "deadline_monotonic": 15.0,
+        "max_seconds": 5.0,
+    }
+    assert REQUEST_BUDGET_METADATA_KEY not in config["configurable"]
 
 
 def test_build_config_namespaces_thread_by_tenant():

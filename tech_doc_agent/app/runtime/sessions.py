@@ -20,6 +20,7 @@ class SessionConfigBuilder(Protocol):
         namespace: str | None = None,
         operation: str = "state",
         with_callbacks: bool = False,
+        request_started_monotonic: float | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -182,6 +183,8 @@ class SessionQueryService:
             "workflow_plan": read.values.get("workflow_plan", []),
             "plan_index": read.values.get("plan_index", 0),
             "budget_usage": read.values.get("budget_usage"),
+            "budget_status": read.values.get("budget_status"),
+            "budget_termination": read.values.get("budget_termination") or None,
         }
 
     async def aget_session_state(

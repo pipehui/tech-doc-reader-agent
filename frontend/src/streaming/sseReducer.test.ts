@@ -167,6 +167,51 @@ describe("pure SSE reducer", () => {
         state: { budget_usage: usagePayload }
       }
     ]);
+
+    const termination = {
+      schema_version: 1,
+      scope: "workflow",
+      dimension: "llm_calls",
+      reason: "limit_would_be_exceeded",
+      observed: 3,
+      limit: 2
+    };
+    const terminated = reduce(plan.state, "budget_terminated", {
+      node: "parser",
+      termination,
+      usage: usagePayload
+    });
+    expect(terminated.actions).toEqual([
+      expect.objectContaining({
+        type: "record_event",
+        event: expect.objectContaining({
+          type: "budget_terminated",
+          agent: "parser"
+        })
+      }),
+      {
+        type: "set_session_state",
+        state: {
+          budget_status: "terminated",
+          budget_termination: termination,
+          budget_usage: usagePayload
+        }
+      }
+    ]);
+
+    const started = reduce(plan.state, "budget_started", {
+      node: "primary_assistant",
+      status: "active",
+      usage: { llm_calls: 0, tool_calls: 0 }
+    });
+    expect(started.actions[1]).toEqual({
+      type: "set_session_state",
+      state: {
+        budget_status: "active",
+        budget_termination: {},
+        budget_usage: { llm_calls: 0, tool_calls: 0 }
+      }
+    });
   });
 
   it("tracks duplicate token metadata and finalizes the agent message", () => {

@@ -126,6 +126,7 @@ class ChatRuntime:
         namespace: str | None = None,
         operation: str = "state",
         with_callbacks: bool = False,
+        request_started_monotonic: float | None = None,
     ) -> dict:
         return SessionConfigFactory(self.settings).build(
             session_id,
@@ -133,6 +134,7 @@ class ChatRuntime:
             namespace=namespace,
             operation=operation,
             with_callbacks=with_callbacks,
+            request_started_monotonic=request_started_monotonic,
         )
 
     def request_guardrail_approval(
@@ -186,12 +188,14 @@ class ChatRuntime:
         user_input: str,
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ):
         yield from self._execution.stream_user_message(
             session_id,
             user_input,
             user_id=user_id,
             namespace=namespace,
+            request_started_monotonic=request_started_monotonic,
         )
 
     async def astream_user_message(
@@ -200,12 +204,14 @@ class ChatRuntime:
         user_input: str,
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ):
         async for part in self._execution.astream_user_message(
             session_id,
             user_input,
             user_id=user_id,
             namespace=namespace,
+            request_started_monotonic=request_started_monotonic,
         ):
             yield part
 
@@ -240,6 +246,7 @@ class ChatRuntime:
         feedback: str = "",
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ):
         yield from self._execution.stream_approval(
             session_id,
@@ -247,6 +254,7 @@ class ChatRuntime:
             feedback=feedback,
             user_id=user_id,
             namespace=namespace,
+            request_started_monotonic=request_started_monotonic,
         )
 
     async def astream_approval(
@@ -256,6 +264,7 @@ class ChatRuntime:
         feedback: str = "",
         user_id: str | None = None,
         namespace: str | None = None,
+        request_started_monotonic: float | None = None,
     ):
         async for part in self._execution.astream_approval(
             session_id,
@@ -263,6 +272,7 @@ class ChatRuntime:
             feedback=feedback,
             user_id=user_id,
             namespace=namespace,
+            request_started_monotonic=request_started_monotonic,
         ):
             yield part
 

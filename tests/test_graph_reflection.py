@@ -340,11 +340,13 @@ def test_assistant_node_resets_active_reflection_only_after_tool_free_output():
         def __init__(self, message):
             self.message = message
 
-        def __call__(self, state, config=None):
+        def __call__(self, state, config=None, *, before_llm_attempt=None):
+            if before_llm_attempt is not None:
+                before_llm_attempt(())
             return {"messages": self.message}
 
-        async def ainvoke(self, state, config=None):
-            return self(state, config)
+        async def ainvoke(self, state, config=None, *, before_llm_attempt=None):
+            return self(state, config, before_llm_attempt=before_llm_attempt)
 
     state = {
         "messages": [],

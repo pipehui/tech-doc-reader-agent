@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterable, Iterable
+from time import monotonic
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
@@ -172,7 +173,13 @@ def stream_chat_events(
     user_id: str | None = None,
     namespace: str | None = None,
     guardrail_checked: bool = False,
+    request_started_monotonic: float | None = None,
 ) -> Iterable[ServerSentEvent]:
+    request_started_monotonic = (
+        request_started_monotonic
+        if request_started_monotonic is not None
+        else monotonic()
+    )
     if not guardrail_checked:
         risk = _record_guardrail_decision(message, source="chat.message")
         if risk.level == "high":
@@ -201,7 +208,13 @@ def stream_chat_events(
     snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
-    parts = runtime.stream_user_message(session_id, message, user_id=user_id, namespace=namespace)
+    parts = runtime.stream_user_message(
+        session_id,
+        message,
+        user_id=user_id,
+        namespace=namespace,
+        request_started_monotonic=request_started_monotonic,
+    )
     yield from stream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace)
 
 
@@ -212,7 +225,13 @@ async def astream_chat_events(
     user_id: str | None = None,
     namespace: str | None = None,
     guardrail_checked: bool = False,
+    request_started_monotonic: float | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
+    request_started_monotonic = (
+        request_started_monotonic
+        if request_started_monotonic is not None
+        else monotonic()
+    )
     if not guardrail_checked:
         risk = _record_guardrail_decision(message, source="chat.message")
         if risk.level == "high":
@@ -242,7 +261,13 @@ async def astream_chat_events(
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
 
-    parts = runtime.astream_user_message(session_id, message, user_id=user_id, namespace=namespace)
+    parts = runtime.astream_user_message(
+        session_id,
+        message,
+        user_id=user_id,
+        namespace=namespace,
+        request_started_monotonic=request_started_monotonic,
+    )
     async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
         yield event
 
@@ -255,7 +280,13 @@ def stream_approval_events(
     user_id: str | None = None,
     namespace: str | None = None,
     guardrail_checked: bool = False,
+    request_started_monotonic: float | None = None,
 ) -> Iterable[ServerSentEvent]:
+    request_started_monotonic = (
+        request_started_monotonic
+        if request_started_monotonic is not None
+        else monotonic()
+    )
     if feedback and not guardrail_checked:
         risk = _record_guardrail_decision(feedback, source="chat.approval.feedback")
         if risk.level == "high":
@@ -275,7 +306,14 @@ def stream_approval_events(
         )
         return
 
-    parts = runtime.stream_approval(session_id, approved, feedback, user_id=user_id, namespace=namespace)
+    parts = runtime.stream_approval(
+        session_id,
+        approved,
+        feedback,
+        user_id=user_id,
+        namespace=namespace,
+        request_started_monotonic=request_started_monotonic,
+    )
     yield from stream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace)
 
 
@@ -287,7 +325,13 @@ async def astream_approval_events(
     user_id: str | None = None,
     namespace: str | None = None,
     guardrail_checked: bool = False,
+    request_started_monotonic: float | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
+    request_started_monotonic = (
+        request_started_monotonic
+        if request_started_monotonic is not None
+        else monotonic()
+    )
     if feedback and not guardrail_checked:
         risk = _record_guardrail_decision(feedback, source="chat.approval.feedback")
         if risk.level == "high":
@@ -307,13 +351,21 @@ async def astream_approval_events(
         )
         return
 
-    parts = runtime.astream_approval(session_id, approved, feedback, user_id=user_id, namespace=namespace)
+    parts = runtime.astream_approval(
+        session_id,
+        approved,
+        feedback,
+        user_id=user_id,
+        namespace=namespace,
+        request_started_monotonic=request_started_monotonic,
+    )
     async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
         yield event
 
 
 @router.post("/chat")
 async def chat(body: ChatRequest, request: Request):
+    request_started_monotonic = monotonic()
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
     tenant = resolve_request_tenant(request, body.user_id, body.namespace)
@@ -364,6 +416,7 @@ async def chat(body: ChatRequest, request: Request):
                 user_id=tenant.user_id,
                 namespace=tenant.namespace,
                 guardrail_checked=True,
+                request_started_monotonic=request_started_monotonic,
             ),
             trace_id,
             body.session_id,
@@ -376,6 +429,7 @@ async def chat(body: ChatRequest, request: Request):
 
 @router.post("/chat/approve")
 async def approve(body: ApproveRequest, request: Request):
+    request_started_monotonic = monotonic()
     runtime = get_runtime(request)
     trace_id = resolve_trace_id(body.trace_id, request)
     tenant = resolve_request_tenant(request, body.user_id, body.namespace)
@@ -405,6 +459,7 @@ async def approve(body: ApproveRequest, request: Request):
                 user_id=tenant.user_id,
                 namespace=tenant.namespace,
                 guardrail_checked=True,
+                request_started_monotonic=request_started_monotonic,
             ),
             trace_id,
             body.session_id,

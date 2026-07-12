@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from tech_doc_agent.app.core.settings import Settings
@@ -20,6 +22,11 @@ def test_settings_parses_typed_values():
         TRANSPORT_RETRY_JITTER_RATIO="0.1",
         TRANSPORT_RETRY_MAX_RETRY_AFTER_SECONDS="12",
         GUARDRAIL_APPROVAL_TTL_SECONDS="120",
+        REQUEST_MAX_SECONDS="45.5",
+        WORKFLOW_MAX_LLM_CALLS="12",
+        WORKFLOW_MAX_TOOL_CALLS="20",
+        WORKFLOW_MAX_TOTAL_TOKENS="50000",
+        WORKFLOW_MAX_ESTIMATED_COST_USD="1.25",
         MAX_IDENTICAL_TOOL_REPEATS="4",
         PARSER_MAX_RETRIEVAL_CALLS="9",
         MAX_REFLECTION_ROUNDS="1",
@@ -39,6 +46,11 @@ def test_settings_parses_typed_values():
     assert settings.TRANSPORT_RETRY_JITTER_RATIO == 0.1
     assert settings.TRANSPORT_RETRY_MAX_RETRY_AFTER_SECONDS == 12
     assert settings.GUARDRAIL_APPROVAL_TTL_SECONDS == 120
+    assert settings.REQUEST_MAX_SECONDS == 45.5
+    assert settings.WORKFLOW_MAX_LLM_CALLS == 12
+    assert settings.WORKFLOW_MAX_TOOL_CALLS == 20
+    assert settings.WORKFLOW_MAX_TOTAL_TOKENS == 50000
+    assert settings.WORKFLOW_MAX_ESTIMATED_COST_USD == Decimal("1.25")
     assert settings.MAX_IDENTICAL_TOOL_REPEATS == 4
     assert settings.PARSER_MAX_RETRIEVAL_CALLS == 9
     assert settings.MAX_REFLECTION_ROUNDS == 1
@@ -69,6 +81,11 @@ def test_settings_rejects_invalid_model_provider_id(provider_id):
         "MAX_IDENTICAL_TOOL_REPEATS",
         "PARSER_MAX_RETRIEVAL_CALLS",
         "MAX_REFLECTION_ROUNDS",
+        "REQUEST_MAX_SECONDS",
+        "WORKFLOW_MAX_LLM_CALLS",
+        "WORKFLOW_MAX_TOOL_CALLS",
+        "WORKFLOW_MAX_TOTAL_TOKENS",
+        "WORKFLOW_MAX_ESTIMATED_COST_USD",
     ],
 )
 def test_settings_rejects_negative_tool_policy_limits(field):

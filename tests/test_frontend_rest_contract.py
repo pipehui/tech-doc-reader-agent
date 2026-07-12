@@ -22,6 +22,8 @@ EXPECTED_FIELDS = {
         "workflow_plan",
         "plan_index",
         "budget_usage",
+        "budget_status",
+        "budget_termination",
     },
     HistoryViewResponse: {
         "session_id",

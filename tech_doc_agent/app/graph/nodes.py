@@ -4,6 +4,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 
 from tech_doc_agent.app.core.errors import Conflict
+from tech_doc_agent.app.core.execution_budget import ExecutionBudgetExceeded
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.structured_outputs import ResultKind, parse_structured_result
 from tech_doc_agent.app.core.tenant import parse_tenant
@@ -23,21 +24,69 @@ def assistant_node(
     def invoke(state: State, config: RunnableConfig | None = None):
         assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
         current_usage = budget_tracker.current(state) if budget_tracker is not None else None
-        update = assistant(assistant_state, config)
+        before_llm_attempt = None
+        if budget_tracker is not None and current_usage is not None:
+            before_llm_attempt = lambda local_usages: budget_tracker.assert_before_llm_attempt(
+                state,
+                config,
+                current=current_usage,
+                local_usages=local_usages,
+            )
+        try:
+            update = assistant(
+                assistant_state,
+                config,
+                before_llm_attempt=before_llm_attempt,
+            )
+        except ExecutionBudgetExceeded as exc:
+            update = {
+                "_llm_usage": (),
+                "_budget_decision": exc.decision,
+            }
         if budget_tracker is not None:
-            update = budget_tracker.record_assistant(state, update, current=current_usage)
+            update = budget_tracker.record_assistant(
+                state,
+                update,
+                config=config,
+                current=current_usage,
+            )
         else:
             update.pop("_llm_usage", None)
+            update.pop("_budget_decision", None)
         return _complete_reflection_state(state, update)
 
     async def ainvoke(state: State, config: RunnableConfig | None = None):
         assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
         current_usage = budget_tracker.current(state) if budget_tracker is not None else None
-        result = await assistant.ainvoke(assistant_state, config)
+        before_llm_attempt = None
+        if budget_tracker is not None and current_usage is not None:
+            before_llm_attempt = lambda local_usages: budget_tracker.assert_before_llm_attempt(
+                state,
+                config,
+                current=current_usage,
+                local_usages=local_usages,
+            )
+        try:
+            result = await assistant.ainvoke(
+                assistant_state,
+                config,
+                before_llm_attempt=before_llm_attempt,
+            )
+        except ExecutionBudgetExceeded as exc:
+            result = {
+                "_llm_usage": (),
+                "_budget_decision": exc.decision,
+            }
         if budget_tracker is not None:
-            result = budget_tracker.record_assistant(state, result, current=current_usage)
+            result = budget_tracker.record_assistant(
+                state,
+                result,
+                config=config,
+                current=current_usage,
+            )
         else:
             result.pop("_llm_usage", None)
+            result.pop("_budget_decision", None)
         return _complete_reflection_state(state, result)
 
     return RunnableLambda(invoke, afunc=ainvoke, name=assistant.name)

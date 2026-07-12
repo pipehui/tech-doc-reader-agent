@@ -9,6 +9,8 @@ SseEventName = Literal[
     "plan_update",
     "structured_result",
     "usage_update",
+    "budget_started",
+    "budget_terminated",
     "tool_call",
     "tool_result",
     "guardrail_blocked",

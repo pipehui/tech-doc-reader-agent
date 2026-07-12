@@ -1,10 +1,12 @@
 import asyncio
+from copy import deepcopy
 from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage
 
 from tech_doc_agent.app.core.observability import trace_context
+from tech_doc_agent.app.core.execution_budget import REQUEST_BUDGET_METADATA_KEY
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
@@ -54,6 +56,17 @@ def _runtime(graph: FakeExecutionGraph) -> ChatRuntime:
     return runtime
 
 
+def _without_request_clock(value):
+    result = deepcopy(value)
+    items = result if isinstance(result, list) else [result]
+    for item in items:
+        config = item.get("config", item) if isinstance(item, dict) else {}
+        metadata = config.get("metadata") if isinstance(config, dict) else None
+        if isinstance(metadata, dict):
+            metadata.pop(REQUEST_BUDGET_METADATA_KEY, None)
+    return result
+
+
 async def _collect_async_message(runtime: ChatRuntime):
     with trace_context(trace_id="trace-parity"):
         return [
@@ -85,7 +98,9 @@ def test_sync_and_async_message_execution_have_identical_parts_and_graph_calls()
     async_parts = asyncio.run(_collect_async_message(async_runtime))
 
     assert async_parts == sync_parts
-    assert async_graph.stream_calls == sync_graph.stream_calls
+    assert _without_request_clock(async_graph.stream_calls) == _without_request_clock(
+        sync_graph.stream_calls
+    )
 
 
 def _interrupted_graph() -> FakeExecutionGraph:
@@ -141,14 +156,18 @@ def test_sync_and_async_graph_approval_have_identical_parts_and_side_effects(app
     async_parts = asyncio.run(_collect_async_approval(async_runtime, approved))
 
     assert async_parts == sync_parts
-    assert async_graph.stream_calls == sync_graph.stream_calls
+    assert _without_request_clock(async_graph.stream_calls) == _without_request_clock(
+        sync_graph.stream_calls
+    )
     assert len(async_graph.update_calls) == len(sync_graph.update_calls)
 
     if not approved:
         async_update = async_graph.update_calls[0]
         sync_update = sync_graph.update_calls[0]
         assert async_update["as_node"] == sync_update["as_node"] == "primary_assistant_sensitive_tools"
-        assert async_update["config"] == sync_update["config"]
+        assert _without_request_clock(async_update["config"]) == _without_request_clock(
+            sync_update["config"]
+        )
         assert async_update["values"]["messages"][0].model_dump() == sync_update["values"]["messages"][0].model_dump()
         assert async_update["values"]["messages"][0].status == "error"
 
@@ -190,6 +209,8 @@ def test_sync_and_async_guardrail_approval_have_identical_parts(approved):
     async_parts = asyncio.run(_collect_async_guardrail_approval(async_runtime, approved))
 
     assert async_parts == sync_parts
-    assert async_graph.stream_calls == sync_graph.stream_calls
+    assert _without_request_clock(async_graph.stream_calls) == _without_request_clock(
+        sync_graph.stream_calls
+    )
     assert not sync_runtime.has_pending_guardrail_approval("session-guardrail")
     assert not async_runtime.has_pending_guardrail_approval("session-guardrail")

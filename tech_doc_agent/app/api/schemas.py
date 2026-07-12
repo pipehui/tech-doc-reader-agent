@@ -72,6 +72,8 @@ class SessionStateResponse(BaseModel):
     workflow_plan: list[str] = Field(default_factory=list)
     plan_index: int = 0
     budget_usage: dict[str, Any] | None = None
+    budget_status: Literal["active", "terminating", "terminated"] | None = None
+    budget_termination: dict[str, Any] | None = None
 
 class LearningRecord(BaseModel):
     knowledge: str
