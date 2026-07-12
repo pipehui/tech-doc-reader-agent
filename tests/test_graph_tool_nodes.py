@@ -82,6 +82,9 @@ def test_tool_node_fallback_preserves_error_status_after_message_conversion():
     assert message.artifact["error"]["tool"] == "exploding_tool"
     assert message.artifact["error"]["cause_type"] == "RuntimeError"
     assert "offline: StateGraph" not in message.content
+    assert result["reflection_status"] == "finalizing"
+    assert result["reflection_rounds_used"] == 0
+    assert result["reflection_terminal_reason"] == "non_repairable_error"
 
 
 def test_async_tool_node_uses_the_same_structured_fallback_contract():
@@ -114,6 +117,7 @@ def test_async_tool_node_uses_the_same_structured_fallback_contract():
     assert message.artifact["error"]["code"] == "unknown_dependency_error"
     assert message.artifact["error"]["cause_type"] == "RuntimeError"
     assert "offline: StateGraph" not in message.content
+    assert result["reflection_status"] == "finalizing"
 
 
 def test_tool_node_logs_explicit_block_decision_with_configured_limit(monkeypatch):
@@ -175,6 +179,8 @@ def test_tool_node_logs_explicit_block_decision_with_configured_limit(monkeypatc
     )
 
     assert result["messages"][0].artifact["error"]["code"] == "repeated_tool_call_blocked"
+    assert result["reflection_status"] == "finalizing"
+    assert result["reflection_terminal_reason"] == "non_repairable_error"
     blocked_event = next(event for event in events if event["event"] == "tool_call.blocked")
     assert blocked_event["policy_action"] == "block"
     assert blocked_event["reason"] == "repeated_tool_call"

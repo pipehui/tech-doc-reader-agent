@@ -42,6 +42,7 @@ PrimaryRouteTarget = Literal[
     "store_plan",
     "primary_assistant_tools",
     "primary_assistant_sensitive_tools",
+    "primary_tool_failure",
     "enter_parser",
     "enter_explanation",
     "enter_relation",
@@ -88,6 +89,9 @@ def make_subagent_router(spec: AgentSpec) -> Callable[[State], str]:
         if did_cancel:
             return spec.leave_node
 
+        if state.get("reflection_status") == "finalizing":
+            return spec.leave_node
+
         if spec.tools.safe and all(tool_call["name"] in safe_tool_names for tool_call in tool_calls):
             return spec.safe_tool_node
 
@@ -112,6 +116,9 @@ def make_primary_router(sensitive_tool_names: frozenset[str]) -> Callable[[State
         tool_calls = list(getattr(state["messages"][-1], "tool_calls", []) or [])
         if not tool_calls:
             return cast(PrimaryRouteTarget, END)
+
+        if state.get("reflection_status") == "finalizing":
+            return "primary_tool_failure"
 
         tool_name = tool_calls[0]["name"]
         if tool_name == PlanWorkflow.__name__:

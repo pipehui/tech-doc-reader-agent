@@ -9,6 +9,7 @@ from tech_doc_agent.app.graph.specs import (
     CompletionPolicy,
     GraphSpec,
     PrimarySpec,
+    ReflectionPolicy,
     ToolExecutionPolicy,
     ToolPolicy,
 )
@@ -85,6 +86,9 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
         tool_execution_policy=ToolExecutionPolicy(
             max_identical_repeats=resources.settings.MAX_IDENTICAL_TOOL_REPEATS,
             parser_max_retrieval_calls=resources.settings.PARSER_MAX_RETRIEVAL_CALLS,
+        ),
+        reflection_policy=ReflectionPolicy(
+            max_rounds=resources.settings.MAX_REFLECTION_ROUNDS,
         ),
     )
 

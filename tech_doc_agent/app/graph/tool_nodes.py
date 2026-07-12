@@ -9,7 +9,8 @@ from langgraph.prebuilt import ToolNode
 from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event, timed_node
 
-from .specs import ToolExecutionPolicy
+from .reflection import apply_reflection_policy, safe_validation_repair_context
+from .specs import ReflectionPolicy, ToolExecutionPolicy
 from .state import State
 from .tool_policy import evaluate_tool_policy
 
@@ -45,11 +46,15 @@ def handle_tool_error(state) -> dict:
             tool=tool_name,
         )
         payload = mapped.to_payload()
+        artifact: dict = {"error": payload}
+        repair_context = safe_validation_repair_context(error)
+        if repair_context:
+            artifact["repair_context"] = repair_context
         messages.append(
             ToolMessage(
                 name=tool_name,
                 content=mapped.to_json(),
-                artifact={"error": payload},
+                artifact=artifact,
                 tool_call_id=tool_call["id"],
                 status="error",
             )
@@ -142,13 +147,18 @@ def _blocked_tool_call_update(state: State, policy: ToolExecutionPolicy) -> dict
     return decision.to_graph_update()
 
 
-def create_tool_node_with_fallback(tools: list, policy: ToolExecutionPolicy):
+def create_tool_node_with_fallback(
+    tools: list,
+    policy: ToolExecutionPolicy,
+    reflection_policy: ReflectionPolicy | None = None,
+):
+    reflection_policy = reflection_policy or ReflectionPolicy()
     tool_node = ToolNode(tools, handle_tool_errors=False)
 
     def guarded_tool_node(state: State):
         blocked = _blocked_tool_call_update(state, policy)
         if blocked is not None:
-            return blocked
+            return apply_reflection_policy(state, blocked, reflection_policy)
 
         tool_calls = _pending_tool_calls(state)
         start = perf_counter()
@@ -172,12 +182,12 @@ def create_tool_node_with_fallback(tools: list, policy: ToolExecutionPolicy):
             elapsed_ms=_elapsed_ms(start),
             success=True,
         )
-        return result
+        return apply_reflection_policy(state, result, reflection_policy)
 
     async def aguarded_tool_node(state: State):
         blocked = _blocked_tool_call_update(state, policy)
         if blocked is not None:
-            return blocked
+            return apply_reflection_policy(state, blocked, reflection_policy)
 
         tool_calls = _pending_tool_calls(state)
         start = perf_counter()
@@ -208,8 +218,15 @@ def create_tool_node_with_fallback(tools: list, policy: ToolExecutionPolicy):
             success=True,
             async_runtime=True,
         )
-        return result
+        return apply_reflection_policy(state, result, reflection_policy)
+
+    def reflected_tool_error(state: State):
+        return apply_reflection_policy(
+            state,
+            handle_tool_error(state),
+            reflection_policy,
+        )
 
     return RunnableLambda(guarded_tool_node, afunc=aguarded_tool_node).with_fallbacks(
-        [RunnableLambda(handle_tool_error)], exception_key="error"
+        [RunnableLambda(reflected_tool_error)], exception_key="error"
     )

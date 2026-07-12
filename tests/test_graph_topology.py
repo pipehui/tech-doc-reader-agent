@@ -70,11 +70,19 @@ def test_compiled_graph_preserves_subagent_topology_and_interrupts(graph_spec):
         "store_plan",
         "primary_assistant_tools",
         "primary_assistant_sensitive_tools",
+        "primary_tool_failure",
         *NEXT_STEP_TARGETS,
     }
     assert outgoing["store_plan"] == NEXT_STEP_TARGETS
-    assert outgoing["primary_assistant_tools"] == {"primary_assistant"}
-    assert outgoing["primary_assistant_sensitive_tools"] == {"primary_assistant"}
+    assert outgoing["primary_assistant_tools"] == {
+        "primary_assistant",
+        "primary_tool_failure",
+    }
+    assert outgoing["primary_assistant_sensitive_tools"] == {
+        "primary_assistant",
+        "primary_tool_failure",
+    }
+    assert outgoing["primary_tool_failure"] == {"__end__"}
 
     for agent, route_targets in SUBAGENT_ROUTE_TARGETS.items():
         assert outgoing[f"enter_{agent}"] == {agent}
@@ -83,19 +91,27 @@ def test_compiled_graph_preserves_subagent_topology_and_interrupts(graph_spec):
         assert outgoing[f"finish_{agent}"] == NEXT_STEP_TARGETS
 
         safe_node = f"{agent}_assistant_safe_tools"
-        assert outgoing[safe_node] == {agent}
+        assert outgoing[safe_node] == {agent, f"leave_{agent}"}
 
         sensitive_node = f"{agent}_assistant_sensitive_tools"
         if sensitive_node in route_targets:
-            assert outgoing[sensitive_node] == {agent}
+            assert outgoing[sensitive_node] == {agent, f"leave_{agent}"}
         else:
             assert sensitive_node not in graph_view.nodes
 
     assert conditional_sources == {
         "fetch_user_info",
         "primary_assistant",
+        "primary_assistant_tools",
+        "primary_assistant_sensitive_tools",
         "store_plan",
         *(f"finish_{agent}" for agent in SUBAGENT_ROUTE_TARGETS),
+        *(f"{agent}_assistant_safe_tools" for agent in SUBAGENT_ROUTE_TARGETS),
+        *(
+            f"{agent}_assistant_sensitive_tools"
+            for agent, targets in SUBAGENT_ROUTE_TARGETS.items()
+            if f"{agent}_assistant_sensitive_tools" in targets
+        ),
         *SUBAGENT_ROUTE_TARGETS,
     }
     assert set(graph.interrupt_before_nodes) == EXPECTED_INTERRUPTS

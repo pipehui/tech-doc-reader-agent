@@ -1,7 +1,7 @@
 from langchain_core.messages import AIMessage, ToolMessage
 import pytest
 
-from tech_doc_agent.app.graph.specs import ToolExecutionPolicy
+from tech_doc_agent.app.graph.specs import ReflectionPolicy, ToolExecutionPolicy
 from tech_doc_agent.app.graph.tool_policy import (
     evaluate_parser_tool_budget,
     evaluate_repeated_tool_calls,
@@ -143,3 +143,17 @@ def test_tool_execution_policy_rejects_negative_limits(field, value):
 
     with pytest.raises(ValueError, match="must be non-negative"):
         ToolExecutionPolicy(**values)
+
+
+def test_reflection_policy_rejects_invalid_rounds_and_error_codes():
+    with pytest.raises(ValueError, match="max_rounds"):
+        ReflectionPolicy(max_rounds=-1)
+
+    with pytest.raises(ValueError, match="repairable_error_codes"):
+        ReflectionPolicy(repairable_error_codes=frozenset())
+
+    with pytest.raises(ValueError, match="repairable_error_codes"):
+        ReflectionPolicy(repairable_error_codes=frozenset({""}))
+
+    with pytest.raises(ValueError, match="repairable_error_codes"):
+        ReflectionPolicy(repairable_error_codes=frozenset({" validation_error "}))

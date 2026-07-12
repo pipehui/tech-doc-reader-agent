@@ -22,6 +22,7 @@ def test_settings_parses_typed_values():
         GUARDRAIL_APPROVAL_TTL_SECONDS="120",
         MAX_IDENTICAL_TOOL_REPEATS="4",
         PARSER_MAX_RETRIEVAL_CALLS="9",
+        MAX_REFLECTION_ROUNDS="1",
         TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
     )
 
@@ -39,6 +40,7 @@ def test_settings_parses_typed_values():
     assert settings.GUARDRAIL_APPROVAL_TTL_SECONDS == 120
     assert settings.MAX_IDENTICAL_TOOL_REPEATS == 4
     assert settings.PARSER_MAX_RETRIEVAL_CALLS == 9
+    assert settings.MAX_REFLECTION_ROUNDS == 1
     assert settings.ALLOWED_ORIGINS == [
         "http://127.0.0.1:5173",
         "http://localhost:5173",
@@ -55,7 +57,11 @@ def test_settings_rejects_weak_telemetry_pseudonym_key():
 
 @pytest.mark.parametrize(
     "field",
-    ["MAX_IDENTICAL_TOOL_REPEATS", "PARSER_MAX_RETRIEVAL_CALLS"],
+    [
+        "MAX_IDENTICAL_TOOL_REPEATS",
+        "PARSER_MAX_RETRIEVAL_CALLS",
+        "MAX_REFLECTION_ROUNDS",
+    ],
 )
 def test_settings_rejects_negative_tool_policy_limits(field):
     with pytest.raises(ValueError):

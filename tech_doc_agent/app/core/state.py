@@ -30,3 +30,8 @@ class State(TypedDict):
     parser_result: NotRequired[dict[str, Any]]
     relation_result: NotRequired[dict[str, Any]]
     examination_context: NotRequired[str]
+    reflection_rounds_used: NotRequired[int]
+    reflection_status: NotRequired[Literal["idle", "repairing", "finalizing", "terminal"]]
+    reflection_tool: NotRequired[str]
+    reflection_error_code: NotRequired[str]
+    reflection_terminal_reason: NotRequired[str]

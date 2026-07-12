@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     LANGGRAPH_RECURSION_LIMIT: int = 80
     MAX_IDENTICAL_TOOL_REPEATS: int = Field(default=2, ge=0)
     PARSER_MAX_RETRIEVAL_CALLS: int = Field(default=6, ge=0)
+    MAX_REFLECTION_ROUNDS: int = Field(default=1, ge=0)
 
     HYBRID_RAG_TOP_K: int = 5
     HYBRID_RAG_BM25_TOP_K: int = 8

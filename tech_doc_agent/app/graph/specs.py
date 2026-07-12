@@ -27,6 +27,23 @@ class ToolExecutionPolicy:
 
 
 @dataclass(frozen=True)
+class ReflectionPolicy:
+    max_rounds: int = 1
+    repairable_error_codes: frozenset[str] = field(
+        default_factory=lambda: frozenset({"validation_error"})
+    )
+
+    def __post_init__(self) -> None:
+        if self.max_rounds < 0:
+            raise ValueError("max_rounds must be non-negative.")
+        if not self.repairable_error_codes or any(
+            not isinstance(code, str) or not code.strip() or code != code.strip()
+            for code in self.repairable_error_codes
+        ):
+            raise ValueError("repairable_error_codes must contain non-empty strings.")
+
+
+@dataclass(frozen=True)
 class CompletionPolicy:
     result_key: str | None = None
     structured_kind: ResultKind | None = None
@@ -74,6 +91,7 @@ class GraphSpec:
     subagents: tuple[AgentSpec, ...]
     user_info_node: Any
     tool_execution_policy: ToolExecutionPolicy
+    reflection_policy: ReflectionPolicy
 
     @property
     def interrupt_nodes(self) -> tuple[str, ...]:

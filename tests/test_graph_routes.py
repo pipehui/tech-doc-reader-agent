@@ -114,6 +114,30 @@ def test_primary_router_uses_injected_sensitive_tool_names():
     assert route(_state_with_tool_call("read_user_profile")) == "primary_assistant_tools"
 
 
+def test_finalizing_subagent_cannot_enter_another_tool_node(graph_spec):
+    state = {
+        **_state_with_tool_call("read_docs"),
+        "reflection_status": "finalizing",
+    }
+
+    assert _route(graph_spec, "parser")(state) == "leave_parser"
+
+
+def test_finalizing_primary_cannot_enter_safe_or_sensitive_tool_node():
+    route = make_primary_router(frozenset({"update_user_profile"}))
+    safe_state = {
+        **_state_with_tool_call("read_user_profile"),
+        "reflection_status": "finalizing",
+    }
+    sensitive_state = {
+        **_state_with_tool_call("update_user_profile"),
+        "reflection_status": "finalizing",
+    }
+
+    assert route(safe_state) == "primary_tool_failure"
+    assert route(sensitive_state) == "primary_tool_failure"
+
+
 def _route(graph_spec, agent: str):
     spec = next(spec for spec in graph_spec.subagents if spec.key == agent)
     return make_subagent_router(spec)

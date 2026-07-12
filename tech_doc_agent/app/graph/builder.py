@@ -4,7 +4,15 @@ from collections.abc import Hashable
 
 from langgraph.graph import END, START, StateGraph
 
-from .nodes import assistant_node, create_entry_node, create_exit_node, create_finish_node, store_plan
+from .nodes import (
+    assistant_node,
+    create_entry_node,
+    create_exit_node,
+    create_finish_node,
+    create_primary_tool_failure_node,
+    store_plan,
+)
+from .reflection import route_after_tool_result
 from .routing import (
     NEXT_STEP_ROUTE_MAP,
     make_primary_router,
@@ -12,33 +20,70 @@ from .routing import (
     route_after_user_info,
     route_next_step,
 )
-from .specs import AgentSpec, GraphSpec, ToolExecutionPolicy
+from .specs import AgentSpec, GraphSpec, ReflectionPolicy, ToolExecutionPolicy
 from .state import State
 from .tool_nodes import create_tool_node_with_fallback
+
+
+def _register_tool_node(
+    builder: StateGraph,
+    *,
+    node_name: str,
+    tools: tuple,
+    tool_execution_policy: ToolExecutionPolicy,
+    reflection_policy: ReflectionPolicy,
+    continue_node: str,
+    terminate_node: str,
+) -> None:
+    builder.add_node(
+        node_name,
+        create_tool_node_with_fallback(
+            list(tools),
+            tool_execution_policy,
+            reflection_policy,
+        ),
+    )
+    builder.add_conditional_edges(
+        node_name,
+        route_after_tool_result,
+        {
+            "continue": continue_node,
+            "terminate": terminate_node,
+        },
+    )
 
 
 def register_subagent(
     builder: StateGraph,
     spec: AgentSpec,
     tool_execution_policy: ToolExecutionPolicy,
+    reflection_policy: ReflectionPolicy,
 ) -> None:
     builder.add_node(spec.entry_node, create_entry_node(spec.display_name, spec.key))
     builder.add_node(spec.key, assistant_node(spec.assistant, scoped_messages=spec.scoped_messages))
     builder.add_edge(spec.entry_node, spec.key)
 
     if spec.tools.safe:
-        builder.add_node(
-            spec.safe_tool_node,
-            create_tool_node_with_fallback(list(spec.tools.safe), tool_execution_policy),
+        _register_tool_node(
+            builder,
+            node_name=spec.safe_tool_node,
+            tools=spec.tools.safe,
+            tool_execution_policy=tool_execution_policy,
+            reflection_policy=reflection_policy,
+            continue_node=spec.key,
+            terminate_node=spec.leave_node,
         )
-        builder.add_edge(spec.safe_tool_node, spec.key)
 
     if spec.tools.sensitive:
-        builder.add_node(
-            spec.sensitive_tool_node,
-            create_tool_node_with_fallback(list(spec.tools.sensitive), tool_execution_policy),
+        _register_tool_node(
+            builder,
+            node_name=spec.sensitive_tool_node,
+            tools=spec.tools.sensitive,
+            tool_execution_policy=tool_execution_policy,
+            reflection_policy=reflection_policy,
+            continue_node=spec.key,
+            terminate_node=spec.leave_node,
         )
-        builder.add_edge(spec.sensitive_tool_node, spec.key)
 
     builder.add_node(spec.leave_node, create_exit_node())
     builder.add_edge(spec.leave_node, "primary_assistant")
@@ -68,17 +113,34 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
     builder.add_edge(START, "fetch_user_info")
 
     for subagent in spec.subagents:
-        register_subagent(builder, subagent, spec.tool_execution_policy)
+        register_subagent(
+            builder,
+            subagent,
+            spec.tool_execution_policy,
+            spec.reflection_policy,
+        )
 
     builder.add_node("primary_assistant", assistant_node(spec.primary.assistant))
-    builder.add_node(
-        "primary_assistant_tools",
-        create_tool_node_with_fallback(list(spec.primary.tools.safe), spec.tool_execution_policy),
+    _register_tool_node(
+        builder,
+        node_name="primary_assistant_tools",
+        tools=spec.primary.tools.safe,
+        tool_execution_policy=spec.tool_execution_policy,
+        reflection_policy=spec.reflection_policy,
+        continue_node="primary_assistant",
+        terminate_node="primary_tool_failure",
     )
-    builder.add_node(
-        "primary_assistant_sensitive_tools",
-        create_tool_node_with_fallback(list(spec.primary.tools.sensitive), spec.tool_execution_policy),
+    _register_tool_node(
+        builder,
+        node_name="primary_assistant_sensitive_tools",
+        tools=spec.primary.tools.sensitive,
+        tool_execution_policy=spec.tool_execution_policy,
+        reflection_policy=spec.reflection_policy,
+        continue_node="primary_assistant",
+        terminate_node="primary_tool_failure",
     )
+    builder.add_node("primary_tool_failure", create_primary_tool_failure_node())
+    builder.add_edge("primary_tool_failure", END)
     builder.add_node("store_plan", store_plan)
     fetch_user_info_routes: dict[Hashable, str] = {
         "enter_examination": "enter_examination",
@@ -98,6 +160,7 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         "enter_summary": "enter_summary",
         "primary_assistant_tools": "primary_assistant_tools",
         "primary_assistant_sensitive_tools": "primary_assistant_sensitive_tools",
+        "primary_tool_failure": "primary_tool_failure",
         END: END,
     }
     sensitive_tool_names = frozenset(tool.name for tool in spec.primary.tools.sensitive)
@@ -107,8 +170,6 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         primary_routes,
     )
     builder.add_conditional_edges("store_plan", route_next_step, NEXT_STEP_ROUTE_MAP)
-    builder.add_edge("primary_assistant_tools", "primary_assistant")
-    builder.add_edge("primary_assistant_sensitive_tools", "primary_assistant")
     return builder
 
 

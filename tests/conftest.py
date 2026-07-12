@@ -15,6 +15,7 @@ from tech_doc_agent.app.graph.specs import (
     CompletionPolicy,
     GraphSpec,
     PrimarySpec,
+    ReflectionPolicy,
     ToolExecutionPolicy,
     ToolPolicy,
 )
@@ -143,4 +144,5 @@ def graph_spec() -> GraphSpec:
             max_identical_repeats=2,
             parser_max_retrieval_calls=6,
         ),
+        reflection_policy=ReflectionPolicy(max_rounds=1),
     )

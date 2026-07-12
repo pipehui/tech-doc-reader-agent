@@ -11,6 +11,7 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
         SEED_DOC_STORE_ON_EMPTY=False,
         MAX_IDENTICAL_TOOL_REPEATS=4,
         PARSER_MAX_RETRIEVAL_CALLS=9,
+        MAX_REFLECTION_ROUNDS=2,
     )
     settings_b = Settings(DATA_PATH=str(tmp_path / "b"), SEED_DOC_STORE_ON_EMPTY=False)
     resources_a = AppResources.create(settings_a)
@@ -26,8 +27,10 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
     assert parser_a.tools.safe[0].invoke({"query": "StateGraph"}) == "[]"
     assert spec_a.tool_execution_policy.max_identical_repeats == 4
     assert spec_a.tool_execution_policy.parser_max_retrieval_calls == 9
+    assert spec_a.reflection_policy.max_rounds == 2
     assert spec_b.tool_execution_policy.max_identical_repeats == 2
     assert spec_b.tool_execution_policy.parser_max_retrieval_calls == 6
+    assert spec_b.reflection_policy.max_rounds == 1
 
     graph = build_application_graph(MemorySaver(), resources_a)
 
