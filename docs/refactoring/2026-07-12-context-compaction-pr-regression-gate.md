@@ -103,7 +103,7 @@ baseline 在开始本批代码修改前生成。manifest 记录 commit `3559223.
 - 10 checks，0 failed；
 - exit code 0。
 
-### Current candidate
+### Pre-commit development candidate
 
 在当前 dirty development tree 重新执行 6 cases / 10 iterations，并显式允许 dirty：
 
@@ -113,6 +113,16 @@ baseline 在开始本批代码修改前生成。manifest 记录 commit `3559223.
 - 10 checks，0 failed；
 - exit code 0。
 
+### Post-commit CI-equivalent strict run
+
+提交 `a8debb81c9c4598905b633715dd343c8562b8ff7` 后，在 clean worktree 完整执行 workflow 中的两条命令，不传 `--allow-dirty`：
+
+- candidate manifest `dirty=false`；
+- manifest status：compatible；
+- 10 checks，0 failed；
+- exit code 0；
+- ignored eval output 生成后 worktree 仍 clean。
+
 ## 验证状态
 
 | 验证 | 结果 |
@@ -121,7 +131,7 @@ baseline 在开始本批代码修改前生成。manifest 记录 commit `3559223.
 | targeted Ruff / mypy | passed |
 | strict baseline self-check | passed，10/10 checks |
 | dirty candidate CLI smoke | passed，10/10 checks |
-| CI-equivalent command | 命令已接入 workflow；本地因开发 tree dirty 使用显式诊断开关 |
+| CI-equivalent clean command | passed；candidate commit `a8debb8...`、dirty=false、10/10 checks |
 | CI workflow YAML/step contract | parsed；regression gate step/command present |
 | 全量 backend pytest | 672 passed，3 个既有 dependency deprecation warning |
 | 全量 Ruff / mypy | passed；mypy 146 source files，0 issues |
