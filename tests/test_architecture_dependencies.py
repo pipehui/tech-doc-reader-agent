@@ -244,6 +244,23 @@ def test_learning_state_uses_domain_models_until_delivery_serialization():
     assert "memory_store.query_memories(" in api_source
 
 
+def test_learning_and_profile_capability_ports_live_in_application_not_tools():
+    state_source = (APPLICATION_DIR / "learning_state.py").read_text(encoding="utf-8")
+    profile_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")
+    dependency_source = (TOOLS_DIR / "dependencies.py").read_text(encoding="utf-8")
+    api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
+
+    assert "class LearningRecordReaderPort(Protocol):" in state_source
+    assert "class MemoryReaderPort(Protocol):" in state_source
+    assert "class LearningStateCommandPort(Protocol):" in state_source
+    assert "class UserProfileServicePort(Protocol):" in profile_source
+    assert "from tech_doc_agent.app.application.learning_state import (" in dependency_source
+    assert "class LearningStorePort(Protocol):" not in dependency_source
+    assert "class MemoryStorePort(Protocol):" not in dependency_source
+    assert "class LearningApiResources(Protocol):" in api_source
+    assert "def _runtime_resources(request: Request) -> LearningApiResources:" in api_source
+
+
 def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
     model_source = (APPLICATION_DIR / "profile_models.py").read_text(encoding="utf-8")
     service_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")

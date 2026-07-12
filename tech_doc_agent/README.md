@@ -95,7 +95,7 @@ tech_doc_agent
 
 ### `app/application`
 
-保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract，以及确定性的 `ExtractiveConversationSummarizer`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
+保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract，以及确定性的 `ExtractiveConversationSummarizer`。`LearningRecordReaderPort`、`MemoryReaderPort`、`LearningStateCommandPort` 与 `UserProfileServicePort` 是 tools/API 共用的 capability 事实源；Learning API 只在 runtime 边界 cast 成窄 `LearningApiResources`，后续不裸读 `Any`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 

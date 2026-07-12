@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from tech_doc_agent.app.application.learning_models import MemoryFragment
+from tech_doc_agent.app.application.learning_state import MemoryReaderPort
 from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdate,
@@ -20,23 +21,41 @@ class UserProfileRepositoryPort(Protocol):
     def save(self, profile: UserProfile) -> None: ...
 
 
-class ProfileMemoryReaderPort(Protocol):
-    def query_memories(
-        self,
-        query: str,
-        *,
-        user_id: str,
-        namespace: str,
-        limit: int,
-    ) -> Sequence[MemoryFragment]: ...
+ProfileMemoryReaderPort = MemoryReaderPort
 
-    def recent_memories(
+
+class UserProfileServicePort(Protocol):
+    def get_profile(
         self,
         *,
         user_id: str,
         namespace: str,
-        limit: int,
-    ) -> Sequence[MemoryFragment]: ...
+    ) -> UserProfile: ...
+
+    def update_profile(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        experience_level: str | None = None,
+        explanation_style: str | None = None,
+        depth: str | None = None,
+        language: str | None = None,
+        known_topics: Sequence[str] | None = None,
+        weak_topics: Sequence[str] | None = None,
+        resolved_weak_topics: Sequence[str] | None = None,
+        notes: str | None = None,
+        evidence: str | None = None,
+    ) -> UserProfileUpdateResult: ...
+
+    def context_summary(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        memory_query: str = "",
+        memory_limit: int = 5,
+    ) -> str: ...
 
 
 def _utc_now() -> datetime:
@@ -177,5 +196,6 @@ __all__ = [
     "ProfileMemoryReaderPort",
     "UserProfileRepositoryPort",
     "UserProfileService",
+    "UserProfileServicePort",
     "format_user_profile_summary",
 ]

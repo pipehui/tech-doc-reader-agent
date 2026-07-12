@@ -137,6 +137,49 @@ class LearningStateRepositoryPort(Protocol):
     def save(self, snapshot: LearningStateSnapshot) -> LearningStateSnapshot: ...
 
 
+class LearningRecordReaderPort(Protocol):
+    def query_records(
+        self,
+        query: str,
+        *,
+        user_id: str,
+        namespace: str,
+    ) -> Sequence[LearningRecord]: ...
+
+    def list_records(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+    ) -> Sequence[LearningRecord]: ...
+
+
+class MemoryReaderPort(Protocol):
+    def query_memories(
+        self,
+        query: str,
+        *,
+        user_id: str,
+        namespace: str,
+        limit: int,
+    ) -> Sequence[MemoryFragment]: ...
+
+    def recent_memories(
+        self,
+        *,
+        user_id: str,
+        namespace: str,
+        limit: int,
+    ) -> Sequence[MemoryFragment]: ...
+
+
+class LearningStateCommandPort(Protocol):
+    def update(
+        self,
+        command: UpdateLearningStateCommand,
+    ) -> UpdateLearningStateResult: ...
+
+
 class LearningRecordUpdaterPort(Protocol):
     def prepare_upsert_record(
         self,
@@ -325,12 +368,15 @@ def _corrupt_learning_state(cause_type: str) -> ValidationError:
 
 
 __all__ = [
+    "LearningRecordReaderPort",
     "LearningRecordUpdaterPort",
+    "LearningStateCommandPort",
     "LearningStateRepositoryPort",
     "LearningStateService",
     "LearningStateSnapshot",
     "LearningStateUnitOfWork",
     "MemoryUpdaterPort",
+    "MemoryReaderPort",
     "UpdateLearningStateCommand",
     "UpdateLearningStateResult",
 ]

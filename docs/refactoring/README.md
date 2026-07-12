@@ -82,6 +82,7 @@
 | 2026-07-12 | Phase 4：AppResources/RetrievalResources concrete aggregate 归位 | bootstrap 选择 factory、lifecycle 调用、composition 消费三层分离 | [2026-07-12-infrastructure-resource-container.md](2026-07-12-infrastructure-resource-container.md) |
 | 2026-07-12 | Phase 4：Services compatibility boundary 与不可增长门禁 | 九组 contract 完成，services 只保留三个受控 facade 文件 | [2026-07-12-services-compatibility-boundary.md](2026-07-12-services-compatibility-boundary.md) |
 | 2026-07-12 | Phase 4：Tool/Composition structural resource Protocol 与 concrete conformance | composition resources Any 清零，bootstrap 建立静态检查点 | [2026-07-12-typed-composition-resources.md](2026-07-12-typed-composition-resources.md) |
+| 2026-07-12 | Phase 4：Learning/Memory/Profile capability ports 归位 application | tools 重复 Protocol 删除，Learning API resource view 类型化 | [2026-07-12-learning-application-ports.md](2026-07-12-learning-application-ports.md) |
 
 ## 本地任务单策略
 

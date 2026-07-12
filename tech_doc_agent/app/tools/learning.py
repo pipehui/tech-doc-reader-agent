@@ -1,4 +1,5 @@
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Optional
 
@@ -20,14 +21,14 @@ class LearningTools:
     upsert_learning_state: BaseTool
 
 
-def _serialize_records(records: list[LearningRecord]) -> str:
+def _serialize_records(records: Sequence[LearningRecord]) -> str:
     return json.dumps(
         [record.to_payload() for record in records],
         ensure_ascii=False,
     )
 
 
-def _serialize_memories(memories: list[MemoryFragment]) -> str:
+def _serialize_memories(memories: Sequence[MemoryFragment]) -> str:
     return json.dumps(
         [memory.to_payload() for memory in memories],
         ensure_ascii=False,
