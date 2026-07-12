@@ -64,6 +64,7 @@
 | 2026-07-12 | Phase 4：Graph finish 行为契约与 CompletionPolicy 值对象收口 | 五个 Agent 终态更新锁定，B7 provider spike 继续 | [2026-07-12-graph-finish-contract.md](2026-07-12-graph-finish-contract.md) |
 | 2026-07-12 | Phase 4：Assistant execution identity 与 prompt/model trace metadata | trace 子项完成，远程 eval identity manifest 继续 | [2026-07-12-assistant-execution-identity.md](2026-07-12-assistant-execution-identity.md) |
 | 2026-07-12 | Phase 4：Versioned runtime identity manifest 与 default-off 诊断端点 | 服务端事实源完成，eval artifact 消费继续 | [2026-07-12-runtime-identity-manifest.md](2026-07-12-runtime-identity-manifest.md) |
+| 2026-07-12 | Phase 4：Online eval run manifest、远端 identity 握手与安全 settings fingerprint | online eval 完成，offline runners 继续 | [2026-07-12-online-eval-run-manifest.md](2026-07-12-online-eval-run-manifest.md) |
 
 ## 本地任务单策略
 

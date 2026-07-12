@@ -41,9 +41,25 @@ def write_jsonl(
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def write_json(
+    path: Path,
+    payload: dict[str, Any],
+    *,
+    policy: RedactionPolicy | None = None,
+) -> None:
+    safe_payload = redact_artifact_rows([payload], policy=policy)[0]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(safe_payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 __all__ = [
     "artifact_redaction_policy",
     "redact_artifact_rows",
     "safe_artifact_text",
+    "write_json",
     "write_jsonl",
 ]

@@ -9,14 +9,23 @@
 快速 baseline：
 
 ```bash
-python -m evals.run_eval --cases evals/cases.json --timeout 240 --output eval_results/latest.jsonl --report eval_reports/latest.md
+python -m evals.run_eval --cases evals/cases.json --timeout 240 --output eval_results/latest.jsonl --report eval_reports/latest.md --manifest eval_results/latest.manifest.json
 ```
 
 Full eval：
 
 ```bash
-python -m evals.run_eval --cases evals/cases_full.json --timeout 240 --output eval_results/full_latest.jsonl --report eval_reports/full_latest.md
+python -m evals.run_eval --cases evals/cases_full.json --timeout 240 --output eval_results/full_latest.jsonl --report eval_reports/full_latest.md --manifest eval_results/full_latest.manifest.json
 ```
+
+Agent eval 会在执行 case 前从目标服务读取 `/runtime/identity`，验证六个 role 与 manifest fingerprint，并把以下事实写入独立 JSON manifest：
+
+- runner git commit 与 dirty 状态；
+- dataset 文件名与 SHA-256；
+- eval 参数与 settings fingerprint；
+- 远端 configured prompt/model identity，或明确的 `disabled/unavailable/invalid` 状态。
+
+runner 不会用本地 `.env` 或 prompt 文件替代远端 identity。目标服务需显式设置 `RUNTIME_IDENTITY_ENDPOINT_ENABLED=true`；在受信 CI/baseline 中建议再加 `--require-runtime-identity`，identity 不可用时会在跑 case 前以退出码 2 停止，但仍保留诊断 manifest。endpoint host、feedback 与可能的 URL 凭据只以 hash/安全结构进入 artifact。
 
 `evals/cases_full.json` 当前包含 25 条：
 

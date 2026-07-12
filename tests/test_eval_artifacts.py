@@ -2,7 +2,7 @@ import copy
 import json
 from pathlib import Path
 
-from evals.artifacts import safe_artifact_text, write_jsonl
+from evals.artifacts import safe_artifact_text, write_json, write_jsonl
 from evals.run_retrieval_eval import render_markdown_report as render_retrieval_report
 from tech_doc_agent.app.core.redaction import RedactionPolicy
 
@@ -65,6 +65,27 @@ def test_retrieval_markdown_report_uses_same_redaction_policy():
     assert "sk-proj-abcdefghijklmnop" not in report
     assert "[REDACTED:EMAIL]" in report
     assert "[REDACTED:AUTHORIZATION]" in report
+
+
+def test_eval_json_manifest_uses_the_same_redaction_boundary(tmp_path):
+    output = tmp_path / "manifest.json"
+
+    write_json(
+        output,
+        {
+            "runner": "online",
+            "api_key": "private-value",
+            "contact": "person@example.com",
+        },
+        policy=RedactionPolicy(
+            pseudonymization_key="controlled-key-with-32-random-bytes"
+        ),
+    )
+
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert written["runner"] == "online"
+    assert "private-value" not in str(written)
+    assert "person@example.com" not in str(written)
 
 
 def test_eval_console_text_uses_artifact_redaction():

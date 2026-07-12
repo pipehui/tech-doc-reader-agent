@@ -14,22 +14,26 @@ from typing import Any
 
 import httpx
 
-from evals.artifacts import redact_artifact_rows, safe_artifact_text, write_jsonl
+from evals.artifacts import (
+    redact_artifact_rows,
+    safe_artifact_text,
+    write_json,
+    write_jsonl,
+)
 from evals.judges import judge_case, normalize_plan
+from evals.manifests import (
+    approve_url_for,
+    build_eval_run_manifest,
+    fetch_runtime_identity,
+    identity_url_for,
+    online_eval_settings,
+)
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8000/chat"
 DEFAULT_CASES = Path("evals/cases.json")
 DEFAULT_TIMEOUT = 240.0
 DEFAULT_REJECT_FEEDBACK = "评测脚本自动拒绝写入或敏感操作，请不要执行该操作，继续完成当前回答。"
-
-
-def approve_url_for(api_url: str, approve_url: str | None) -> str:
-    if approve_url:
-        return approve_url
-    if api_url.rstrip("/").endswith("/chat"):
-        return f"{api_url.rstrip('/')}/approve"
-    return f"{api_url.rstrip('/')}/chat/approve"
 
 
 async def iter_sse_events(response: httpx.Response) -> AsyncIterator[tuple[str, dict[str, Any]]]:
@@ -306,7 +310,11 @@ async def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
     return results
 
 
-def render_markdown_report(rows: list[dict[str, Any]]) -> str:
+def render_markdown_report(
+    rows: list[dict[str, Any]],
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> str:
     rows = redact_artifact_rows(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     summary = summarize_results(rows)
@@ -318,6 +326,20 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         f"- Done: `{summary['done']}`",
         f"- Interrupted: `{summary['interrupted']}`",
         f"- Errored: `{summary['errored']}`",
+        *(
+            [
+                f"- Runtime identity: `{manifest['runtime_identity']['status']}`",
+                (
+                    "- Runtime fingerprint: `"
+                    f"{manifest['runtime_identity'].get('manifest', {}).get('fingerprint', 'N/A')}`"
+                ),
+                f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
+                f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
+                f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
+            ]
+            if manifest is not None
+            else []
+        ),
         "",
         "## Summary",
         "",
@@ -439,6 +461,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reject-feedback", default=DEFAULT_REJECT_FEEDBACK)
     parser.add_argument("--output", type=Path, default=Path("eval_results/latest.jsonl"))
     parser.add_argument("--report", type=Path, default=Path("eval_reports/latest.md"))
+    parser.add_argument(
+        "--identity-url",
+        default=None,
+        help="Runtime identity endpoint; defaults from --api-url.",
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("eval_results/latest.manifest.json"),
+    )
+    parser.add_argument(
+        "--require-runtime-identity",
+        action="store_true",
+        help="Stop before cases when the target runtime identity is not available and valid.",
+    )
     return parser.parse_args()
 
 
@@ -524,15 +561,43 @@ def _string_or_none(value: Any) -> str | None:
     return text or None
 
 
-async def async_main() -> None:
+async def async_main() -> int:
     args = parse_args()
+    identity_url = identity_url_for(args.api_url, args.identity_url)
+    async with httpx.AsyncClient() as client:
+        runtime_identity = await fetch_runtime_identity(
+            client,
+            identity_url,
+            timeout_s=min(args.timeout, 10.0),
+        )
+    manifest = build_eval_run_manifest(
+        runner="online_agent_eval",
+        dataset_path=args.cases,
+        settings=online_eval_settings(args),
+        runtime_identity=runtime_identity,
+    )
+    write_json(args.manifest, manifest)
+    if args.require_runtime_identity and runtime_identity.status != "available":
+        print(
+            safe_artifact_text(
+                "Runtime identity is required but target status is "
+                f"{runtime_identity.status}. Manifest: {args.manifest}"
+            )
+        )
+        return 2
+
     rows = await run_all(args)
     write_jsonl(args.output, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_markdown_report(rows), encoding="utf-8")
+    args.report.write_text(
+        render_markdown_report(rows, manifest=manifest),
+        encoding="utf-8",
+    )
     print(f"Raw results saved to {safe_artifact_text(args.output)}")
     print(f"Markdown report saved to {safe_artifact_text(args.report)}")
+    print(f"Run manifest saved to {safe_artifact_text(args.manifest)}")
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(async_main())
+    raise SystemExit(asyncio.run(async_main()))
