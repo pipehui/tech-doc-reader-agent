@@ -43,9 +43,15 @@ def events_from_stream_part(part) -> Iterable[ServerSentEvent]:
     if part_type == "messages":
         message_part = extract_message_part_data(part_data)
         if message_part is None:
+            log_event("sse.translation.ignored", reason="malformed_message_part")
             return
         msg_chunk, metadata = message_part
         if getattr(msg_chunk, "type", None) != "AIMessageChunk":
+            log_event(
+                "sse.translation.ignored",
+                reason="unsupported_message_chunk",
+                chunk_type=type(msg_chunk).__name__,
+            )
             return
 
         text = extract_text_from_chunk(msg_chunk)
@@ -61,6 +67,17 @@ def events_from_stream_part(part) -> Iterable[ServerSentEvent]:
 
     if part_type == "updates":
         yield from iter_update_events(part)
+        return
+
+    log_event(
+        "sse.translation.ignored",
+        reason="unsupported_stream_part",
+        part_type=(
+            part_type
+            if isinstance(part_type, str) and part_type in {"messages", "updates"}
+            else "unknown"
+        ),
+    )
 
 
 def stream_parts_as_sse(

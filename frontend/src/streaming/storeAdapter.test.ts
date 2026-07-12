@@ -67,13 +67,39 @@ describe("stream store adapter", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     dispatchStreamActions(
-      [{ type: "protocol_warning", event: "future_event", data: { value: 1 } }],
+      [{
+        type: "protocol_warning",
+        event: "future_event",
+        data: { value: 1 },
+        reason: "unknown_event"
+      }],
       target()
     );
 
     expect(warning).toHaveBeenCalledWith(
       "Ignoring unknown SSE event: future_event",
       { value: 1 }
+    );
+    warning.mockRestore();
+  });
+
+  it("distinguishes invalid known payloads from unknown future events", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    dispatchStreamActions(
+      [{
+        type: "protocol_warning",
+        event: "token",
+        data: {},
+        reason: "invalid_payload",
+        error: "token.text must be a string"
+      }],
+      target()
+    );
+
+    expect(warning).toHaveBeenCalledWith(
+      "Invalid SSE payload for token: token.text must be a string",
+      {}
     );
     warning.mockRestore();
   });

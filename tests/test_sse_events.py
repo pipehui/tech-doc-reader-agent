@@ -13,6 +13,7 @@ from tech_doc_agent.app.api.routes.chat import (
     sse_event,
     stream_parts_as_sse,
 )
+from tech_doc_agent.app.api.sse.streaming import events_from_stream_part
 from tech_doc_agent.app.core.observability import get_trace_context
 from tech_doc_agent.app.core.errors import Timeout
 
@@ -138,6 +139,61 @@ class FakeRouteRuntime(FakeRuntime):
                 yield part
         else:
             yield ("updates", {"guardrail": {"messages": [AIMessage(content="blocked", name="guardrail")]}})
+
+
+def _synthetic_stream_parts():
+    return [
+        (
+            "messages",
+            (
+                AIMessageChunk(content="hello"),
+                {"langgraph_node": "primary"},
+            ),
+        ),
+        (
+            "updates",
+            {
+                "store_plan": {
+                    "workflow_plan": ["parser", "explanation"],
+                    "plan_index": 0,
+                    "learning_target": "StateGraph",
+                }
+            },
+        ),
+        ("updates", {"enter_parser": {}}),
+        (
+            "updates",
+            {
+                "parser": {
+                    "messages": [
+                        AIMessage(
+                            content="parsed answer",
+                            name="parser",
+                            id="message-1",
+                        )
+                    ]
+                }
+            },
+        ),
+        (
+            "updates",
+            {
+                "parser_assistant_safe_tools": {
+                    "messages": [
+                        ToolMessage(
+                            content="tool result",
+                            name="read_docs",
+                            tool_call_id="call-1",
+                        )
+                    ]
+                }
+            },
+        ),
+    ]
+
+
+def _event_sequence(events):
+    return [(event.event, event.data) for event in events]
 
 
 def test_iter_update_events_emits_plan_transition_and_tool_events():
@@ -362,6 +418,79 @@ def test_iter_update_events_sanitizes_legacy_error_without_structured_artifact()
     assert "private-password" not in str(events[0].data)
 
 
+def test_stream_translation_ignores_unknown_parts_with_safe_telemetry(monkeypatch):
+    logged_events = []
+    monkeypatch.setattr(
+        "tech_doc_agent.app.api.sse.streaming.log_event",
+        lambda event, **fields: logged_events.append((event, fields)),
+    )
+
+    assert list(events_from_stream_part(("custom", {"secret": "private-value"}))) == []
+    assert list(events_from_stream_part(("messages", "malformed"))) == []
+    assert list(events_from_stream_part(("messages", (object(), {})))) == []
+
+    assert logged_events == [
+        (
+            "sse.translation.ignored",
+            {"reason": "unsupported_stream_part", "part_type": "unknown"},
+        ),
+        (
+            "sse.translation.ignored",
+            {"reason": "malformed_message_part"},
+        ),
+        (
+            "sse.translation.ignored",
+            {"reason": "unsupported_message_chunk", "chunk_type": "object"},
+        ),
+    ]
+    assert "private-value" not in str(logged_events)
+
+
+def test_update_translation_ignores_malformed_nodes_with_safe_telemetry(monkeypatch):
+    logged_events = []
+    monkeypatch.setattr(
+        "tech_doc_agent.app.api.sse.translators.log_event",
+        lambda event, **fields: logged_events.append((event, fields)),
+    )
+
+    events = list(
+        iter_update_events(
+            (
+                "updates",
+                {
+                    42: {},
+                    "custom_invalid_update": "not-a-mapping",
+                    "custom_node": {"messages": [object()]},
+                },
+            )
+        )
+    )
+
+    assert events == []
+    assert logged_events == [
+        (
+            "sse.translation.ignored",
+            {"reason": "invalid_node_name", "node_type": "int"},
+        ),
+        (
+            "sse.translation.ignored",
+            {
+                "reason": "invalid_node_update",
+                "node": "custom_invalid_update",
+                "update_type": "str",
+            },
+        ),
+        (
+            "sse.translation.ignored",
+            {
+                "reason": "unsupported_update_message",
+                "node": "custom_node",
+                "message_type": "object",
+            },
+        ),
+    ]
+
+
 def test_stream_parts_as_sse_emits_safe_structured_error_without_raw_exception_text():
     def failing_parts():
         raise ConnectionError("redis://admin:private-password@internal-host")
@@ -429,12 +558,81 @@ def test_stream_parts_as_sse_accepts_langgraph_tuple_messages():
     assert [event.event for event in events] == ["token", "done"]
 
 
+def test_sync_and_async_streams_match_golden_sse_contract():
+    expected = [
+        ("token", {"text": "hello", "agent": "primary"}),
+        (
+            "plan_update",
+            {
+                "plan": ["parser", "explanation"],
+                "plan_index": 0,
+                "learning_target": "StateGraph",
+            },
+        ),
+        ("agent_transition", {"agent": "parser", "phase": "enter"}),
+        (
+            "agent_message",
+            {
+                "agent": "parser",
+                "node": "parser",
+                "message_id": "message-1",
+                "content": "parsed answer",
+            },
+        ),
+        (
+            "tool_result",
+            {
+                "agent": "parser_assistant_safe_tools",
+                "node": "parser_assistant_safe_tools",
+                "tool": "read_docs",
+                "tool_call_id": "call-1",
+                "content": "tool result",
+                "status": "success",
+                "error": None,
+                "safe_message": None,
+                "code": None,
+                "retryable": None,
+                "dependency": None,
+                "cause_type": None,
+            },
+        ),
+        ("done", {"session_id": "session-golden"}),
+    ]
+
+    sync_events = list(
+        stream_parts_as_sse(
+            FakeRuntime(),
+            "session-golden",
+            _synthetic_stream_parts(),
+        )
+    )
+
+    async def collect_async():
+        async def parts():
+            for part in _synthetic_stream_parts():
+                yield part
+
+        return [
+            event
+            async for event in astream_parts_as_sse(
+                FakeRuntime(),
+                "session-golden",
+                parts(),
+            )
+        ]
+
+    async_events = asyncio.run(collect_async())
+
+    assert _event_sequence(sync_events) == expected
+    assert _event_sequence(async_events) == expected
+
+
 def test_iter_with_trace_context_sets_context_per_next_without_leaking():
     def source():
         assert get_trace_context()["trace_id"] == "trace-test"
-        yield sse_event("first", {})
+        yield sse_event("done", {})
         assert get_trace_context()["trace_id"] == "trace-test"
-        yield sse_event("second", {})
+        yield sse_event("no_pending_interrupt", {})
 
     wrapped = iter_with_trace_context(
         source(),
@@ -462,9 +660,9 @@ def test_aiter_with_trace_context_sets_context_per_next_without_leaking():
     async def collect():
         async def source():
             assert get_trace_context()["trace_id"] == "trace-async"
-            yield sse_event("first", {})
+            yield sse_event("done", {})
             assert get_trace_context()["trace_id"] == "trace-async"
-            yield sse_event("second", {})
+            yield sse_event("no_pending_interrupt", {})
 
         wrapped = aiter_with_trace_context(
             source(),

@@ -40,7 +40,14 @@ export function dispatchStreamActions(
         break;
       case "protocol_warning":
         if (import.meta.env.DEV) {
-          console.warn(`Ignoring unknown SSE event: ${action.event}`, action.data);
+          if (action.reason === "unknown_event") {
+            console.warn(`Ignoring unknown SSE event: ${action.event}`, action.data);
+          } else {
+            console.warn(
+              `Invalid SSE payload for ${action.event}: ${action.error || "validation failed"}`,
+              action.data
+            );
+          }
         }
         break;
       case "stream_error":

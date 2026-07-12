@@ -3,6 +3,8 @@ from collections.abc import Iterable
 
 from fastapi.sse import ServerSentEvent
 
+from tech_doc_agent.app.core.observability import log_event
+
 from .events import sse_event
 
 
@@ -306,11 +308,24 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
     update_data = _extract_update_data(part)
 
     for node_name, node_update in update_data.items():
+        if not isinstance(node_name, str):
+            log_event(
+                "sse.translation.ignored",
+                reason="invalid_node_name",
+                node_type=type(node_name).__name__,
+            )
+            continue
         transition_payload = _agent_transition_payload(node_name)
         if transition_payload:
             yield sse_event("agent_transition", transition_payload)
 
         if not isinstance(node_update, dict):
+            log_event(
+                "sse.translation.ignored",
+                reason="invalid_node_update",
+                node=node_name,
+                update_type=type(node_update).__name__,
+            )
             continue
 
         plan_payload = _plan_update_payload(node_name, node_update)
@@ -370,4 +385,11 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
                 yield sse_event(
                     "tool_result",
                     _tool_result_payload(message, node_name),
+                )
+            elif raw_type != "remove":
+                log_event(
+                    "sse.translation.ignored",
+                    reason="unsupported_update_message",
+                    node=node_name,
+                    message_type=type(message).__name__,
                 )

@@ -1,28 +1,10 @@
 import { SSE_EVENT_TYPES } from "../sseContract";
 import type { SseEventType } from "../sseContract";
+import { decodeSsePayload } from "./ssePayloads";
+import type { SsePayload, SsePayloadMap } from "./ssePayloads";
 
 
-export type SsePayload = Record<string, unknown>;
-
-export interface SsePayloadMap {
-  token: SsePayload & { text?: unknown; agent?: unknown };
-  session_snapshot: SsePayload;
-  agent_message: SsePayload & { agent?: unknown; node?: unknown; content?: unknown };
-  agent_transition: SsePayload & { agent?: unknown; phase?: unknown };
-  plan_update: SsePayload & { plan?: unknown; plan_index?: unknown; learning_target?: unknown };
-  structured_result: SsePayload & { node?: unknown; result_key?: unknown; result?: unknown; parsed?: unknown };
-  usage_update: SsePayload & { node?: unknown; delta?: unknown; usage?: unknown };
-  budget_started: SsePayload & { node?: unknown; status?: unknown; usage?: unknown };
-  budget_terminated: SsePayload & { node?: unknown; termination?: unknown; usage?: unknown };
-  context_metrics_update: SsePayload & { node?: unknown; delta?: unknown; metrics?: unknown };
-  tool_call: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; args?: unknown; tool_call_id?: unknown };
-  tool_result: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; content?: unknown; tool_call_id?: unknown; status?: unknown; error?: unknown; safe_message?: unknown; code?: unknown; retryable?: unknown; dependency?: unknown; cause_type?: unknown };
-  guardrail_blocked: SsePayload & { message?: unknown; findings?: unknown };
-  interrupt_required: SsePayload & { pending?: unknown; session_id?: unknown };
-  no_pending_interrupt: SsePayload & { session_id?: unknown };
-  done: SsePayload & { session_id?: unknown };
-  error: SsePayload & { status?: unknown; code?: unknown; retryable?: unknown; message?: unknown; safe_message?: unknown; dependency?: unknown; cause_type?: unknown; session_id?: unknown };
-}
+export type { SsePayload, SsePayloadMap } from "./ssePayloads";
 
 export type SseEnvelope = {
   [EventType in SseEventType]: {
@@ -33,7 +15,8 @@ export type SseEnvelope = {
 
 export type ParsedSseMessage =
   | { kind: "event"; envelope: SseEnvelope }
-  | { kind: "unknown"; event: string; data: SsePayload };
+  | { kind: "unknown"; event: string; data: SsePayload }
+  | { kind: "invalid"; event: SseEventType; data: SsePayload; error: string };
 
 
 const KNOWN_EVENT_TYPES = new Set<string>(SSE_EVENT_TYPES);
@@ -44,13 +27,23 @@ export function parseSseMessage(event: string, rawData: string): ParsedSseMessag
   if (!KNOWN_EVENT_TYPES.has(event)) {
     return { kind: "unknown", event, data };
   }
-  return {
-    kind: "event",
-    envelope: {
-      type: event as SseEventType,
-      data
-    } as SseEnvelope
-  };
+  const eventType = event as SseEventType;
+  try {
+    return {
+      kind: "event",
+      envelope: {
+        type: eventType,
+        data: decodeSsePayload(eventType, data)
+      } as SseEnvelope
+    };
+  } catch (error) {
+    return {
+      kind: "invalid",
+      event: eventType,
+      data,
+      error: error instanceof Error ? error.message : "invalid SSE payload"
+    };
+  }
 }
 
 

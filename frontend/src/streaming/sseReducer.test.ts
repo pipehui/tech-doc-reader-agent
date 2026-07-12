@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import SSE_EXAMPLES from "../../../contracts/sse_v1_examples.json";
 import { SSE_EVENT_TYPES } from "../sseContract";
 import type { AgentKey, ToolCall } from "../types";
 import { parseSseData, parseSseMessage } from "./sseEnvelope";
+import type { SsePayload } from "./sseEnvelope";
 import type { SseEventType } from "../sseContract";
 import {
   createStreamReducerState,
@@ -15,6 +17,7 @@ import type {
 
 
 const BASE_TIME = "2026-07-11T00:00:00.000Z";
+const VALID_PAYLOADS = SSE_EXAMPLES as Record<SseEventType, SsePayload>;
 
 
 function options(now = BASE_TIME): StreamReductionOptions {
@@ -32,7 +35,10 @@ function reduce(
   data: Record<string, unknown>,
   reductionOptions = options()
 ) {
-  const parsed = parseSseMessage(type, JSON.stringify(data));
+  const parsed = parseSseMessage(type, JSON.stringify({
+    ...VALID_PAYLOADS[type],
+    ...data
+  }));
   return reduceSseMessage(state, parsed, reductionOptions);
 }
 
@@ -89,11 +95,11 @@ describe("pure SSE reducer", () => {
       }),
       {
         type: "set_session_state",
-        state: {
+        state: expect.objectContaining({
           session_id: "session-1",
           current_agent: "parser",
           plan_index: 2
-        }
+        })
       }
     ]);
 
@@ -113,14 +119,14 @@ describe("pure SSE reducer", () => {
 
   it("normalizes plan updates and records structured results", () => {
     const plan = reduce(initialState("parser"), "plan_update", {
-      plan: ["parser", 7],
+      plan: ["parser", "explanation"],
       plan_index: 1,
       learning_target: null
     });
     expect(plan.actions[1]).toEqual({
       type: "set_session_state",
       state: {
-        workflow_plan: ["parser", "7"],
+        workflow_plan: ["parser", "explanation"],
         plan_index: 1,
         learning_target: null
       }
@@ -302,20 +308,20 @@ describe("pure SSE reducer", () => {
     ]);
   });
 
-  it("keeps missing token fields compatible and ignores blank final messages", () => {
-    const token = reduce(
-      initialState(),
-      "token",
-      {},
-      options("2026-07-11T00:00:00.000Z")
-    );
-    expect(token.actions[0]).toEqual({
-      type: "update_streaming_message",
-      responseId: "response-1",
-      agent: "primary",
-      text: ""
+  it("rejects malformed known payloads and ignores valid blank final messages", () => {
+    const parsed = parseSseMessage("token", "{}");
+    expect(parsed).toEqual({
+      kind: "invalid",
+      event: "token",
+      data: {},
+      error: "token.text must be a string"
     });
-    expect(reduce(token.state, "agent_message", { content: "   " }).actions).toEqual([]);
+    const invalid = reduceSseMessage(initialState(), parsed, options());
+    expect(actionTypes(invalid.actions)).toEqual([
+      "protocol_warning",
+      "stream_error"
+    ]);
+    expect(reduce(initialState(), "agent_message", { content: "   " }).actions).toEqual([]);
   });
 
   it("creates PlanWorkflow tool state and stays consistent on duplicate calls", () => {
@@ -387,6 +393,7 @@ describe("pure SSE reducer", () => {
     );
     expect(result.state.toolCalls["call-1"]).toEqual({
       ...existing,
+      node: "parser_assistant_safe_tools",
       result: "request failed without a magic keyword",
       errorCode: "dependency_timeout",
       safeMessage: "Safe timeout summary.",
@@ -457,7 +464,8 @@ describe("pure SSE reducer", () => {
       {
         type: "protocol_warning",
         event: "future_event",
-        data: { new_field: true }
+        data: { new_field: true },
+        reason: "unknown_event"
       }
     ]);
   });

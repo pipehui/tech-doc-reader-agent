@@ -31,7 +31,13 @@ export type StreamAction =
   | { type: "update_streaming_message"; responseId: string; agent: AgentKey; text: string; finalContent?: string }
   | { type: "add_tool_call"; toolCall: ToolCall; responseId: string | null }
   | { type: "update_tool_result"; toolCall: ToolCall; responseId: string | null }
-  | { type: "protocol_warning"; event: string; data: SsePayload }
+  | {
+      type: "protocol_warning";
+      event: string;
+      data: SsePayload;
+      reason: "unknown_event" | "invalid_payload";
+      error?: string;
+    }
   | { type: "stream_error"; message: string };
 
 export interface StreamReduction {
@@ -62,7 +68,30 @@ export function reduceSseMessage(
   if (parsed.kind === "unknown") {
     return {
       state,
-      actions: [{ type: "protocol_warning", event: parsed.event, data: parsed.data }]
+      actions: [{
+        type: "protocol_warning",
+        event: parsed.event,
+        data: parsed.data,
+        reason: "unknown_event"
+      }]
+    };
+  }
+  if (parsed.kind === "invalid") {
+    return {
+      state,
+      actions: [
+        {
+          type: "protocol_warning",
+          event: parsed.event,
+          data: parsed.data,
+          reason: "invalid_payload",
+          error: parsed.error
+        },
+        {
+          type: "stream_error",
+          message: `SSE protocol error for ${parsed.event}: ${parsed.error}`
+        }
+      ]
     };
   }
   return reduceSseEvent(state, parsed.envelope, options);
@@ -74,16 +103,17 @@ export function reduceSseEvent(
   envelope: SseEnvelope,
   options: StreamReductionOptions
 ): StreamReduction {
-  const { data } = envelope;
-
   switch (envelope.type) {
-    case "session_snapshot":
+    case "session_snapshot": {
+      const data = envelope.data;
       return actionsOnly(state, [
         recordEvent(state, envelope.type, data, normalizeAgent(data.current_agent)),
-        { type: "set_session_state", state: data as Partial<SessionState> }
+        { type: "set_session_state", state: data }
       ]);
+    }
 
     case "agent_transition": {
+      const data = envelope.data;
       const agent = normalizeAgent(data.agent);
       return {
         state: { ...state, activeAgent: agent },
@@ -97,10 +127,11 @@ export function reduceSseEvent(
     }
 
     case "plan_update": {
+      const data = envelope.data;
       const update: Partial<SessionState> = {};
-      if (Array.isArray(data.plan)) update.workflow_plan = data.plan.map(String);
-      if (typeof data.plan_index === "number") update.plan_index = data.plan_index;
-      if (typeof data.learning_target === "string" || data.learning_target === null) {
+      if (data.plan !== undefined) update.workflow_plan = data.plan;
+      if (data.plan_index !== undefined) update.plan_index = data.plan_index;
+      if (data.learning_target !== undefined) {
         update.learning_target = data.learning_target;
       }
       return actionsOnly(state, [
@@ -109,73 +140,74 @@ export function reduceSseEvent(
       ]);
     }
 
-    case "structured_result":
+    case "structured_result": {
+      const data = envelope.data;
       return actionsOnly(state, [
         recordEvent(
           state,
           envelope.type,
           data,
-          normalizeAgent(data.node || state.activeAgent)
+          normalizeAgent(data.node)
         )
       ]);
+    }
 
-    case "usage_update":
+    case "usage_update": {
+      const data = envelope.data;
       return actionsOnly(state, [
-        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
-        ...(isObject(data.usage)
-          ? [{
-              type: "set_session_state",
-              state: { budget_usage: data.usage }
-            } as StreamAction]
-          : [])
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node)),
+        {
+          type: "set_session_state",
+          state: { budget_usage: data.usage }
+        }
       ]);
+    }
 
-    case "budget_started":
+    case "budget_started": {
+      const data = envelope.data;
       return actionsOnly(state, [
-        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node)),
         {
           type: "set_session_state",
           state: {
             budget_status: "active",
             budget_termination: {},
-            ...(isObject(data.usage)
-              ? { budget_usage: data.usage }
-              : {})
+            budget_usage: data.usage
           }
         }
       ]);
+    }
 
-    case "budget_terminated":
+    case "budget_terminated": {
+      const data = envelope.data;
       return actionsOnly(state, [
-        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node)),
         {
           type: "set_session_state",
           state: {
             budget_status: "terminated",
-            ...(isObject(data.termination)
-              ? { budget_termination: data.termination }
-              : {}),
-            ...(isObject(data.usage)
-              ? { budget_usage: data.usage }
-              : {})
+            budget_termination: data.termination,
+            ...(data.usage === null ? {} : { budget_usage: data.usage })
           }
         }
       ]);
+    }
 
-    case "context_metrics_update":
+    case "context_metrics_update": {
+      const data = envelope.data;
       return actionsOnly(state, [
-        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
-        ...(isObject(data.metrics)
-          ? [{
-              type: "set_session_state",
-              state: { context_metrics: data.metrics }
-            } as StreamAction]
-          : [])
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node)),
+        {
+          type: "set_session_state",
+          state: { context_metrics: data.metrics }
+        }
       ]);
+    }
 
     case "token": {
+      const data = envelope.data;
       const agent = normalizeAgent(data.agent || state.activeAgent);
-      const text = typeof data.text === "string" ? data.text : "";
+      const text = data.text;
       const nextState = withTokenMeta(state, agent, options.now);
       return {
         state: nextState,
@@ -191,8 +223,9 @@ export function reduceSseEvent(
     }
 
     case "agent_message": {
+      const data = envelope.data;
       const agent = normalizeAgent(data.agent || state.activeAgent);
-      const content = typeof data.content === "string" ? data.content : "";
+      const content = data.content;
       if (!content.trim()) return actionsOnly(state, []);
       const meta = eventMeta(state, agent, options.now);
       return actionsOnly(state, [
@@ -214,16 +247,15 @@ export function reduceSseEvent(
     }
 
     case "tool_call": {
+      const data = envelope.data;
       const agent = normalizeAgent(data.agent || state.activeAgent);
-      const id = typeof data.tool_call_id === "string"
-        ? data.tool_call_id
-        : options.createId();
+      const id = data.tool_call_id || options.createId();
       const toolCall: ToolCall = {
         id,
         agent,
-        node: typeof data.node === "string" ? data.node : "",
-        tool: typeof data.tool === "string" ? data.tool : "tool",
-        args: data.args || {},
+        node: data.node,
+        tool: data.tool || "tool",
+        args: data.args,
         result: "",
         status: "pending",
         createdAt: options.now,
@@ -233,7 +265,7 @@ export function reduceSseEvent(
         recordEvent(state, envelope.type, data, agent),
         { type: "add_tool_call", toolCall, responseId: state.responseId }
       ];
-      if (toolCall.tool === "PlanWorkflow" && isObject(data.args)) {
+      if (toolCall.tool === "PlanWorkflow") {
         const steps = data.args.steps;
         if (Array.isArray(steps)) {
           actions.push({
@@ -258,28 +290,27 @@ export function reduceSseEvent(
     }
 
     case "tool_result": {
+      const data = envelope.data;
       const agent = normalizeAgent(data.agent || state.activeAgent);
-      const id = typeof data.tool_call_id === "string"
-        ? data.tool_call_id
-        : options.createId();
+      const id = data.tool_call_id || options.createId();
       const existing = state.toolCalls[id];
-      const content = typeof data.content === "string" ? data.content : "";
+      const content = data.content;
       const errorMetadata = data.status === "error"
         ? {
-            ...(typeof data.code === "string"
+            ...(data.code !== null
               ? { errorCode: data.code }
               : existing?.errorCode ? { errorCode: existing.errorCode } : {}),
-            ...(typeof data.safe_message === "string"
+            ...(data.safe_message !== null
               ? { safeMessage: data.safe_message }
-              : typeof data.error === "string" ? { safeMessage: data.error }
+              : data.error !== null ? { safeMessage: data.error }
               : existing?.safeMessage ? { safeMessage: existing.safeMessage } : {}),
-            ...(typeof data.retryable === "boolean"
+            ...(data.retryable !== null
               ? { retryable: data.retryable }
               : existing?.retryable !== undefined ? { retryable: existing.retryable } : {}),
-            ...(typeof data.dependency === "string"
+            ...(data.dependency !== null
               ? { dependency: data.dependency }
               : existing?.dependency ? { dependency: existing.dependency } : {}),
-            ...(typeof data.cause_type === "string"
+            ...(data.cause_type !== null
               ? { causeType: data.cause_type }
               : existing?.causeType ? { causeType: existing.causeType } : {})
           }
@@ -287,8 +318,8 @@ export function reduceSseEvent(
       const toolCall: ToolCall = {
         id,
         agent: existing?.agent || agent,
-        node: typeof data.node === "string" ? data.node : existing?.node || "",
-        tool: typeof data.tool === "string" ? data.tool : existing?.tool || "tool",
+        node: data.node,
+        tool: data.tool || existing?.tool || "tool",
         args: existing?.args || {},
         result: content,
         ...errorMetadata,
@@ -308,35 +339,41 @@ export function reduceSseEvent(
       };
     }
 
-    case "interrupt_required":
+    case "interrupt_required": {
+      const data = envelope.data;
       return actionsOnly(state, [
         recordEvent(state, envelope.type, data, state.activeAgent),
         { type: "set_session_state", state: { pending_interrupt: true } }
       ]);
+    }
 
-    case "guardrail_blocked":
+    case "guardrail_blocked": {
+      const data = envelope.data;
       return actionsOnly(state, [
         recordEvent(state, envelope.type, data, state.activeAgent),
         { type: "stream_error", message: "输入被安全规则阻止" }
       ]);
+    }
 
     case "no_pending_interrupt":
-    case "done":
+    case "done": {
+      const data = envelope.data;
       return actionsOnly(state, [
         recordEvent(state, envelope.type, data, state.activeAgent),
         { type: "set_session_state", state: { pending_interrupt: false } }
       ]);
+    }
 
-    case "error":
+    case "error": {
+      const data = envelope.data;
       return actionsOnly(state, [
         recordEvent(state, envelope.type, data, state.activeAgent),
         {
           type: "stream_error",
-          message: typeof data.message === "string"
-            ? data.message
-            : "后端返回错误事件"
+          message: data.message
         }
       ]);
+    }
 
     default:
       return assertNever(envelope);
@@ -410,11 +447,6 @@ function eventMeta(
     stream_started_at: meta.stream_started_at,
     stream_ended_at: meta.stream_ended_at
   };
-}
-
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 

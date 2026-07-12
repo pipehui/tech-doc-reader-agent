@@ -1,0 +1,114 @@
+{
+  "token": {
+    "text": "hello",
+    "agent": "primary"
+  },
+  "session_snapshot": {
+    "session_id": "session-1",
+    "user_id": null,
+    "namespace": null,
+    "exists": true,
+    "pending_interrupt": false,
+    "learning_target": null,
+    "message_count": 0,
+    "current_agent": "primary",
+    "workflow_plan": [],
+    "plan_index": 0,
+    "budget_usage": null,
+    "budget_status": null,
+    "budget_termination": null,
+    "context_metrics": null
+  },
+  "agent_message": {
+    "agent": "primary",
+    "node": "primary_assistant",
+    "message_id": "message-1",
+    "content": "answer"
+  },
+  "agent_transition": {
+    "agent": "parser",
+    "phase": "enter"
+  },
+  "plan_update": {
+    "plan": ["parser", "explanation"],
+    "plan_index": 0,
+    "learning_target": "StateGraph"
+  },
+  "structured_result": {
+    "node": "finish_parser",
+    "result_key": "parser_result",
+    "result": {"parsed": true, "topic": "StateGraph"},
+    "parsed": true
+  },
+  "usage_update": {
+    "node": "primary_assistant",
+    "delta": {"kind": "llm", "llm_calls": 1},
+    "usage": {"schema_version": 1, "llm_calls": 1}
+  },
+  "budget_started": {
+    "node": "fetch_user_info",
+    "status": "active",
+    "usage": {"schema_version": 1, "llm_calls": 0}
+  },
+  "budget_terminated": {
+    "node": "budget_terminated",
+    "termination": {"schema_version": 1, "dimension": "llm_calls"},
+    "usage": {"schema_version": 1, "llm_calls": 32}
+  },
+  "context_metrics_update": {
+    "node": "primary_assistant",
+    "delta": {"kind": "assistant", "agent": "primary"},
+    "metrics": {"schema_version": 1, "measurements": 1, "agents": {}}
+  },
+  "tool_call": {
+    "agent": "parser",
+    "node": "parser",
+    "tool": "read_docs",
+    "args": {"query": "StateGraph"},
+    "tool_call_id": "call-1"
+  },
+  "tool_result": {
+    "agent": "parser_assistant_safe_tools",
+    "node": "parser_assistant_safe_tools",
+    "tool": "read_docs",
+    "tool_call_id": "call-1",
+    "content": "result",
+    "status": "success",
+    "error": null,
+    "safe_message": null,
+    "code": null,
+    "retryable": null,
+    "dependency": null,
+    "cause_type": null
+  },
+  "guardrail_blocked": {
+    "session_id": "session-1",
+    "source": "chat.input",
+    "risk_level": "high",
+    "findings": ["system_prompt_exfiltration"]
+  },
+  "interrupt_required": {
+    "session_id": "session-1",
+    "pending": true,
+    "approval_kind": "guardrail_input",
+    "source": "chat.input",
+    "risk_level": "medium",
+    "findings": ["ignore_previous_instructions"]
+  },
+  "no_pending_interrupt": {
+    "session_id": "session-1"
+  },
+  "done": {
+    "session_id": "session-1"
+  },
+  "error": {
+    "session_id": "session-1",
+    "status": "error",
+    "code": "dependency_unavailable",
+    "retryable": true,
+    "message": "A dependency is unavailable.",
+    "safe_message": "A dependency is unavailable.",
+    "dependency": "agent_runtime",
+    "cause_type": "ConnectionError"
+  }
+}
