@@ -182,3 +182,13 @@ tests/
 这些目录通常不应提交到 Git。
 
 旧版 `learning_store/records.json` 和 `memory_store/memories.json` 仍作为只读兼容输入；第一次 learning-state 保存会发布新 generation。不要直接编辑 `learning_state/generations/*/state.json`，也不要单独删除 `current.json`。
+
+显式 legacy migration 默认 dry-run；apply 会先备份且不删除旧源：
+
+```powershell
+python scripts/migrate_legacy_persistence.py --data-path .\tech_doc_agent\data
+python scripts/migrate_legacy_persistence.py --data-path .\tech_doc_agent\data --apply
+```
+
+不要手工清理非 current generation、processed command、legacy source 或 migration backup。当前生命周期和恢复策略、
+以及开放用户数据删除 API 前必须完成的前置条件见 [data-lifecycle.md](data-lifecycle.md)。

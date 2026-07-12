@@ -105,6 +105,7 @@ http://127.0.0.1:5173
 | [docs/architecture.md](docs/architecture.md) | 多 agent 编排、状态流转、工具层和数据层设计 |
 | [docs/evaluation.md](docs/evaluation.md) | Agent eval、retrieval eval、concurrency benchmark 和指标解释 |
 | [docs/learning-state.md](docs/learning-state.md) | 学习记录、学习轨迹 memory、长期用户画像的边界和写入策略 |
+| [docs/data-lifecycle.md](docs/data-lifecycle.md) | 运行时数据分类、保留/删除、generation、备份恢复与 GDPR-like API 前置条件 |
 | [docs/observability.md](docs/observability.md) | `trace_id`、结构化日志、SSE 事件和 Langfuse tracing |
 | [docs/api.md](docs/api.md) | REST / SSE API 参考 |
 | [docs/development.md](docs/development.md) | 本地启动、Docker、质量检查、项目结构和运行时数据 |

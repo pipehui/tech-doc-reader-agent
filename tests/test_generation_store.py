@@ -34,6 +34,14 @@ def test_published_generation_is_retained_and_current(tmp_path):
     manifest = json.loads(store.manifest_path.read_text(encoding="utf-8"))
     assert manifest["generation"] == generation
 
+    inventory = store.inventory()
+    assert inventory.manifest_exists is True
+    assert inventory.current_generation == generation
+    assert inventory.current_generation_present is True
+    assert inventory.generation_ids == (generation,)
+    assert inventory.non_current_generation_ids == ()
+    assert inventory.unknown_entries == ()
+
 
 def test_publication_started_failure_preserves_possible_current_generation(
     tmp_path,
@@ -61,3 +69,44 @@ def test_generation_path_rejects_traversal(tmp_path):
 
     with pytest.raises(ValueError):
         store.generation_path("../outside")
+
+
+def test_inventory_classifies_non_current_missing_and_unknown_entries(tmp_path):
+    store = GenerationStore(tmp_path / "state")
+    current = "a" * 32
+    non_current = "b" * 32
+    store.generation_path(current).mkdir(parents=True)
+    store.generation_path(non_current).mkdir()
+    (store.generations_dir / "unexpected").mkdir()
+    (store.generations_dir / "partial.tmp").write_text("partial", encoding="utf-8")
+    store.manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    store.manifest_path.write_text(
+        json.dumps({"generation": current, "schema_version": 1}),
+        encoding="utf-8",
+    )
+
+    inventory = store.inventory()
+
+    assert inventory.to_payload() == {
+        "manifest_exists": True,
+        "current_generation": current,
+        "current_generation_present": True,
+        "generation_ids": [current, non_current],
+        "non_current_generation_ids": [non_current],
+        "unknown_entries": ["partial.tmp", "unexpected"],
+    }
+
+    store.generation_path(current).rmdir()
+    missing = store.inventory()
+    assert missing.current_generation == current
+    assert missing.current_generation_present is False
+    assert missing.non_current_generation_ids == (non_current,)
+
+
+def test_inventory_rejects_invalid_current_manifest(tmp_path):
+    store = GenerationStore(tmp_path / "state")
+    store.manifest_path.parent.mkdir(parents=True)
+    store.manifest_path.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="manifest is invalid"):
+        store.inventory()

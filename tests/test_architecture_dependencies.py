@@ -98,6 +98,32 @@ def test_approval_domain_does_not_live_under_runtime_or_leak_into_redis_adapter(
     assert "tech_doc_agent.app.runtime" not in in_memory_source
 
 
+def test_persistence_adapters_do_not_expose_unapproved_retention_deletion():
+    paths = (
+        APP_DIR / "infrastructure" / "persistence" / "generations.py",
+        APP_DIR / "infrastructure" / "persistence" / "faiss_snapshot.py",
+        APP_DIR / "infrastructure" / "persistence" / "learning_state_repository.py",
+        APP_DIR / "infrastructure" / "persistence" / "user_profile_repository.py",
+        APP_DIR / "infrastructure" / "persistence" / "legacy_migration.py",
+    )
+    forbidden_prefixes = ("delete", "prune", "purge", "gc", "retention")
+    violations = []
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for member in node.body:
+                if (
+                    isinstance(member, ast.FunctionDef)
+                    and not member.name.startswith("_")
+                    and member.name.casefold().startswith(forbidden_prefixes)
+                ):
+                    violations.append(f"{path.name}:{member.lineno} exposes {member.name}")
+
+    assert violations == []
+
+
 def test_runtime_does_not_depend_on_api_or_legacy_services():
     assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
 

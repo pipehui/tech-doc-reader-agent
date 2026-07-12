@@ -78,6 +78,14 @@ class UpdateLearningStateCommand:
     def fingerprint(self) -> str:
         return _stable_digest(asdict(self))
 
+    def owner_key(self) -> str:
+        return _stable_digest(
+            (
+                self.tenant.user_id,
+                self.tenant.namespace,
+            )
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class UpdateLearningStateResult:
@@ -237,6 +245,7 @@ class LearningStateUnitOfWork:
             result = mutation(candidate)
             candidate.processed_commands[key] = {
                 "fingerprint": fingerprint,
+                "owner_key": command.owner_key(),
                 "completed_at": datetime.now(UTC).isoformat(),
                 "result": result.to_payload(),
             }

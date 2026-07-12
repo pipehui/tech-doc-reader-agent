@@ -18,6 +18,26 @@ def is_generation_id(value: Any) -> bool:
     return isinstance(value, str) and GENERATION_ID_PATTERN.fullmatch(value) is not None
 
 
+@dataclass(frozen=True, slots=True)
+class GenerationInventory:
+    manifest_exists: bool
+    current_generation: str | None
+    current_generation_present: bool
+    generation_ids: tuple[str, ...]
+    non_current_generation_ids: tuple[str, ...]
+    unknown_entries: tuple[str, ...]
+
+    def to_payload(self) -> dict[str, Any]:
+        return {
+            "manifest_exists": self.manifest_exists,
+            "current_generation": self.current_generation,
+            "current_generation_present": self.current_generation_present,
+            "generation_ids": list(self.generation_ids),
+            "non_current_generation_ids": list(self.non_current_generation_ids),
+            "unknown_entries": list(self.unknown_entries),
+        }
+
+
 @dataclass(slots=True)
 class GenerationDraft:
     generation: str
@@ -55,6 +75,45 @@ class GenerationStore:
             raise ValueError("Invalid generation identifier.")
         return self.generations_dir / generation
 
+    def inventory(self) -> GenerationInventory:
+        generation_ids: list[str] = []
+        unknown_entries: list[str] = []
+        if self.generations_dir.is_dir():
+            for path in self.generations_dir.iterdir():
+                if path.is_dir() and is_generation_id(path.name):
+                    generation_ids.append(path.name)
+                else:
+                    unknown_entries.append(path.name)
+
+        generation_ids.sort()
+        unknown_entries.sort()
+        manifest_exists = self.has_current_manifest()
+        current_generation: str | None = None
+        if manifest_exists:
+            manifest = self.read_current_manifest()
+            if not isinstance(manifest, dict) or not is_generation_id(
+                manifest.get("generation")
+            ):
+                raise ValueError("The current generation manifest is invalid.")
+            current_generation = manifest["generation"]
+
+        current_generation_present = (
+            current_generation is not None
+            and current_generation in generation_ids
+        )
+        return GenerationInventory(
+            manifest_exists=manifest_exists,
+            current_generation=current_generation,
+            current_generation_present=current_generation_present,
+            generation_ids=tuple(generation_ids),
+            non_current_generation_ids=tuple(
+                generation
+                for generation in generation_ids
+                if generation != current_generation
+            ),
+            unknown_entries=tuple(unknown_entries),
+        )
+
     @contextmanager
     def draft(self) -> Iterator[GenerationDraft]:
         generation = uuid4().hex
@@ -72,6 +131,7 @@ class GenerationStore:
 __all__ = [
     "GENERATION_ID_PATTERN",
     "GenerationDraft",
+    "GenerationInventory",
     "GenerationStore",
     "is_generation_id",
 ]

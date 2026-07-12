@@ -174,11 +174,19 @@ class LearningStateSnapshotRepository:
             if not isinstance(command, dict):
                 raise _corrupt_learning_state("InvalidProcessedCommand")
             fingerprint = command.get("fingerprint")
+            owner_key = command.get("owner_key")
             if (
                 not isinstance(key, str)
                 or _DIGEST_PATTERN.fullmatch(key) is None
                 or not isinstance(fingerprint, str)
                 or _DIGEST_PATTERN.fullmatch(fingerprint) is None
+                or (
+                    owner_key is not None
+                    and (
+                        not isinstance(owner_key, str)
+                        or _DIGEST_PATTERN.fullmatch(owner_key) is None
+                    )
+                )
                 or not isinstance(command.get("completed_at"), str)
             ):
                 raise _corrupt_learning_state("InvalidProcessedCommand")

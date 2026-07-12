@@ -96,6 +96,9 @@ LangGraph state 保存：
 - Web search backend：Tavily + DuckDuckGo fallback
 - Redis checkpointer：会话恢复
 
+各存储的保留、generation、备份恢复与删除前置条件见 [data-lifecycle.md](data-lifecycle.md)。当前除 approval TTL 和
+replace-in-place 状态外，不启用自动数据 pruning。
+
 ## Frontend Views
 
 - Studio：日常对话、计划推进、agent 切换、tool 调用和 HITL 审批。

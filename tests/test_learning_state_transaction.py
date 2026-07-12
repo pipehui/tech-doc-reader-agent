@@ -222,6 +222,39 @@ def test_idempotency_identity_includes_tenant_session_and_tool_call():
     assert base.idempotency_key() != _command(tenant=TenantContext("user-b", "tenant-docs")).idempotency_key()
     assert base.idempotency_key() != _command(session_id="session-2").idempotency_key()
     assert base.idempotency_key() != _command(tool_call_id="call-2").idempotency_key()
+    assert base.owner_key() == _command(session_id="session-2", tool_call_id="call-2").owner_key()
+    assert base.owner_key() != _command(tenant=TenantContext("user-b", "tenant-docs")).owner_key()
+
+
+def test_processed_command_persists_deterministic_owner_key(tmp_path):
+    repository, _, _, _, service = _stack(tmp_path)
+    command = _command()
+
+    service.update(command)
+    commands = _state_payload(repository)["processed_commands"]
+    persisted = next(iter(commands.values()))
+
+    assert persisted["owner_key"] == command.owner_key()
+    assert "user_id" not in persisted
+    assert "namespace" not in persisted
+    assert "session_id" not in persisted
+    assert "tool_call_id" not in persisted
+
+
+def test_repository_rejects_invalid_processed_command_owner_key(tmp_path):
+    repository, _, _, _, service = _stack(tmp_path)
+    service.update(_command())
+    generation = _manifest(repository)["generation"]
+    state_path = repository.generations_dir / generation / "state.json"
+    payload = json.loads(state_path.read_text(encoding="utf-8"))
+    next(iter(payload["processed_commands"].values()))["owner_key"] = "invalid"
+    state_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValidationError) as raised:
+        repository.load()
+
+    assert raised.value.code == "learning_state_corrupt"
+    assert raised.value.cause_type == "InvalidProcessedCommand"
 
 
 @pytest.mark.parametrize(
