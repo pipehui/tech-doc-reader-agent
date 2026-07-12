@@ -8,9 +8,10 @@ APP_DIR = Path(__file__).resolve().parents[1] / "tech_doc_agent" / "app"
 APPLICATION_DIR = APP_DIR / "application"
 RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
-ASSISTANTS_DIR = APP_DIR / "services" / "assistants"
+AGENTS_DIR = APP_DIR / "agents"
 RETRIEVAL_DIR = APP_DIR / "services" / "retrieval"
 FORBIDDEN_CORE_DEPENDENCIES = (
+    "tech_doc_agent.app.agents",
     "tech_doc_agent.app.api",
     "tech_doc_agent.app.graph",
     "tech_doc_agent.app.infrastructure",
@@ -32,6 +33,7 @@ APPLICATION_CONTRACT = DependencyContract(
     name="application isolation",
     source_prefixes=("tech_doc_agent.app.application",),
     forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
         "tech_doc_agent.app.api",
         "tech_doc_agent.app.bootstrap",
         "tech_doc_agent.app.composition",
@@ -47,6 +49,7 @@ RUNTIME_CONTRACT = DependencyContract(
     name="runtime isolation",
     source_prefixes=("tech_doc_agent.app.runtime",),
     forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
         "tech_doc_agent.app.api",
         "tech_doc_agent.app.bootstrap",
         "tech_doc_agent.app.composition",
@@ -62,6 +65,7 @@ GRAPH_CONTRACT = DependencyContract(
     name="graph orchestration isolation",
     source_prefixes=("tech_doc_agent.app.graph",),
     forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
         "tech_doc_agent.app.api",
         "tech_doc_agent.app.bootstrap",
         "tech_doc_agent.app.composition",
@@ -76,6 +80,7 @@ INFRASTRUCTURE_CONTRACT = DependencyContract(
     name="infrastructure adapter isolation",
     source_prefixes=("tech_doc_agent.app.infrastructure",),
     forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
         "tech_doc_agent.app.api",
         "tech_doc_agent.app.bootstrap",
         "tech_doc_agent.app.composition",
@@ -90,6 +95,7 @@ API_DELIVERY_CONTRACT = DependencyContract(
     name="API delivery avoids concrete backends",
     source_prefixes=("tech_doc_agent.app.api",),
     forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
         "tech_doc_agent.app.graph",
         "tech_doc_agent.app.infrastructure",
         "tech_doc_agent.app.services",
@@ -100,10 +106,24 @@ TOOLS_CONTRACT = DependencyContract(
     name="tool adapter isolation",
     source_prefixes=("tech_doc_agent.app.tools",),
     forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
         "tech_doc_agent.app.api",
         "tech_doc_agent.app.bootstrap",
         "tech_doc_agent.app.composition",
         "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.infrastructure",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.runtime",
+        "tech_doc_agent.app.services",
+    ),
+)
+AGENTS_CONTRACT = DependencyContract(
+    name="agent definition isolation",
+    source_prefixes=("tech_doc_agent.app.agents",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
         "tech_doc_agent.app.infrastructure",
         "tech_doc_agent.app.main",
         "tech_doc_agent.app.runtime",
@@ -134,6 +154,10 @@ def test_api_delivery_only_depends_on_runtime_facade_not_services_or_backends():
 
 def test_tool_adapters_depend_on_application_ports_not_service_implementations():
     assert TOOLS_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_agent_definitions_do_not_depend_on_services_or_delivery_adapters():
+    assert AGENTS_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
 def test_learning_tools_delegate_writes_to_application_service():
@@ -284,8 +308,8 @@ def test_runtime_package_init_does_not_eagerly_load_components():
     assert imports == []
 
 
-def test_assistants_package_init_does_not_eagerly_load_role_definitions():
-    path = ASSISTANTS_DIR / "__init__.py"
+def test_agents_package_init_does_not_eagerly_load_role_definitions():
+    path = AGENTS_DIR / "__init__.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
     imports = [
@@ -313,7 +337,7 @@ def test_role_modules_do_not_define_or_load_prompt_templates():
         "examination_assistant.py",
         "summary_assistant.py",
     ):
-        source = (ASSISTANTS_DIR / filename).read_text(encoding="utf-8")
+        source = (AGENTS_DIR / filename).read_text(encoding="utf-8")
         for fragment in forbidden_fragments:
             if fragment in source:
                 violations.append(f"{filename} contains {fragment}")
@@ -323,7 +347,7 @@ def test_role_modules_do_not_define_or_load_prompt_templates():
 
 def test_chat_model_construction_is_isolated_to_model_factory():
     violations = []
-    for path in sorted(ASSISTANTS_DIR.glob("*.py")):
+    for path in sorted(AGENTS_DIR.glob("*.py")):
         if path.name == "model_factory.py":
             continue
         source = path.read_text(encoding="utf-8")
@@ -335,11 +359,11 @@ def test_chat_model_construction_is_isolated_to_model_factory():
 
 def test_assistant_base_does_not_import_settings_or_model_factory():
     assert _dependency_violations(
-        ASSISTANTS_DIR,
+        AGENTS_DIR,
         (
             "langchain_openai",
             "tech_doc_agent.app.core.settings",
-            "tech_doc_agent.app.services.assistants.model_factory",
+            "tech_doc_agent.app.agents.model_factory",
         ),
         filenames=("assistant_base.py",),
     ) == []
@@ -349,7 +373,7 @@ def test_graph_builder_does_not_import_concrete_assistants_or_tools():
     violations = _dependency_violations(
         APP_DIR / "graph",
         (
-            "tech_doc_agent.app.services.assistants",
+            "tech_doc_agent.app.agents",
             "tech_doc_agent.app.services.tools",
         ),
         filenames=("builder.py",),

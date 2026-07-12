@@ -16,7 +16,7 @@ from evals.artifacts import redact_artifact_rows
 from tech_doc_agent.app.api.schemas import RuntimeExecutionIdentityResponse
 from tech_doc_agent.app.core.revisions import is_full_git_commit_sha
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.assistants.prompt_registry import ASSISTANT_ROLES
+from tech_doc_agent.app.agents.prompt_registry import ASSISTANT_ROLES
 
 
 RuntimeIdentityStatus = Literal[

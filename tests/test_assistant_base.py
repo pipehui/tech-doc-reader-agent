@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from tech_doc_agent.app.core.errors import Timeout
 from tech_doc_agent.app.core import observability
 from tech_doc_agent.app.core.retry import RetryExecutor, RetryPolicy
-from tech_doc_agent.app.services.assistants.assistant_base import (
+from tech_doc_agent.app.agents.assistant_base import (
     Assistant,
     is_empty_assistant_output,
 )

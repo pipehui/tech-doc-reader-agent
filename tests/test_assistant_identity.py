@@ -1,18 +1,18 @@
 import pytest
 
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.assistants.identity import (
+from tech_doc_agent.app.agents.identity import (
     AssistantExecutionIdentity,
     RuntimeDeploymentIdentity,
     build_runtime_execution_identity,
 )
-from tech_doc_agent.app.services.assistants.definition import (
+from tech_doc_agent.app.agents.definition import (
     build_assistant_definition,
 )
-from tech_doc_agent.app.services.assistants.model_factory import (
+from tech_doc_agent.app.agents.model_factory import (
     AssistantModelProvider,
 )
-from tech_doc_agent.app.services.assistants.prompt_registry import (
+from tech_doc_agent.app.agents.prompt_registry import (
     build_prompt_registry,
 )
 

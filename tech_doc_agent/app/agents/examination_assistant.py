@@ -1,12 +1,12 @@
 """Learning examination assistant tool composition."""
 
 from tech_doc_agent.app.graph.commands import CompleteOrEscalate
-from tech_doc_agent.app.services.assistants.definition import (
+from .definition import (
     AssistantDefinition,
     build_assistant_definition,
 )
-from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
-from tech_doc_agent.app.services.assistants.prompt_registry import PromptArtifact
+from .model_factory import AssistantModelProvider
+from .prompt_registry import PromptArtifact
 from tech_doc_agent.app.tools import ToolBundle
 
 

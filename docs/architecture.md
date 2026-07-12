@@ -106,20 +106,23 @@ replace-in-place 状态外，不启用自动数据 pruning。
 | Source | 禁止反向依赖 | 当前允许方向 |
 |---|---|---|
 | `core` | 其他全部 app layer | `core` 内部与第三方基础库 |
-| `application` | API、graph、runtime、services、tools、infrastructure、组装入口 | `core` |
-| `runtime` | API、graph、services、tools、infrastructure、组装入口 | `application`、`core` |
-| `graph` | API、runtime、services、tools、infrastructure、组装入口 | `graph`、`core` |
-| `infrastructure` | API、graph、runtime、services、tools、组装入口 | `application`、`core` |
-| `api` | graph、services、persistence/retrieval backend、tools | runtime facade、core、API contract |
-| `tools` | API、graph、runtime、services、infrastructure、组装入口 | `application` ports/models、`core`、tool 内部 |
+| `application` | agents、API、graph、runtime、services、tools、infrastructure、组装入口 | `core` |
+| `runtime` | agents、API、graph、services、tools、infrastructure、组装入口 | `application`、`core` |
+| `graph` | agents、API、runtime、services、tools、infrastructure、组装入口 | `graph`、`core` |
+| `infrastructure` | agents、API、graph、runtime、services、tools、组装入口 | `application`、`core` |
+| `api` | agents、graph、services、persistence/retrieval backend、tools | runtime facade、core、API contract |
+| `tools` | agents、API、graph、runtime、services、infrastructure、组装入口 | `application` ports/models、`core`、tool 内部 |
+| `agents` | API、runtime、services、infrastructure、组装入口 | `core`、graph commands、tools、application contract、agent 内部 |
 
-`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool 和 graph 只能在这些边界完成组装。`services` 仍包含 assistant/provider 与 resource container，尚未强行声明虚假的单一层级；后续会先迁出具体职责，再收紧 contract。
+`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool、agent 和 graph 只能在这些边界完成组装。role 定义、prompt、model provider 与 registry 已从混合的 `services/assistants` 迁到独立 `agents` 包，并由双向 contract 阻止重新耦合。`services` 仍包含 resource container、retrieval 与 provider adapter，尚未强行声明虚假的单一层级；后续会先迁出具体职责，再收紧 contract。
 
 `runtime/chat_runtime.py` 是 API/CLI 共用 facade，只依赖 application/core/runtime ports。生产所需的 Redis approval repository、RedisSaver、resource factory、graph builder 与 prompt/model identity builder 由 `bootstrap.py` 显式注入；runtime 模块本身没有具体 adapter fallback。
 
 Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph state 并决定 Agent prompt 可见消息，属于 graph orchestration policy，不再由 `services` 反向提供给 graph。
 
 Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`SearchQuery`、`SearchResult` 与 `DocumentRetrieverPort`。`services/retrieval/models.py` 只承载 ranker/store 实现所需的内部 candidate/port；tools 只构造 application query，不 import taxonomy、filter 或 HybridRetriever 实现。
+
+Agent role 的执行装配位于 `agents/`：prompt 作为同包资源由 `PromptRegistry` 校验，`AssistantExecutionIdentity` 和 model route identity 与 role 定义共同维护。该包可消费 graph command 和已绑定的 `ToolBundle`，但不能反向读取 services、runtime、API、infrastructure 或 composition root。
 
 ## Frontend Views
 

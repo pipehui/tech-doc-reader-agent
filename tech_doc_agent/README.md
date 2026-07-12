@@ -18,6 +18,13 @@
 tech_doc_agent
 ├── app
 │   ├── api
+│   ├── agents
+│   │   ├── definition.py
+│   │   ├── identity.py
+│   │   ├── model_factory.py
+│   │   ├── prompt_registry.py
+│   │   ├── prompts
+│   │   └── registry.py
 │   ├── bootstrap.py
 │   ├── composition.py
 │   ├── core
@@ -50,12 +57,10 @@ tech_doc_agent
 │   │   └── profiles.py
 │   ├── main.py
 │   └── services
-│       ├── assistants
-│       │   ├── definition.py
-│       │   ├── model_factory.py
-│       │   └── registry.py
+│       ├── retrieval
 │       ├── vectordb
-│       └── chat_runtime.py
+│       ├── embedding.py
+│       └── resources.py
 └── data
 ```
 
@@ -101,9 +106,9 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 - `GET /sessions/{id}/history`
 - `GET /sessions/{id}/state`
 
-### `app/services/assistants`
+### `app/agents`
 
-包含当前系统的 prompt 与依赖绑定工厂：
+内聚当前系统的 role 定义、prompt、执行身份与模型绑定工厂：
 
 - `primary_assistant.py`
 - `parser_assistant.py`
@@ -112,7 +117,7 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 - `examination_assistant.py`
 - `summary_assistant.py`
 
-`model_factory.py` 是模型客户端的唯一构造位置，`definition.py` 统一绑定 safe/sensitive/control tools，`registry.py` 组装六个 role。import assistant 基类不会读取 settings 或创建模型客户端。
+`model_factory.py` 是模型客户端的唯一构造位置，`definition.py` 统一绑定 safe/sensitive/control tools，`prompt_registry.py` 从同包资源加载并校验 prompt，`registry.py` 组装六个 role。该包不依赖 `services`、runtime、API 或 infrastructure；具体实例只在 composition root 组装。import assistant 基类不会读取 settings 或创建模型客户端。
 
 ### `app/tools`
 

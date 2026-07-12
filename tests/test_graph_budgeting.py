@@ -27,7 +27,7 @@ from tech_doc_agent.app.graph.routing import make_primary_router
 from tech_doc_agent.app.graph.specs import ReflectionPolicy, ToolExecutionPolicy
 from tech_doc_agent.app.graph.tool_nodes import create_tool_node_with_fallback
 from tech_doc_agent.app.graph.builder import build_multi_agentic_graph
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant
+from tech_doc_agent.app.agents.assistant_base import Assistant
 from tests.test_model_pricing import PRICE_TABLE_PAYLOAD
 
 

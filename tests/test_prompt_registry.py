@@ -6,8 +6,8 @@ from pathlib import PurePosixPath
 
 import pytest
 
-import tech_doc_agent.app.services.assistants.prompt_registry as prompt_registry
-from tech_doc_agent.app.services.assistants.prompt_registry import (
+import tech_doc_agent.app.agents.prompt_registry as prompt_registry
+from tech_doc_agent.app.agents.prompt_registry import (
     ASSISTANT_ROLES,
     PROMPT_PACKAGE,
     PromptRegistry,

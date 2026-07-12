@@ -52,7 +52,7 @@ LangGraph checkpoint 和 medium-risk input guardrail approval 共用 Redis。app
 
 ## Prompt Resources
 
-Assistant system prompts 位于 `tech_doc_agent/app/services/assistants/prompts/`，由 `manifest.json` 固定 role、稳定 ID、
+Assistant system prompts 位于 `tech_doc_agent/app/agents/prompts/`，由 `manifest.json` 固定 role、稳定 ID、
 资源顺序、SHA-256 和 required placeholders。role Python 模块只声明工具组合，不应重新内联 prompt。
 
 有意修改 prompt 时应单独提交：同步升级 prompt ID/hash，运行 `tests/test_prompt_registry.py`，并将模型、数据集或

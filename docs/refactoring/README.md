@@ -73,6 +73,7 @@
 | 2026-07-12 | Phase 4：递归 Python import graph、分层 architecture contracts 与 message_scope 归位 | 六组稳定边界已阻断，ChatRuntime/services 收口继续 | [2026-07-12-recursive-architecture-contracts.md](2026-07-12-recursive-architecture-contracts.md) |
 | 2026-07-12 | Phase 4：ChatRuntime 纯注入 facade 归位、runtime identity port 与 API -> runtime | facade 边界完成，services 其他混合职责继续 | [2026-07-12-chat-runtime-facade-boundary.md](2026-07-12-chat-runtime-facade-boundary.md) |
 | 2026-07-12 | Phase 4：Retrieval application contract、内部 ranker DTO 分离与 tools -> services 清零 | 查询/结果 port 下沉完成，真实 corpus 基线继续 | [2026-07-12-retrieval-application-contract.md](2026-07-12-retrieval-application-contract.md) |
+| 2026-07-12 | Phase 4：Agents 顶层 package、prompt 资源无损迁移与双向依赖门禁 | role/prompt/model/identity 已迁出 services，旧路径不保留 | [2026-07-12-agents-package-boundary.md](2026-07-12-agents-package-boundary.md) |
 
 ## 本地任务单策略
 

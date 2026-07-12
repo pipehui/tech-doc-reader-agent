@@ -12,7 +12,7 @@ from evals.manifests import (
 )
 from evals.retrieval_corpus import build_retrieval_corpus_identity
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.assistants.identity import (
+from tech_doc_agent.app.agents.identity import (
     build_runtime_execution_identity,
 )
 

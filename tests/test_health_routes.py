@@ -8,7 +8,7 @@ from redis.exceptions import ConnectionError
 
 from tech_doc_agent.app.api.routes import health
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.assistants.identity import (
+from tech_doc_agent.app.agents.identity import (
     build_runtime_execution_identity,
 )
 

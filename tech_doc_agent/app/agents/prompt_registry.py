@@ -23,7 +23,7 @@ AssistantRole = Literal[
 ]
 ResourceReader = Callable[[str], str]
 
-PROMPT_PACKAGE = "tech_doc_agent.app.services.assistants.prompts"
+PROMPT_PACKAGE = "tech_doc_agent.app.agents.prompts"
 PROMPT_MANIFEST_RESOURCE = "manifest.json"
 PROMPT_MANIFEST_SCHEMA_VERSION = 1
 ASSISTANT_ROLES: tuple[AssistantRole, ...] = (

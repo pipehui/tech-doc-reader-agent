@@ -10,7 +10,7 @@ from tech_doc_agent.app.graph.context_metrics import (
     context_metrics_request_start_node,
 )
 from tech_doc_agent.app.graph.nodes import assistant_node
-from tech_doc_agent.app.services.assistants.assistant_base import Assistant
+from tech_doc_agent.app.agents.assistant_base import Assistant
 
 
 class OneMessageRunnable:

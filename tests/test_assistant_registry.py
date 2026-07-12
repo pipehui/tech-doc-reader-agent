@@ -12,10 +12,10 @@ from tech_doc_agent.app.graph.commands import (
     ToSummaryAssistant,
 )
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.assistants import model_factory
-from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
-from tech_doc_agent.app.services.assistants.prompt_registry import build_prompt_registry
-from tech_doc_agent.app.services.assistants.registry import build_assistant_registry
+from tech_doc_agent.app.agents import model_factory
+from tech_doc_agent.app.agents.model_factory import AssistantModelProvider
+from tech_doc_agent.app.agents.prompt_registry import build_prompt_registry
+from tech_doc_agent.app.agents.registry import build_assistant_registry
 from tech_doc_agent.app.tools import ToolBundle
 
 

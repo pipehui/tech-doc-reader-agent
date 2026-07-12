@@ -20,9 +20,9 @@ from tech_doc_agent.app.graph.specs import (
     ToolExecutionPolicy,
     ToolPolicy,
 )
-from tech_doc_agent.app.services.assistants.model_factory import build_assistant_model_provider
-from tech_doc_agent.app.services.assistants.prompt_registry import build_prompt_registry
-from tech_doc_agent.app.services.assistants.registry import AssistantRegistry, build_assistant_registry
+from tech_doc_agent.app.agents.model_factory import build_assistant_model_provider
+from tech_doc_agent.app.agents.prompt_registry import build_prompt_registry
+from tech_doc_agent.app.agents.registry import AssistantRegistry, build_assistant_registry
 from tech_doc_agent.app.services.conversation_summarizer import ExtractiveConversationSummarizer
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 

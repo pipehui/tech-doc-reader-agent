@@ -22,7 +22,7 @@ from evals.manifests import (
     validate_runtime_identity,
 )
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.assistants.identity import (
+from tech_doc_agent.app.agents.identity import (
     build_runtime_execution_identity,
 )
 

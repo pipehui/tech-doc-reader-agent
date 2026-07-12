@@ -355,8 +355,8 @@ def test_retry_executor_is_not_wired_around_tool_nodes_or_write_paths():
     source_root = Path(__file__).parents[1] / "tech_doc_agent"
     allowed = {
         Path("app/core/retry.py"),
-        Path("app/services/assistants/assistant_base.py"),
-        Path("app/services/assistants/model_factory.py"),
+        Path("app/agents/assistant_base.py"),
+        Path("app/agents/model_factory.py"),
         Path("app/services/embedding.py"),
         Path("app/services/vectordb/web_search_backend.py"),
     }

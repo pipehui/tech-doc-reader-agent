@@ -11,7 +11,7 @@ from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository
 from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 from tech_doc_agent.app.runtime.identity import RuntimeExecutionIdentityPort
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
-from tech_doc_agent.app.services.assistants.identity import (
+from tech_doc_agent.app.agents.identity import (
     build_runtime_execution_identity,
 )
 
