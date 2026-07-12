@@ -1,14 +1,18 @@
-import json
 import threading
-
-import faiss
-import numpy as np
 from pathlib import Path
 from typing import Any
 
-from tech_doc_agent.app.core.errors import ApplicationError, DependencyUnavailable, classify_error
-from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.core.settings import get_settings
+import faiss
+import numpy as np
+
+from tech_doc_agent.app.core.errors import (
+    ApplicationError,
+    DependencyUnavailable,
+    ValidationError,
+    classify_error,
+)
+from tech_doc_agent.app.core.settings import Settings, get_settings
+from tech_doc_agent.app.infrastructure.persistence.faiss_snapshot import FaissSnapshotRepository
 from tech_doc_agent.app.services.embedding import generate_embedding
 from tech_doc_agent.app.services.retrieval.normalization import (
     normalize_chunk_metadata,
@@ -26,9 +30,7 @@ class FaissStore:
     ):
         settings = settings or get_settings()
         self.store_dir = Path(settings.DATA_PATH) / "faiss_store"
-        self.index_path = self.store_dir / "index.faiss"
-        self.documents_path = self.store_dir / "documents.json"
-        self.metadata_path = self.store_dir / "chunk_metadata.json"
+        self._snapshot_repository = FaissSnapshotRepository(self.store_dir)
 
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -36,14 +38,14 @@ class FaissStore:
         self.dimension: int | None = None
         self.chunk_metadata: list[dict[str, Any]] = []
         self.documents: list[dict[str, Any]] = []
-        self._write_lock = threading.Lock()
+        self._state_lock = threading.Lock()
 
     def _prepare_chunks(self, docs: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
-        '''
+        """
         批量切块
         输入：文档列表
         输出：所有切块的字面量列表、所有切块的元数据列表
-        '''
+        """
         all_chunks = []
         all_metadata = []
 
@@ -78,15 +80,9 @@ class FaissStore:
                         doc,
                     )
                 )
-        
+
         return all_chunks, all_metadata
-    
-    def _ensure_index(self, dimension: int) -> None:
-        if self.index is not None:
-            return
-        self.dimension = dimension
-        self.index = faiss.IndexFlatL2(self.dimension)
-    
+
     def _next_doc_id(self) -> int:
         max_id = 0
         for doc in self.documents:
@@ -97,75 +93,134 @@ class FaissStore:
                 max_id = max(max_id, int(doc_id))
         return max_id + 1
 
+    def _prepare_documents(
+        self,
+        docs: list[dict[str, Any]],
+        *,
+        first_id: int,
+    ) -> list[dict[str, Any]]:
+        new_docs: list[dict[str, Any]] = []
+        for offset, doc in enumerate(docs):
+            raw_doc = {
+                "id": first_id + offset,
+                "title": doc["title"],
+                "content": doc["content"],
+                "source": doc.get("source", ""),
+                "metadata": doc.get("metadata", {}),
+            }
+            for key in ("user_id", "namespace", "category", "tags"):
+                if doc.get(key) is not None:
+                    raw_doc[key] = doc[key]
+            new_docs.append(normalize_document(raw_doc))
+        return new_docs
+
+    def _index_with_chunks(
+        self,
+        chunks: list[str],
+        *,
+        existing_index: Any | None,
+    ) -> tuple[Any, int]:
+        try:
+            embeddings = generate_embedding(chunks)
+            vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
+            if vectors.ndim != 2 or vectors.shape[0] != len(chunks) or vectors.shape[1] <= 0:
+                raise ValidationError(
+                    "The embedding response shape is invalid.",
+                    code="embedding_shape_invalid",
+                    dependency="embedding",
+                    cause_type="EmbeddingShapeMismatch",
+                )
+
+            dimension = int(vectors.shape[1])
+            candidate_index: Any
+            if existing_index is None:
+                candidate_index = faiss.IndexFlatL2(dimension)
+            else:
+                if int(existing_index.d) != dimension:
+                    raise ValidationError(
+                        "The vector dimension does not match the current index.",
+                        code="vector_dimension_mismatch",
+                        dependency="vector_index",
+                        cause_type="VectorDimensionMismatch",
+                    )
+                # Mutate a clone so a failed append cannot corrupt the active index.
+                candidate_index = faiss.clone_index(existing_index)
+
+            candidate_index.add(vectors)
+            return candidate_index, dimension
+        except ApplicationError:
+            raise
+        except Exception as exc:
+            raise classify_error(exc, dependency="vector_index") from exc
+
     def add_documents(self, docs: list[dict[str, Any]]) -> dict:
-        with self._write_lock:
-            new_docs: list[dict[str, Any]] = []
-            next_id = self._next_doc_id()
-            for offset, doc in enumerate(docs):
-                raw_doc = {
-                    "id": next_id + offset,
-                    "title": doc["title"],
-                    "content": doc["content"],
-                    "source": doc.get("source", ""),
-                    "metadata": doc.get("metadata", {}),
-                }
-                for key in ("user_id", "namespace", "category", "tags"):
-                    if doc.get(key) is not None:
-                        raw_doc[key] = doc[key]
-                normalized_doc = normalize_document(raw_doc)
-                new_docs.append(normalized_doc)
+        with self._state_lock:
+            new_docs = self._prepare_documents(docs, first_id=self._next_doc_id())
             chunks, metadata = self._prepare_chunks(new_docs)
             if not new_docs or not chunks:
                 return {
                     "added_documents": 0,
                     "added_chunks": 0,
                 }
-            try:
-                embeddings = generate_embedding(chunks)
-                vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
-
-                self._ensure_index(vectors.shape[1])
-                assert self.index is not None
-                self.index.add(vectors)
-            except ApplicationError:
-                raise
-            except Exception as exc:
-                raise classify_error(exc, dependency="vector_index") from exc
-            self.documents.extend(new_docs)
-            self.chunk_metadata.extend(metadata)
+            candidate_index, dimension = self._index_with_chunks(
+                chunks,
+                existing_index=self.index,
+            )
+            self.index = candidate_index
+            self.dimension = dimension
+            # Replace the paired collections together; readers can safely retain
+            # the previous immutable-by-convention snapshot while this publishes.
+            self.documents = [*self.documents, *new_docs]
+            self.chunk_metadata = [*self.chunk_metadata, *metadata]
             return {
                 "added_documents": len(new_docs),
                 "added_chunks": len(metadata),
             }
-    
-    def add_document(self, title: str, content: str, source: str = "") -> dict:
-        return self.add_documents([
-            {"title": title, "content": content, "source": source}
-        ])
 
+    def add_document(self, title: str, content: str, source: str = "") -> dict:
+        return self.add_documents([{"title": title, "content": content, "source": source}])
 
     def build_index(self, docs: list[dict[str, Any]]) -> dict:
-        self.index = None
-        self.dimension = None
-        self.documents = []
-        self.chunk_metadata = []
+        with self._state_lock:
+            new_docs = self._prepare_documents(docs, first_id=1)
+            chunks, metadata = self._prepare_chunks(new_docs)
+            if not new_docs or not chunks:
+                return {
+                    "added_documents": 0,
+                    "added_chunks": 0,
+                }
 
-        return self.add_documents(docs)
-
+            # Build an isolated candidate. The current state is replaced only after
+            # embedding and FAISS construction have both completed successfully.
+            candidate_index, dimension = self._index_with_chunks(
+                chunks,
+                existing_index=None,
+            )
+            self.index = candidate_index
+            self.dimension = dimension
+            self.documents = new_docs
+            self.chunk_metadata = metadata
+            return {
+                "added_documents": len(new_docs),
+                "added_chunks": len(metadata),
+            }
 
     def search_related(self, query: str, k: int = 3) -> list[dict]:
-        if self.index is None:
-            raise DependencyUnavailable(
-                "The semantic search index is unavailable.",
-                code="vector_index_unavailable",
-                retryable=False,
-                dependency="vector_index",
-            )
+        with self._state_lock:
+            index = self.index
+            chunk_metadata = self.chunk_metadata
+            if index is None:
+                raise DependencyUnavailable(
+                    "The semantic search index is unavailable.",
+                    code="vector_index_unavailable",
+                    retryable=False,
+                    dependency="vector_index",
+                )
 
         try:
             query_embedding = generate_embedding(query)
             query_vector = np.ascontiguousarray(np.array([query_embedding], dtype="float32"))
-            distances, indices = self.index.search(query_vector, k)
+            distances, indices = index.search(query_vector, k)
         except ApplicationError:
             raise
         except Exception as exc:
@@ -176,76 +231,85 @@ class FaissStore:
             if idx == -1:
                 continue
 
-            item = dict(self.chunk_metadata[idx])
+            item = dict(chunk_metadata[idx])
             item["distance"] = float(distance)
             results.append(item)
 
         return results
-    
+
     def read_documents(self, query: str) -> list[dict]:
+        with self._state_lock:
+            documents = self.documents
         res = []
         query_lower = query.lower()
-        for doc in self.documents:
+        for doc in documents:
             if query_lower in doc["title"].lower() or query_lower in doc["content"].lower():
                 res.append(doc)
         return res
 
     def save(self) -> bool:
-        with self._write_lock:
+        with self._state_lock:
             if self.index is None:
                 return False
-            self.normalize_metadata()
-
-            try:
-                self.store_dir.mkdir(parents=True, exist_ok=True)
-                faiss.write_index(self.index, str(self.index_path))
-                with open(self.documents_path, "w", encoding="utf-8") as f:
-                    json.dump(self.documents, f, ensure_ascii=False, indent=2)
-
-                with open(self.metadata_path, "w", encoding="utf-8") as f:
-                    json.dump(self.chunk_metadata, f, ensure_ascii=False, indent=2)
-            except Exception as exc:
-                raise classify_error(exc, dependency="file_repository") from exc
-
+            documents, chunk_metadata = self._normalized_snapshot(
+                self.documents,
+                self.chunk_metadata,
+            )
+            self._snapshot_repository.save(
+                self.index,
+                documents,
+                chunk_metadata,
+            )
+            self.documents = documents
+            self.chunk_metadata = chunk_metadata
             return True
 
     def load(self) -> bool:
-        if not (
-            self.index_path.exists()
-            and self.documents_path.exists()
-            and self.metadata_path.exists()
-        ):
-            return False
-        try:
-            index = faiss.read_index(str(self.index_path))
-            with open(self.documents_path, "r", encoding="utf-8") as f:
-                documents = json.load(f)
-            with open(self.metadata_path, "r", encoding="utf-8") as f:
-                chunk_metadata = json.load(f)
-        except Exception as exc:
-            raise classify_error(exc, dependency="file_repository") from exc
+        with self._state_lock:
+            snapshot = self._snapshot_repository.load()
+            if snapshot is None:
+                return False
 
-        self.index = index
-        self.dimension = index.d
-        self.documents = documents
-        self.chunk_metadata = chunk_metadata
-        self.normalize_metadata()
-        return True
+            documents, chunk_metadata = self._normalized_snapshot(
+                snapshot.documents,
+                snapshot.chunk_metadata,
+            )
+            self.index = snapshot.index
+            self.dimension = int(snapshot.index.d)
+            self.documents = documents
+            self.chunk_metadata = chunk_metadata
+            return True
 
     def normalize_metadata(self) -> None:
-        self.documents = [normalize_document(doc) for doc in self.documents]
-        documents_by_id = {str(doc.get("id")): doc for doc in self.documents}
+        with self._state_lock:
+            documents, chunk_metadata = self._normalized_snapshot(
+                self.documents,
+                self.chunk_metadata,
+            )
+            self.documents = documents
+            self.chunk_metadata = chunk_metadata
+
+    @staticmethod
+    def _normalized_snapshot(
+        documents: list[dict[str, Any]],
+        chunk_metadata: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        normalized_documents = [normalize_document(doc) for doc in documents]
+        documents_by_id = {str(doc.get("id")): doc for doc in normalized_documents}
         normalized_chunks = []
-        for chunk in self.chunk_metadata:
+        for chunk in chunk_metadata:
             document = documents_by_id.get(str(chunk.get("doc_id")))
             normalized_chunks.append(normalize_chunk_metadata(chunk, document))
-        self.chunk_metadata = normalized_chunks
-
+        return normalized_documents, normalized_chunks
 
 
 if __name__ == "__main__":
     docs = [
-        {"title": "LangGraph StateGraph", "content": "StateGraph 是 LangGraph 的核心类，用于构建状态驱动工作流。", "source": "demo"},
+        {
+            "title": "LangGraph StateGraph",
+            "content": "StateGraph 是 LangGraph 的核心类，用于构建状态驱动工作流。",
+            "source": "demo",
+        },
         {"title": "LangChain Chain", "content": "Chain 更适合线性流程。", "source": "demo"},
     ]
 

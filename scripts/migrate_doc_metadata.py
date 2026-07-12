@@ -48,17 +48,9 @@ def main() -> int:
         print("Dry run only. No files were changed.")
         return 0
 
-    store.store_dir.mkdir(parents=True, exist_ok=True)
-    store.documents_path.write_text(
-        json.dumps(store.documents, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    store.metadata_path.write_text(
-        json.dumps(store.chunk_metadata, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    store.save()
 
-    print(f"Metadata migrated in {store.store_dir}.")
+    print(f"Metadata migrated as a new snapshot generation in {store.store_dir}.")
     return 0
 
 

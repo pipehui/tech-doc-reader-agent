@@ -10,6 +10,7 @@ import pytest
     "script",
     [
         "scripts/benchmark_latency.py",
+        "scripts/migrate_doc_metadata.py",
         "scripts/seed_doc_store.py",
     ],
 )

@@ -130,6 +130,8 @@ python scripts/migrate_doc_metadata.py --dry-run
 python scripts/migrate_doc_metadata.py
 ```
 
+FAISS 文档库使用 generation snapshot。`faiss_store/current.json` 只会在新 generation 的 index、documents 和 chunk metadata 全部写入并回读校验成功后原子切换；不要直接修改 generation 内的单个文件。旧版根目录三件套仍可读取，下一次正常保存或 metadata migration 会发布首个 generation，旧文件不会在启动时被隐式删除。
+
 ## Project Structure
 
 ```text
