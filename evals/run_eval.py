@@ -27,6 +27,7 @@ from evals.manifests import (
     fetch_runtime_identity,
     identity_url_for,
     online_eval_settings,
+    runtime_identity_is_verified,
 )
 
 
@@ -318,6 +319,19 @@ def render_markdown_report(
     rows = redact_artifact_rows(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     summary = summarize_results(rows)
+    manifest_lines: list[str] = []
+    if manifest is not None:
+        runtime_manifest = manifest["runtime_identity"].get("manifest", {})
+        deployment = runtime_manifest.get("deployment", {})
+        manifest_lines = [
+            f"- Runtime identity: `{manifest['runtime_identity']['status']}`",
+            f"- Runtime fingerprint: `{runtime_manifest.get('fingerprint', 'N/A')}`",
+            f"- Deployment identity: `{deployment.get('status', 'missing')}`",
+            f"- Deployment commit: `{deployment.get('commit_sha', 'N/A')}`",
+            f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
+            f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
+            f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
+        ]
     lines = [
         "# Agent Eval Report",
         "",
@@ -326,20 +340,7 @@ def render_markdown_report(
         f"- Done: `{summary['done']}`",
         f"- Interrupted: `{summary['interrupted']}`",
         f"- Errored: `{summary['errored']}`",
-        *(
-            [
-                f"- Runtime identity: `{manifest['runtime_identity']['status']}`",
-                (
-                    "- Runtime fingerprint: `"
-                    f"{manifest['runtime_identity'].get('manifest', {}).get('fingerprint', 'N/A')}`"
-                ),
-                f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
-                f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
-                f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
-            ]
-            if manifest is not None
-            else []
-        ),
+        *manifest_lines,
         "",
         "## Summary",
         "",
@@ -474,7 +475,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-runtime-identity",
         action="store_true",
-        help="Stop before cases when the target runtime identity is not available and valid.",
+        help=(
+            "Stop before cases unless the target runtime identity is valid and "
+            "includes a configured deployment commit."
+        ),
     )
     return parser.parse_args()
 
@@ -577,11 +581,13 @@ async def async_main() -> int:
         runtime_identity=runtime_identity,
     )
     write_json(args.manifest, manifest)
-    if args.require_runtime_identity and runtime_identity.status != "available":
+    if args.require_runtime_identity and not runtime_identity_is_verified(
+        runtime_identity
+    ):
         print(
             safe_artifact_text(
-                "Runtime identity is required but target status is "
-                f"{runtime_identity.status}. Manifest: {args.manifest}"
+                "Verified runtime and deployment identity is required but target "
+                f"status is {runtime_identity.status}. Manifest: {args.manifest}"
             )
         )
         return 2

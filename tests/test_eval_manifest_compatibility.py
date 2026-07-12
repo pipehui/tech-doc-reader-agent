@@ -64,11 +64,17 @@ def _manifest(
     return manifest
 
 
-def _online_identity(model: str) -> RuntimeIdentityLookup:
+def _online_identity(
+    model: str,
+    deployment_commit: str | None = "d" * 40,
+) -> RuntimeIdentityLookup:
     return RuntimeIdentityLookup(
         status="available",
         manifest=build_runtime_execution_identity(
-            Settings(PRIMARY_MODEL=model)
+            Settings(
+                PRIMARY_MODEL=model,
+                DEPLOYMENT_COMMIT_SHA=deployment_commit or "",
+            )
         ).to_payload(),
     )
 
@@ -181,6 +187,83 @@ def test_unavailable_online_runtime_is_unverified(tmp_path):
     assert result.status == "unverified"
     assert {issue.code for issue in result.verification_issues} == {
         "runtime_identity_unverified"
+    }
+
+
+def test_online_compatibility_requires_same_verified_deployment_commit(tmp_path):
+    baseline = _manifest(
+        tmp_path,
+        runner="online_agent_eval",
+        runtime_identity=_online_identity("model-a", "d" * 40),
+        subject_identity=None,
+    )
+    candidate = _manifest(
+        tmp_path,
+        runner="online_agent_eval",
+        runtime_identity=_online_identity("model-a", "d" * 40),
+        subject_identity=None,
+        commit="b" * 40,
+    )
+
+    assert compare_eval_run_manifests(baseline, candidate).status == "compatible"
+
+    different_deployment = _manifest(
+        tmp_path,
+        runner="online_agent_eval",
+        runtime_identity=_online_identity("model-a", "e" * 40),
+        subject_identity=None,
+        commit="b" * 40,
+    )
+    mismatch = compare_eval_run_manifests(baseline, different_deployment)
+
+    assert mismatch.status == "incompatible"
+    assert {issue.code for issue in mismatch.differences} == {
+        "deployment_commit_mismatch",
+        "runtime_identity_mismatch",
+    }
+
+
+def test_online_runtime_without_deployment_commit_is_unverified(tmp_path):
+    baseline = _manifest(
+        tmp_path,
+        runner="online_agent_eval",
+        runtime_identity=_online_identity("model-a", None),
+        subject_identity=None,
+    )
+    candidate = copy.deepcopy(baseline)
+
+    result = compare_eval_run_manifests(baseline, candidate)
+
+    assert result.status == "unverified"
+    assert {issue.code for issue in result.verification_issues} == {
+        "deployment_commit_unverified"
+    }
+
+
+def test_legacy_runtime_identity_is_valid_but_not_deployment_verified(tmp_path):
+    legacy_runtime = _online_identity("model-a").manifest
+    assert legacy_runtime is not None
+    legacy_runtime = copy.deepcopy(legacy_runtime)
+    legacy_runtime.pop("deployment")
+    legacy_runtime["schema_version"] = 1
+    legacy_runtime.pop("fingerprint")
+    legacy_runtime["fingerprint"] = fingerprint_payload(legacy_runtime)
+    baseline = _manifest(
+        tmp_path,
+        runner="online_agent_eval",
+        runtime_identity=RuntimeIdentityLookup(
+            status="available",
+            manifest=legacy_runtime,
+        ),
+        subject_identity=None,
+    )
+    candidate = copy.deepcopy(baseline)
+
+    result = compare_eval_run_manifests(baseline, candidate)
+
+    assert result.status == "unverified"
+    assert {issue.code for issue in result.verification_issues} == {
+        "deployment_identity_missing"
     }
 
 

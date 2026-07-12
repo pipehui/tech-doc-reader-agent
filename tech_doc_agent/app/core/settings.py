@@ -1,10 +1,12 @@
 import json
 from decimal import Decimal
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+from tech_doc_agent.app.core.revisions import is_full_git_commit_sha
 
 
 class Settings(BaseSettings):
@@ -61,6 +63,8 @@ class Settings(BaseSettings):
     CONTEXT_COMPACTION_KEEP_RECENT_TURNS: int = Field(default=4, ge=1)
     CONTEXT_SUMMARY_MAX_CHARS: int = Field(default=12_000, ge=256)
     RUNTIME_IDENTITY_ENDPOINT_ENABLED: bool = False
+    DEPLOYMENT_COMMIT_SHA: str = ""
+    IMAGE_COMMIT_SHA: str = ""
 
     HYBRID_RAG_TOP_K: int = 5
     HYBRID_RAG_BM25_TOP_K: int = 8
@@ -108,6 +112,29 @@ class Settings(BaseSettings):
         if not value or value != value.strip():
             raise ValueError("MODEL_PROVIDER_ID must be a non-empty trimmed string.")
         return value
+
+    @field_validator("DEPLOYMENT_COMMIT_SHA", "IMAGE_COMMIT_SHA")
+    @classmethod
+    def validate_deployment_commit_sha(cls, value: str) -> str:
+        if not value:
+            return value
+        if value != value.strip() or not is_full_git_commit_sha(value):
+            raise ValueError(
+                "Deployment commit identity must be empty or a full lowercase Git commit SHA."
+            )
+        return value
+
+    @model_validator(mode="after")
+    def validate_deployment_commit_sources(self) -> Self:
+        if (
+            self.DEPLOYMENT_COMMIT_SHA
+            and self.IMAGE_COMMIT_SHA
+            and self.DEPLOYMENT_COMMIT_SHA != self.IMAGE_COMMIT_SHA
+        ):
+            raise ValueError(
+                "DEPLOYMENT_COMMIT_SHA and IMAGE_COMMIT_SHA must match when both are set."
+            )
+        return self
 
 
 @lru_cache

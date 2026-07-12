@@ -1,9 +1,10 @@
 '''
 设置数据进出格式
 '''
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from tech_doc_agent.app.core.revisions import FULL_GIT_COMMIT_PATTERN
 from tech_doc_agent.app.core.tenant import TENANT_ID_PATTERN
 
 SESSION_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
@@ -42,10 +43,35 @@ class AssistantExecutionIdentityResponse(BaseModel):
     backup_model_id: str | None = None
 
 
+class RuntimeDeploymentIdentityResponse(BaseModel):
+    status: Literal["configured", "unavailable"]
+    commit_sha: str | None = Field(
+        default=None,
+        pattern=FULL_GIT_COMMIT_PATTERN,
+    )
+
+    @model_validator(mode="after")
+    def validate_status_payload(self) -> Self:
+        if self.status == "configured" and self.commit_sha is None:
+            raise ValueError("Configured deployment identity requires commit_sha")
+        if self.status == "unavailable" and self.commit_sha is not None:
+            raise ValueError("Unavailable deployment identity cannot include commit_sha")
+        return self
+
+
 class RuntimeExecutionIdentityResponse(BaseModel):
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     assistants: list[AssistantExecutionIdentityResponse]
+    deployment: RuntimeDeploymentIdentityResponse | None = None
+
+    @model_validator(mode="after")
+    def validate_versioned_deployment(self) -> Self:
+        if self.schema_version == 1 and self.deployment is not None:
+            raise ValueError("Runtime identity schema v1 cannot include deployment")
+        if self.schema_version == 2 and self.deployment is None:
+            raise ValueError("Runtime identity schema v2 requires deployment")
+        return self
 
 class HistoryMessage(BaseModel):
     id: str | None = None

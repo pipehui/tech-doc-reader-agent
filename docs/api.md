@@ -69,6 +69,7 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 响应只包含：
 
 - schema version 与整体 SHA-256 fingerprint；
+- deployment commit identity 的 `configured/unavailable` 状态与可选完整 Git SHA；
 - 六个 Assistant 的 role、prompt ID、prompt SHA-256；
 - configured provider、primary model ID 与可选 backup model ID。
 
@@ -76,8 +77,12 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "fingerprint": "<sha256>",
+  "deployment": {
+    "status": "configured",
+    "commit_sha": "<full-lowercase-git-sha>"
+  },
   "assistants": [
     {
       "assistant_role": "primary",
@@ -89,6 +94,8 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
   ]
 }
 ```
+
+部署流程应显式设置完整的 `DEPLOYMENT_COMMIT_SHA`。Docker build 也可通过 compose build arg 把它写入镜像的 `IMAGE_COMMIT_SHA`；运行时显式值为空时回退到镜像值，两者同时存在时必须相同。两者都为空时 endpoint 仍可返回，但 `deployment.status=unavailable`，受信 online eval 的 `--require-runtime-identity` 与 baseline compatibility gate 会拒绝把它当作已验证目标。服务端不会读取本地 `.git` 猜测 deployment commit。
 
 ### POST /chat
 

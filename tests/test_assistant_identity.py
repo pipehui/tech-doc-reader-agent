@@ -3,6 +3,7 @@ import pytest
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.assistants.identity import (
     AssistantExecutionIdentity,
+    RuntimeDeploymentIdentity,
     build_runtime_execution_identity,
 )
 from tech_doc_agent.app.services.assistants.definition import (
@@ -71,6 +72,7 @@ def test_runtime_execution_identity_is_versioned_deterministic_and_secret_free()
         BACKUP_API_KEY="private-backup-key",
         OPENAI_API_KEY="private-primary-key",
         OPENAI_BASE_URL="https://private-provider.example/v1",
+        DEPLOYMENT_COMMIT_SHA="d" * 40,
     )
 
     first = build_runtime_execution_identity(settings)
@@ -78,7 +80,11 @@ def test_runtime_execution_identity_is_versioned_deterministic_and_secret_free()
     payload = first.to_payload()
 
     assert first.fingerprint == second.fingerprint
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
+    assert payload["deployment"] == {
+        "status": "configured",
+        "commit_sha": "d" * 40,
+    }
     assert payload["fingerprint"] == first.fingerprint
     assert [item["assistant_role"] for item in payload["assistants"]] == [
         "primary",
@@ -118,6 +124,40 @@ def test_runtime_execution_fingerprint_changes_with_active_model_route():
 
     assert primary.fingerprint != changed.fingerprint
     assert primary.fingerprint == inactive_backup.fingerprint
+
+
+def test_runtime_execution_identity_tracks_explicit_or_baked_deployment_commit():
+    explicit = build_runtime_execution_identity(
+        Settings(
+            DEPLOYMENT_COMMIT_SHA="a" * 40,
+            IMAGE_COMMIT_SHA="a" * 40,
+        )
+    )
+    baked = build_runtime_execution_identity(
+        Settings(IMAGE_COMMIT_SHA="a" * 40)
+    )
+    changed = build_runtime_execution_identity(
+        Settings(IMAGE_COMMIT_SHA="b" * 40)
+    )
+    unavailable = build_runtime_execution_identity(Settings())
+
+    assert explicit.deployment.commit_sha == "a" * 40
+    assert explicit.fingerprint == baked.fingerprint
+    assert explicit.fingerprint != changed.fingerprint
+    assert unavailable.deployment.to_payload() == {"status": "unavailable"}
+
+
+@pytest.mark.parametrize(
+    "deployment",
+    [
+        {"status": "configured"},
+        {"status": "configured", "commit_sha": "short"},
+        {"status": "unavailable", "commit_sha": "a" * 40},
+    ],
+)
+def test_runtime_deployment_identity_rejects_inconsistent_payload(deployment):
+    with pytest.raises(ValueError):
+        RuntimeDeploymentIdentity(**deployment)
 
 
 @pytest.mark.parametrize(

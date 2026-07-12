@@ -36,6 +36,7 @@ def test_settings_parses_typed_values():
         CONTEXT_SUMMARY_MAX_CHARS="10000",
         TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
         MODEL_PROVIDER_ID="provider-a",
+        DEPLOYMENT_COMMIT_SHA="a" * 40,
     )
 
     assert settings.TAVILY_DAILY_LIMIT == 7
@@ -70,6 +71,7 @@ def test_settings_parses_typed_values():
     assert settings.LANGFUSE_FLUSH_ON_REQUEST is True
     assert settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value() == "controlled-key-with-32-random-bytes"
     assert settings.MODEL_PROVIDER_ID == "provider-a"
+    assert settings.DEPLOYMENT_COMMIT_SHA == "a" * 40
 
 
 def test_settings_rejects_weak_telemetry_pseudonym_key():
@@ -81,6 +83,27 @@ def test_settings_rejects_weak_telemetry_pseudonym_key():
 def test_settings_rejects_invalid_model_provider_id(provider_id):
     with pytest.raises(ValueError, match="MODEL_PROVIDER_ID"):
         Settings(MODEL_PROVIDER_ID=provider_id)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("DEPLOYMENT_COMMIT_SHA", "abc123"),
+        ("DEPLOYMENT_COMMIT_SHA", "A" * 40),
+        ("IMAGE_COMMIT_SHA", " " + "a" * 40),
+    ],
+)
+def test_settings_rejects_invalid_deployment_commit_identity(field, value):
+    with pytest.raises(ValueError, match="full lowercase Git commit SHA"):
+        Settings(**{field: value})
+
+
+def test_settings_rejects_conflicting_runtime_and_image_commit_identity():
+    with pytest.raises(ValueError, match="must match"):
+        Settings(
+            DEPLOYMENT_COMMIT_SHA="a" * 40,
+            IMAGE_COMMIT_SHA="b" * 40,
+        )
 
 
 @pytest.mark.parametrize(

@@ -62,7 +62,8 @@ def test_build_config_omits_callbacks_for_state_reads():
     assert config["run_name"] == "tech_doc_agent.state"
     assert REQUEST_BUDGET_METADATA_KEY not in config["metadata"]
     identity = config["metadata"]["runtime_execution_identity"]
-    assert identity["schema_version"] == 1
+    assert identity["schema_version"] == 2
+    assert identity["deployment"] == {"status": "unavailable"}
     assert identity["fingerprint"] == runtime.execution_identity.fingerprint
     assert len(identity["assistants"]) == 6
 

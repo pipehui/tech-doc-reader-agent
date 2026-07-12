@@ -31,6 +31,9 @@ COPY tech_doc_agent /app/tech_doc_agent
 COPY --from=frontend-builder /frontend/dist /app/frontend/dist
 COPY graphs /app/graphs
 
+ARG IMAGE_COMMIT_SHA=""
+ENV IMAGE_COMMIT_SHA=${IMAGE_COMMIT_SHA}
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

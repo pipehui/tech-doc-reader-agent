@@ -23,9 +23,9 @@ Agent eval 会在执行 case 前从目标服务读取 `/runtime/identity`，验�
 - runner git commit 与 dirty 状态；
 - dataset 文件名与 SHA-256；
 - eval 参数与 settings fingerprint；
-- 远端 configured prompt/model identity，或明确的 `disabled/unavailable/invalid` 状态。
+- 远端 deployment commit、configured prompt/model identity，或明确的 `disabled/unavailable/invalid` 状态。
 
-runner 不会用本地 `.env` 或 prompt 文件替代远端 identity。目标服务需显式设置 `RUNTIME_IDENTITY_ENDPOINT_ENABLED=true`；在受信 CI/baseline 中建议再加 `--require-runtime-identity`，identity 不可用时会在跑 case 前以退出码 2 停止，但仍保留诊断 manifest。endpoint host、feedback 与可能的 URL 凭据只以 hash/安全结构进入 artifact。
+runner 不会用本地 `.env`、本地 Git 或 prompt 文件替代远端 identity。目标服务需显式设置 `RUNTIME_IDENTITY_ENDPOINT_ENABLED=true`，并通过 `DEPLOYMENT_COMMIT_SHA` 或镜像 build metadata 提供完整 commit；在受信 CI/baseline 中建议再加 `--require-runtime-identity`，runtime identity 或 deployment commit 不可验证时会在跑 case 前以退出码 2 停止，但仍保留诊断 manifest。endpoint host、feedback 与可能的 URL 凭据只以 hash/安全结构进入 artifact。
 
 `evals/cases_full.json` 当前包含 25 条：
 
@@ -111,7 +111,7 @@ manifest 不保存文档/分块原文或本地数据路径。历史表格只有�
 python -m evals.check_manifest_compatibility eval_results/baseline.manifest.json eval_results/candidate.manifest.json
 ```
 
-exit code `0` 表示 workload identity 相同且 Git provenance 可验证；`1` 表示 runner、dataset、settings、remote runtime 或 retrieval corpus 已知不一致；`2` 表示 manifest 无效或证据不足。PR/CI 不应使用 `--allow-dirty`；该开关只用于明确接受本地 dirty worktree 的诊断运行。两个 commit 可以不同，这是代码 before/after 的正常前提，但两边 commit 都必须可识别。
+exit code `0` 表示 workload identity 相同且 Git provenance 可验证；`1` 表示 runner、dataset、settings、remote deployment/runtime 或 retrieval corpus 已知不一致；`2` 表示 manifest 无效或证据不足。PR/CI 不应使用 `--allow-dirty`；该开关只用于明确接受本地 dirty worktree 的诊断运行。两个 runner commit 可以不同，这是代码 before/after 的正常前提，但两边 runner commit 必须可识别，online target deployment commit 必须相同。
 
 ## Context Compaction Eval
 

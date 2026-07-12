@@ -17,6 +17,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        IMAGE_COMMIT_SHA: ${DEPLOYMENT_COMMIT_SHA:-}
     ports:
       - "8000:8000"
     env_file:
@@ -28,6 +30,7 @@ services:
       PRIMARY_MODEL: ${PRIMARY_MODEL:-}
       MODEL_PROVIDER_ID: ${MODEL_PROVIDER_ID:-openai_compatible}
       MODEL_PRICE_TABLE_PATH: ${MODEL_PRICE_TABLE_PATH:-}
+      DEPLOYMENT_COMMIT_SHA: ${DEPLOYMENT_COMMIT_SHA:-}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
       EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}

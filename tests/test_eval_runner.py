@@ -58,6 +58,27 @@ def test_render_markdown_report_contains_summary_and_cases():
     assert summary["structured_results_avg"] == 1
     assert summary["interrupts_total"] == 1
 
+    manifested_report = render_markdown_report(
+        rows,
+        manifest={
+            "runtime_identity": {
+                "status": "available",
+                "manifest": {
+                    "fingerprint": "runtime-hash",
+                    "deployment": {
+                        "status": "configured",
+                        "commit_sha": "d" * 40,
+                    },
+                },
+            },
+            "dataset": {"sha256": "dataset-hash"},
+            "settings": {"fingerprint": "settings-hash"},
+            "runner_git": {"commit": "runner-commit"},
+        },
+    )
+    assert "Deployment identity: `configured`" in manifested_report
+    assert f"Deployment commit: `{'d' * 40}`" in manifested_report
+
 
 def test_eval_approve_url_defaults_from_chat_endpoint():
     assert approve_url_for("http://127.0.0.1:8000/chat", None) == "http://127.0.0.1:8000/chat/approve"

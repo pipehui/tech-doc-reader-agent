@@ -108,10 +108,17 @@ http://127.0.0.1:8000/
 ## Docker
 
 ```bash
+DEPLOYMENT_COMMIT_SHA=$(git rev-parse HEAD) docker compose up --build
+```
+
+PowerShell：
+
+```powershell
+$env:DEPLOYMENT_COMMIT_SHA = git rev-parse HEAD
 docker compose up --build
 ```
 
-Compose 会先等待 Redis healthy，再启动后端；后端容器使用 `/ready` 做 healthcheck。
+Compose 会把完整 commit 写入 image runtime identity，先等待 Redis healthy，再启动后端；后端容器使用 `/ready` 做 healthcheck。若不提供 commit，服务仍可启动，但 online eval compatibility 只能标记为 `unverified`。
 
 手动检查：
 

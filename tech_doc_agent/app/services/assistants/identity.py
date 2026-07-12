@@ -3,9 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.core.revisions import is_full_git_commit_sha
 
 from .prompt_registry import (
     ASSISTANT_ROLES,
@@ -87,14 +88,55 @@ class AssistantExecutionIdentity:
         return metadata
 
 
+DeploymentIdentityStatus = Literal["configured", "unavailable"]
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeDeploymentIdentity:
+    status: DeploymentIdentityStatus
+    commit_sha: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.status == "configured":
+            if not is_full_git_commit_sha(self.commit_sha):
+                raise ValueError(
+                    "Configured runtime deployment identity requires a full "
+                    "lowercase Git commit SHA"
+                )
+        elif self.status == "unavailable":
+            if self.commit_sha is not None:
+                raise ValueError(
+                    "Unavailable runtime deployment identity cannot include a commit SHA"
+                )
+        else:
+            raise ValueError("Runtime deployment identity status is invalid")
+
+    def to_payload(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {"status": self.status}
+        if self.commit_sha is not None:
+            payload["commit_sha"] = self.commit_sha
+        return payload
+
+
+def build_runtime_deployment_identity(settings: Settings) -> RuntimeDeploymentIdentity:
+    commit_sha = settings.DEPLOYMENT_COMMIT_SHA or settings.IMAGE_COMMIT_SHA
+    if commit_sha:
+        return RuntimeDeploymentIdentity(
+            status="configured",
+            commit_sha=commit_sha,
+        )
+    return RuntimeDeploymentIdentity(status="unavailable")
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeExecutionIdentity:
     assistants: tuple[AssistantExecutionIdentity, ...]
-    schema_version: int = 1
+    deployment: RuntimeDeploymentIdentity
+    schema_version: int = 2
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1:
-            raise ValueError("RuntimeExecutionIdentity only supports schema_version 1")
+        if self.schema_version != 2:
+            raise ValueError("RuntimeExecutionIdentity only supports schema_version 2")
         roles = tuple(identity.role for identity in self.assistants)
         if roles != ASSISTANT_ROLES:
             raise ValueError(
@@ -122,6 +164,7 @@ class RuntimeExecutionIdentity:
     def _fingerprint_payload(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
+            "deployment": self.deployment.to_payload(),
             "assistants": [
                 identity.to_metadata()
                 for identity in self.assistants
@@ -136,6 +179,7 @@ def build_runtime_execution_identity(
     route = build_model_route_identity(settings)
     prompt_registry = prompts or build_prompt_registry()
     return RuntimeExecutionIdentity(
+        deployment=build_runtime_deployment_identity(settings),
         assistants=tuple(
             AssistantExecutionIdentity(
                 role=role,
@@ -153,8 +197,10 @@ def build_runtime_execution_identity(
 
 __all__ = [
     "AssistantExecutionIdentity",
+    "RuntimeDeploymentIdentity",
     "ModelRouteIdentity",
     "RuntimeExecutionIdentity",
     "build_model_route_identity",
+    "build_runtime_deployment_identity",
     "build_runtime_execution_identity",
 ]

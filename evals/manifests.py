@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from evals.artifacts import redact_artifact_rows
 from tech_doc_agent.app.api.schemas import RuntimeExecutionIdentityResponse
+from tech_doc_agent.app.core.revisions import is_full_git_commit_sha
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.assistants.prompt_registry import ASSISTANT_ROLES
 
@@ -134,6 +135,17 @@ def validate_runtime_identity(payload: Any) -> dict[str, Any]:
     if fingerprint != actual_fingerprint:
         raise ValueError("Runtime identity fingerprint does not match its payload")
     return {**identity, "fingerprint": fingerprint}
+
+
+def runtime_identity_is_verified(lookup: RuntimeIdentityLookup) -> bool:
+    if lookup.status != "available" or lookup.manifest is None:
+        return False
+    deployment = lookup.manifest.get("deployment")
+    return (
+        isinstance(deployment, dict)
+        and deployment.get("status") == "configured"
+        and is_full_git_commit_sha(deployment.get("commit_sha"))
+    )
 
 
 def build_eval_run_manifest(
@@ -318,8 +330,10 @@ def validate_eval_run_manifest(payload: Any) -> dict[str, Any]:
         raise ValueError("Eval run manifest runner_git must be an object")
     commit = runner_git.get("commit")
     dirty = runner_git.get("dirty")
-    if commit is not None and (not isinstance(commit, str) or not commit.strip()):
-        raise ValueError("Eval run manifest runner_git.commit must be a string or null")
+    if commit is not None and not is_full_git_commit_sha(commit):
+        raise ValueError(
+            "Eval run manifest runner_git.commit must be a full Git commit SHA or null"
+        )
     if dirty is not None and not isinstance(dirty, bool):
         raise ValueError("Eval run manifest runner_git.dirty must be a boolean or null")
 
@@ -410,6 +424,7 @@ __all__ = [
     "identity_url_for",
     "online_eval_settings",
     "retrieval_eval_settings",
+    "runtime_identity_is_verified",
     "validate_eval_run_manifest",
     "validate_runtime_identity",
     "validate_subject_identity",

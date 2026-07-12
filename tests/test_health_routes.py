@@ -110,6 +110,7 @@ def test_runtime_identity_endpoint_returns_versioned_secret_free_manifest():
         OPENAI_API_KEY="private-key",
         OPENAI_BASE_URL="https://private-provider.example/v1",
         RUNTIME_IDENTITY_ENDPOINT_ENABLED=True,
+        DEPLOYMENT_COMMIT_SHA="d" * 40,
     )
     runtime = SimpleNamespace(
         settings=settings,
@@ -120,7 +121,11 @@ def test_runtime_identity_endpoint_returns_versioned_secret_free_manifest():
     payload = response.json()
 
     assert response.status_code == 200
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
+    assert payload["deployment"] == {
+        "status": "configured",
+        "commit_sha": "d" * 40,
+    }
     assert len(payload["fingerprint"]) == 64
     assert len(payload["assistants"]) == 6
     assert payload["assistants"][0]["primary_model_id"] == "model-primary"

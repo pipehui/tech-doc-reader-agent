@@ -207,6 +207,13 @@ def _compare_runtime_identity(
                     message="An offline runner should declare runtime identity not applicable.",
                 )
             )
+        else:
+            _compare_deployment_identity(
+                baseline_identity["manifest"],
+                candidate_identity["manifest"],
+                differences=differences,
+                verification_issues=verification_issues,
+            )
     elif baseline_status == "not_applicable":
         if not runner.startswith("offline_"):
             verification_issues.append(
@@ -224,6 +231,55 @@ def _compare_runtime_identity(
                 message="The evaluated runtime identity is unavailable or invalid.",
             )
         )
+
+
+def _compare_deployment_identity(
+    baseline_runtime: dict[str, Any],
+    candidate_runtime: dict[str, Any],
+    *,
+    differences: list[CompatibilityIssue],
+    verification_issues: list[CompatibilityIssue],
+) -> None:
+    baseline_deployment = baseline_runtime.get("deployment")
+    candidate_deployment = candidate_runtime.get("deployment")
+    if baseline_deployment is None or candidate_deployment is None:
+        verification_issues.append(
+            CompatibilityIssue(
+                code="deployment_identity_missing",
+                path="runtime_identity.manifest.deployment",
+                message="Both online runtimes must expose deployment commit identity.",
+            )
+        )
+        return
+
+    baseline_status = baseline_deployment["status"]
+    candidate_status = candidate_deployment["status"]
+    if baseline_status != candidate_status:
+        differences.append(
+            CompatibilityIssue(
+                code="deployment_identity_status_mismatch",
+                path="runtime_identity.manifest.deployment.status",
+                message="Deployment commit availability differs between the runtimes.",
+            )
+        )
+        return
+    if baseline_status == "unavailable":
+        verification_issues.append(
+            CompatibilityIssue(
+                code="deployment_commit_unverified",
+                path="runtime_identity.manifest.deployment.status",
+                message="The online runtime deployment commit is unavailable.",
+            )
+        )
+        return
+    _compare_value(
+        baseline_deployment["commit_sha"],
+        candidate_deployment["commit_sha"],
+        path="runtime_identity.manifest.deployment.commit_sha",
+        code="deployment_commit_mismatch",
+        message="The online runtimes were built from different commits.",
+        differences=differences,
+    )
 
 
 def _compare_subject_identity(

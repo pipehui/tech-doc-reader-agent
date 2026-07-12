@@ -13,9 +13,11 @@ from evals.manifests import (
     build_eval_run_manifest,
     context_compaction_eval_settings,
     fetch_runtime_identity,
+    fingerprint_payload,
     identity_url_for,
     online_eval_settings,
     retrieval_eval_settings,
+    runtime_identity_is_verified,
     validate_eval_run_manifest,
     validate_runtime_identity,
 )
@@ -45,6 +47,42 @@ def test_runtime_identity_validation_recomputes_fingerprint_and_role_order():
     reordered["assistants"].reverse()
     with pytest.raises(ValueError, match="roles"):
         validate_runtime_identity(reordered)
+
+
+def test_runtime_identity_validation_accepts_legacy_v1_without_deployment():
+    legacy = _runtime_manifest()
+    legacy.pop("deployment")
+    legacy["schema_version"] = 1
+    legacy.pop("fingerprint")
+    legacy["fingerprint"] = fingerprint_payload(legacy)
+
+    assert validate_runtime_identity(legacy) == legacy
+
+    invalid_v2 = _runtime_manifest()
+    invalid_v2.pop("deployment")
+    invalid_v2.pop("fingerprint")
+    invalid_v2["fingerprint"] = fingerprint_payload(invalid_v2)
+    with pytest.raises(ValueError, match="deployment"):
+        validate_runtime_identity(invalid_v2)
+
+
+def test_verified_runtime_identity_requires_configured_deployment_commit():
+    unavailable_deployment = RuntimeIdentityLookup(
+        status="available",
+        manifest=_runtime_manifest(),
+    )
+    configured_deployment = RuntimeIdentityLookup(
+        status="available",
+        manifest=build_runtime_execution_identity(
+            Settings(
+                PRIMARY_MODEL="model-a",
+                DEPLOYMENT_COMMIT_SHA="d" * 40,
+            )
+        ).to_payload(),
+    )
+
+    assert runtime_identity_is_verified(unavailable_deployment) is False
+    assert runtime_identity_is_verified(configured_deployment) is True
 
 
 @pytest.mark.parametrize(
@@ -108,6 +146,11 @@ def test_eval_manifest_binds_dataset_settings_git_and_remote_identity(tmp_path):
     assert "private-value" not in str(manifest)
     assert manifest["generated_at"] == "2026-07-12T00:00:00+00:00"
     assert validate_eval_run_manifest(manifest) == manifest
+
+    invalid_runner_commit = json.loads(json.dumps(manifest))
+    invalid_runner_commit["runner_git"]["commit"] = "short"
+    with pytest.raises(ValueError, match="full Git commit SHA"):
+        validate_eval_run_manifest(invalid_runner_commit)
 
 
 def test_online_eval_settings_hashes_feedback_and_endpoint_hosts():
