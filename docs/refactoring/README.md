@@ -60,6 +60,7 @@
 | 2026-07-12 | Phase 4：长会话 compaction off/on 离线 recall/size/token-proxy 评估 | 离线基线完成，发现 raw-tool-only 信息损失，继续默认关闭 | [2026-07-12-context-compaction-eval.md](2026-07-12-context-compaction-eval.md) |
 | 2026-07-12 | Phase 4：Mypy check-untyped-defs 与 app/evals 全范围 CI gate | 136 个源文件全绿，strict 分项继续 | [2026-07-12-mypy-full-app-gate.md](2026-07-12-mypy-full-app-gate.md) |
 | 2026-07-12 | Phase 4：SSE 逐事件 Pydantic/TypeScript payload contract、golden parity 与异常策略 | 17 种 event 双端运行时校验完成，schema/codegen 后续评估 | [2026-07-12-sse-payload-contract.md](2026-07-12-sse-payload-contract.md) |
+| 2026-07-12 | Phase 4：FastAPI async runtime surface 与 CLI sync facade 分界 | route 同步重复编排删除，native async graph benchmark 后续独立执行 | [2026-07-12-fastapi-async-runtime-boundary.md](2026-07-12-fastapi-async-runtime-boundary.md) |
 
 ## 本地任务单策略
 

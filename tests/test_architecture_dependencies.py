@@ -132,6 +132,48 @@ def test_runtime_does_not_depend_on_api_or_legacy_services():
     assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
 
 
+def test_fastapi_chat_routes_only_use_async_runtime_surface():
+    path = APP_DIR / "api" / "routes" / "chat.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    route_functions = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and any(_is_router_decorator(decorator) for decorator in node.decorator_list)
+    ]
+
+    assert {node.name for node in route_functions} == {
+        "chat",
+        "approve",
+        "get_history",
+        "get_session_state",
+    }
+    assert all(isinstance(node, ast.AsyncFunctionDef) for node in route_functions)
+
+    forbidden_sync_methods = {
+        "get_history_view",
+        "get_session_state",
+        "has_pending_interrupt",
+        "stream_approval",
+        "stream_user_message",
+    }
+    violations = [
+        f"chat.py:{call.lineno} calls runtime.{call.func.attr}"
+        for call in ast.walk(tree)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and isinstance(call.func.value, ast.Name)
+        and call.func.value.id == "runtime"
+        and call.func.attr in forbidden_sync_methods
+    ]
+
+    assert violations == []
+
+    cli_source = (APP_DIR / "main.py").read_text(encoding="utf-8")
+    assert "runtime.stream_user_message(" in cli_source
+    assert "runtime.stream_approval(" in cli_source
+
+
 def test_runtime_package_init_does_not_eagerly_load_components():
     path = RUNTIME_DIR / "__init__.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -346,3 +388,13 @@ def _imported_modules(node: ast.AST) -> list[str]:
     if isinstance(node, ast.ImportFrom) and node.module:
         return [node.module]
     return []
+
+
+def _is_router_decorator(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "router"
+        and node.func.attr in {"get", "post", "put", "patch", "delete"}
+    )

@@ -163,6 +163,21 @@ class SessionQueryService:
             "messages": items,
         }
 
+    async def aget_history_view(
+        self,
+        session_id: str,
+        include_tools: bool = False,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            self.get_history_view,
+            session_id,
+            include_tools=include_tools,
+            user_id=user_id,
+            namespace=namespace,
+        )
+
     def get_session_state(
         self,
         session_id: str,

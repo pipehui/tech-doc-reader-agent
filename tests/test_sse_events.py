@@ -41,6 +41,7 @@ class FakeRouteRuntime(FakeRuntime):
         self.guardrail_approvals: dict[str, dict] = {}
         self.approved_messages: list[str] = []
         self.request_starts: list[tuple[str, float | None]] = []
+        self.history_requests: list[tuple[str, bool, str | None, str | None]] = []
 
     def request_guardrail_approval(
         self,
@@ -95,6 +96,26 @@ class FakeRouteRuntime(FakeRuntime):
             "current_agent": "guardrail" if session_id in self.guardrail_approvals else "primary",
             "workflow_plan": [],
             "plan_index": 0,
+        }
+
+    async def aget_history_view(
+        self,
+        session_id: str,
+        include_tools: bool = False,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> dict:
+        self.history_requests.append(
+            (session_id, include_tools, user_id, namespace)
+        )
+        return {
+            "session_id": session_id,
+            "user_id": user_id,
+            "namespace": namespace,
+            "learning_target": None,
+            "pending_interrupt": False,
+            "message_count": 0,
+            "messages": [],
         }
 
     async def astream_user_message(
@@ -736,6 +757,36 @@ def test_chat_route_returns_async_sse_stream():
     assert "tenant-docs" in response.text
     assert runtime.request_starts[0][0] == "chat"
     assert runtime.request_starts[0][1] is not None
+
+
+def test_session_query_routes_use_async_runtime_surface():
+    app = FastAPI()
+    runtime = FakeRouteRuntime()
+    app.state.runtime = runtime
+    app.include_router(router)
+    client = TestClient(app)
+
+    state_response = client.get(
+        "/sessions/session-query/state",
+        params={"user_id": "user-a", "namespace": "tenant-docs"},
+    )
+    history_response = client.get(
+        "/sessions/session-query/history",
+        params={
+            "include_tools": "true",
+            "user_id": "user-a",
+            "namespace": "tenant-docs",
+        },
+    )
+
+    assert state_response.status_code == 200
+    assert state_response.json()["session_id"] == "session-query"
+    assert state_response.json()["user_id"] == "user-a"
+    assert history_response.status_code == 200
+    assert history_response.json()["messages"] == []
+    assert runtime.history_requests == [
+        ("session-query", True, "user-a", "tenant-docs")
+    ]
 
 
 def test_chat_route_blocks_high_risk_prompt_injection_before_graph():

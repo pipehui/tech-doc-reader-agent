@@ -126,7 +126,13 @@ def test_history_view_filters_internal_messages_and_optionally_includes_tools():
 
     without_tools = runtime.get_history_view("session-1")
     with_tools = runtime.get_history_view("session-1", include_tools=True)
+    async_without_tools = asyncio.run(runtime.aget_history_view("session-1"))
+    async_with_tools = asyncio.run(
+        runtime.aget_history_view("session-1", include_tools=True)
+    )
 
+    assert async_without_tools == without_tools
+    assert async_with_tools == with_tools
     assert without_tools["messages"] == [
         {"id": "human-1", "role": "user", "kind": "message", "content": "question"},
         {

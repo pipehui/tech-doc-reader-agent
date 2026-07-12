@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterable, Iterable
+from collections.abc import AsyncIterable
 from time import monotonic
 
 from fastapi import APIRouter, Request
@@ -138,20 +138,6 @@ def _guardrail_interrupt_event(risk: InputRisk, *, session_id: str, source: str)
     )
 
 
-def stream_guardrail_approval_events(
-    runtime: ChatRuntime,
-    session_id: str,
-    risk: InputRisk,
-    *,
-    source: str,
-    user_id: str | None = None,
-    namespace: str | None = None,
-) -> Iterable[ServerSentEvent]:
-    snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
-    yield sse_event("session_snapshot", snapshot)
-    yield _guardrail_interrupt_event(risk, session_id=session_id, source=source)
-
-
 async def astream_guardrail_approval_events(
     runtime: ChatRuntime,
     session_id: str,
@@ -164,58 +150,6 @@ async def astream_guardrail_approval_events(
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
     yield sse_event("session_snapshot", snapshot)
     yield _guardrail_interrupt_event(risk, session_id=session_id, source=source)
-
-
-def stream_chat_events(
-    runtime: ChatRuntime,
-    session_id: str,
-    message: str,
-    user_id: str | None = None,
-    namespace: str | None = None,
-    guardrail_checked: bool = False,
-    request_started_monotonic: float | None = None,
-) -> Iterable[ServerSentEvent]:
-    request_started_monotonic = (
-        request_started_monotonic
-        if request_started_monotonic is not None
-        else monotonic()
-    )
-    if not guardrail_checked:
-        risk = _record_guardrail_decision(message, source="chat.message")
-        if risk.level == "high":
-            yield _guardrail_blocked_event(risk, session_id=session_id, source="chat.message")
-            return
-        if risk.level == "medium":
-            _request_guardrail_approval(
-                runtime,
-                session_id,
-                message,
-                risk,
-                source="chat.message",
-                user_id=user_id,
-                namespace=namespace,
-            )
-            yield from stream_guardrail_approval_events(
-                runtime,
-                session_id,
-                risk,
-                source="chat.message",
-                user_id=user_id,
-                namespace=namespace,
-            )
-            return
-
-    snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
-    yield sse_event("session_snapshot", snapshot)
-
-    parts = runtime.stream_user_message(
-        session_id,
-        message,
-        user_id=user_id,
-        namespace=namespace,
-        request_started_monotonic=request_started_monotonic,
-    )
-    yield from stream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace)
 
 
 async def astream_chat_events(
@@ -270,51 +204,6 @@ async def astream_chat_events(
     )
     async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
         yield event
-
-
-def stream_approval_events(
-    runtime: ChatRuntime,
-    session_id: str,
-    approved: bool,
-    feedback: str = "",
-    user_id: str | None = None,
-    namespace: str | None = None,
-    guardrail_checked: bool = False,
-    request_started_monotonic: float | None = None,
-) -> Iterable[ServerSentEvent]:
-    request_started_monotonic = (
-        request_started_monotonic
-        if request_started_monotonic is not None
-        else monotonic()
-    )
-    if feedback and not guardrail_checked:
-        risk = _record_guardrail_decision(feedback, source="chat.approval.feedback")
-        if risk.level == "high":
-            yield _guardrail_blocked_event(risk, session_id=session_id, source="chat.approval.feedback")
-            return
-
-    snapshot = runtime.get_session_state(session_id, user_id=user_id, namespace=namespace)
-    yield sse_event("session_snapshot", snapshot)
-
-    if not runtime.has_pending_interrupt(session_id, user_id=user_id, namespace=namespace):
-        log_event("chat.approval.no_pending_interrupt", approved=approved)
-        yield sse_event(
-            "no_pending_interrupt",
-            {
-                "session_id": session_id,
-            },
-        )
-        return
-
-    parts = runtime.stream_approval(
-        session_id,
-        approved,
-        feedback,
-        user_id=user_id,
-        namespace=namespace,
-        request_started_monotonic=request_started_monotonic,
-    )
-    yield from stream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace)
 
 
 async def astream_approval_events(
@@ -471,7 +360,7 @@ async def approve(body: ApproveRequest, request: Request):
 
 
 @router.get("/sessions/{session_id}/history", response_model=HistoryViewResponse)
-def get_history(
+async def get_history(
     session_id: str,
     request: Request,
     include_tools: bool = False,
@@ -480,7 +369,7 @@ def get_history(
 ):
     runtime = get_runtime(request)
     tenant = resolve_request_tenant(request, user_id, namespace)
-    history = runtime.get_history_view(
+    history = await runtime.aget_history_view(
         session_id,
         include_tools=include_tools,
         user_id=tenant.user_id,
@@ -490,7 +379,7 @@ def get_history(
 
 
 @router.get("/sessions/{session_id}/state", response_model=SessionStateResponse)
-def get_session_state(
+async def get_session_state(
     session_id: str,
     request: Request,
     user_id: str | None = None,
@@ -498,7 +387,7 @@ def get_session_state(
 ):
     runtime = get_runtime(request)
     tenant = resolve_request_tenant(request, user_id, namespace)
-    state = runtime.get_session_state(
+    state = await runtime.aget_session_state(
         session_id,
         user_id=tenant.user_id,
         namespace=tenant.namespace,
