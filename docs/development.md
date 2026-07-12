@@ -31,7 +31,12 @@ EMBEDDING_MODEL=your_embedding_model
 TAVILY_API_KEY=your_tavily_key
 REDIS_URL=redis://localhost:6379
 GUARDRAIL_APPROVAL_TTL_SECONDS=900
+MAX_IDENTICAL_TOOL_REPEATS=2
+PARSER_MAX_RETRIEVAL_CALLS=6
 ```
+
+两个 tool policy 配置必须是非负整数。前者限制连续相同 tool + args 的允许调用次数，后者限制一个 parser step 内
+`read_docs` 与 `web_search` 的合计调用次数；超过阈值会产生结构化 error ToolMessage，不执行目标工具。
 
 可选 telemetry user-id 稳定假名配置（至少 16 字节，生产环境应由 secret manager 注入）：
 

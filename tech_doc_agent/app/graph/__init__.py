@@ -15,7 +15,14 @@ from .routing import (
     route_next_step,
     route_primary_assistant,
 )
-from .specs import AgentSpec, CompletionPolicy, GraphSpec, PrimarySpec, ToolPolicy
+from .specs import (
+    AgentSpec,
+    CompletionPolicy,
+    GraphSpec,
+    PrimarySpec,
+    ToolExecutionPolicy,
+    ToolPolicy,
+)
 from .state import State, WorkflowStep
 
 __all__ = [
@@ -31,6 +38,7 @@ __all__ = [
     "ToExplanationAssistant",
     "ToRelationAssistant",
     "ToSummaryAssistant",
+    "ToolExecutionPolicy",
     "ToolPolicy",
     "WorkflowStep",
     "build_multi_agentic_graph",

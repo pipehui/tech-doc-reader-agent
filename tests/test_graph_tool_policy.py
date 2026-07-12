@@ -1,8 +1,11 @@
 from langchain_core.messages import AIMessage, ToolMessage
+import pytest
 
+from tech_doc_agent.app.graph.specs import ToolExecutionPolicy
 from tech_doc_agent.app.graph.tool_policy import (
-    maybe_block_parser_tool_budget,
-    maybe_block_repeated_tool_calls,
+    evaluate_parser_tool_budget,
+    evaluate_repeated_tool_calls,
+    evaluate_tool_policy,
 )
 
 
@@ -30,9 +33,13 @@ def test_repeated_tool_policy_blocks_third_identical_call():
         "dialog_state": ["parser"],
     }
 
-    blocked = maybe_block_repeated_tool_calls(state)
+    decision = evaluate_repeated_tool_calls(state, max_identical_repeats=2)
+    blocked = decision.to_graph_update()
 
-    assert blocked is not None
+    assert decision.action == "block"
+    assert decision.reason == "repeated_tool_call"
+    assert decision.observed_calls == 3
+    assert decision.limit == 2
     assert blocked["messages"][0].tool_call_id == "call-3"
     assert blocked["messages"][0].status == "error"
     assert "Blocked repeated identical tool call" in blocked["messages"][0].content
@@ -57,7 +64,12 @@ def test_repeated_tool_policy_allows_changed_arguments():
         "dialog_state": ["parser"],
     }
 
-    assert maybe_block_repeated_tool_calls(state) is None
+    decision = evaluate_repeated_tool_calls(state, max_identical_repeats=2)
+
+    assert decision.action == "allow"
+    assert decision.is_blocked is False
+    with pytest.raises(ValueError, match="Only block decisions"):
+        decision.to_graph_update()
 
 
 def test_parser_budget_blocks_call_after_configured_total():
@@ -72,9 +84,13 @@ def test_parser_budget_blocks_call_after_configured_total():
         "dialog_state": ["parser"],
     }
 
-    blocked = maybe_block_parser_tool_budget(state, max_total_calls=2)
+    decision = evaluate_parser_tool_budget(state, max_total_calls=2)
+    blocked = decision.to_graph_update()
 
-    assert blocked is not None
+    assert decision.action == "block"
+    assert decision.reason == "parser_tool_budget"
+    assert decision.observed_calls == 3
+    assert decision.limit == 2
     assert blocked["messages"][0].tool_call_id == "call-3"
     assert blocked["messages"][0].status == "error"
     assert "parser retrieval budget overflow" in blocked["messages"][0].content
@@ -88,4 +104,42 @@ def test_parser_budget_does_not_apply_outside_parser_step():
         "dialog_state": ["explanation"],
     }
 
-    assert maybe_block_parser_tool_budget(state, max_total_calls=0) is None
+    decision = evaluate_parser_tool_budget(state, max_total_calls=0)
+
+    assert decision.action == "allow"
+
+
+def test_combined_policy_applies_parser_budget_before_repeat_limit():
+    state = {
+        "messages": [_ai_tool_call("read_docs", "call-1")],
+        "dialog_state": ["parser"],
+    }
+
+    decision = evaluate_tool_policy(
+        state,
+        ToolExecutionPolicy(
+            max_identical_repeats=0,
+            parser_max_retrieval_calls=0,
+        ),
+    )
+
+    assert decision.action == "block"
+    assert decision.reason == "parser_tool_budget"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_identical_repeats", -1),
+        ("parser_max_retrieval_calls", -1),
+    ],
+)
+def test_tool_execution_policy_rejects_negative_limits(field, value):
+    values = {
+        "max_identical_repeats": 2,
+        "parser_max_retrieval_calls": 6,
+    }
+    values[field] = value
+
+    with pytest.raises(ValueError, match="must be non-negative"):
+        ToolExecutionPolicy(**values)

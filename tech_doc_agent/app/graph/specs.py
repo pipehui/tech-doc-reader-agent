@@ -15,6 +15,18 @@ class ToolPolicy:
 
 
 @dataclass(frozen=True)
+class ToolExecutionPolicy:
+    max_identical_repeats: int
+    parser_max_retrieval_calls: int
+
+    def __post_init__(self) -> None:
+        if self.max_identical_repeats < 0:
+            raise ValueError("max_identical_repeats must be non-negative.")
+        if self.parser_max_retrieval_calls < 0:
+            raise ValueError("parser_max_retrieval_calls must be non-negative.")
+
+
+@dataclass(frozen=True)
 class CompletionPolicy:
     result_key: str | None = None
     structured_kind: ResultKind | None = None
@@ -61,6 +73,7 @@ class GraphSpec:
     primary: PrimarySpec
     subagents: tuple[AgentSpec, ...]
     user_info_node: Any
+    tool_execution_policy: ToolExecutionPolicy
 
     @property
     def interrupt_nodes(self) -> tuple[str, ...]:

@@ -9,6 +9,7 @@ from tech_doc_agent.app.graph.specs import (
     CompletionPolicy,
     GraphSpec,
     PrimarySpec,
+    ToolExecutionPolicy,
     ToolPolicy,
 )
 from tech_doc_agent.app.services.assistants.model_factory import build_assistant_model_provider
@@ -79,6 +80,10 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
             ),
         ),
         user_info_node=create_user_info_node(resources.profile_service.context_summary),
+        tool_execution_policy=ToolExecutionPolicy(
+            max_identical_repeats=resources.settings.MAX_IDENTICAL_TOOL_REPEATS,
+            parser_max_retrieval_calls=resources.settings.PARSER_MAX_RETRIEVAL_CALLS,
+        ),
     )
 
 

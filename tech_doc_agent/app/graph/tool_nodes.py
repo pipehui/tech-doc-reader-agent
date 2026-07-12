@@ -9,8 +9,9 @@ from langgraph.prebuilt import ToolNode
 from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event, timed_node
 
+from .specs import ToolExecutionPolicy
 from .state import State
-from .tool_policy import maybe_block_parser_tool_budget, maybe_block_repeated_tool_calls
+from .tool_policy import evaluate_tool_policy
 
 
 TOOL_DEPENDENCIES = {
@@ -124,33 +125,28 @@ def _log_tool_errors(
         )
 
 
-def _maybe_block_tool_call(state: State) -> dict | None:
-    blocked = maybe_block_parser_tool_budget(state)
-    if blocked is not None:
-        _log_tool_calls(
-            "tool_call.blocked",
-            state,
-            _pending_tool_calls(state),
-            reason="parser_tool_budget",
-        )
-        return blocked
+def _blocked_tool_call_update(state: State, policy: ToolExecutionPolicy) -> dict | None:
+    decision = evaluate_tool_policy(state, policy)
+    if not decision.is_blocked:
+        return None
 
-    blocked = maybe_block_repeated_tool_calls(state)
-    if blocked is not None:
-        _log_tool_calls(
-            "tool_call.blocked",
-            state,
-            _pending_tool_calls(state),
-            reason="repeated_tool_call",
-        )
-    return blocked
+    _log_tool_calls(
+        "tool_call.blocked",
+        state,
+        _pending_tool_calls(state),
+        policy_action=decision.action,
+        reason=decision.reason,
+        observed_calls=decision.observed_calls,
+        configured_limit=decision.limit,
+    )
+    return decision.to_graph_update()
 
 
-def create_tool_node_with_fallback(tools: list):
+def create_tool_node_with_fallback(tools: list, policy: ToolExecutionPolicy):
     tool_node = ToolNode(tools, handle_tool_errors=False)
 
     def guarded_tool_node(state: State):
-        blocked = _maybe_block_tool_call(state)
+        blocked = _blocked_tool_call_update(state, policy)
         if blocked is not None:
             return blocked
 
@@ -179,7 +175,7 @@ def create_tool_node_with_fallback(tools: list):
         return result
 
     async def aguarded_tool_node(state: State):
-        blocked = _maybe_block_tool_call(state)
+        blocked = _blocked_tool_call_update(state, policy)
         if blocked is not None:
             return blocked
 

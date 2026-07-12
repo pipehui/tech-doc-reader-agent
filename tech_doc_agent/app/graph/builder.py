@@ -12,22 +12,32 @@ from .routing import (
     route_after_user_info,
     route_next_step,
 )
-from .specs import AgentSpec, GraphSpec
+from .specs import AgentSpec, GraphSpec, ToolExecutionPolicy
 from .state import State
 from .tool_nodes import create_tool_node_with_fallback
 
 
-def register_subagent(builder: StateGraph, spec: AgentSpec) -> None:
+def register_subagent(
+    builder: StateGraph,
+    spec: AgentSpec,
+    tool_execution_policy: ToolExecutionPolicy,
+) -> None:
     builder.add_node(spec.entry_node, create_entry_node(spec.display_name, spec.key))
     builder.add_node(spec.key, assistant_node(spec.assistant, scoped_messages=spec.scoped_messages))
     builder.add_edge(spec.entry_node, spec.key)
 
     if spec.tools.safe:
-        builder.add_node(spec.safe_tool_node, create_tool_node_with_fallback(list(spec.tools.safe)))
+        builder.add_node(
+            spec.safe_tool_node,
+            create_tool_node_with_fallback(list(spec.tools.safe), tool_execution_policy),
+        )
         builder.add_edge(spec.safe_tool_node, spec.key)
 
     if spec.tools.sensitive:
-        builder.add_node(spec.sensitive_tool_node, create_tool_node_with_fallback(list(spec.tools.sensitive)))
+        builder.add_node(
+            spec.sensitive_tool_node,
+            create_tool_node_with_fallback(list(spec.tools.sensitive), tool_execution_policy),
+        )
         builder.add_edge(spec.sensitive_tool_node, spec.key)
 
     builder.add_node(spec.leave_node, create_exit_node())
@@ -58,16 +68,16 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
     builder.add_edge(START, "fetch_user_info")
 
     for subagent in spec.subagents:
-        register_subagent(builder, subagent)
+        register_subagent(builder, subagent, spec.tool_execution_policy)
 
     builder.add_node("primary_assistant", assistant_node(spec.primary.assistant))
     builder.add_node(
         "primary_assistant_tools",
-        create_tool_node_with_fallback(list(spec.primary.tools.safe)),
+        create_tool_node_with_fallback(list(spec.primary.tools.safe), spec.tool_execution_policy),
     )
     builder.add_node(
         "primary_assistant_sensitive_tools",
-        create_tool_node_with_fallback(list(spec.primary.tools.sensitive)),
+        create_tool_node_with_fallback(list(spec.primary.tools.sensitive), spec.tool_execution_policy),
     )
     builder.add_node("store_plan", store_plan)
     fetch_user_info_routes: dict[Hashable, str] = {

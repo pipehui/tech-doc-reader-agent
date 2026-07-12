@@ -42,6 +42,7 @@
 | 2026-07-12 | Phase 4：FAISS generation snapshot、原子 manifest 与内存候选发布 | 完成，multi-worker lock 与 generation GC 继续 | [2026-07-12-faiss-snapshot-generations.md](2026-07-12-faiss-snapshot-generations.md) |
 | 2026-07-12 | Phase 4：LearningState command/service/UoW、组合 generation 与 tool-call 幂等 | 完成，multi-worker 与 retention 继续 | [2026-07-12-learning-state-transaction.md](2026-07-12-learning-state-transaction.md) |
 | 2026-07-12 | Phase 4：Tenant strict parse、legacy normalize 与共享 HTTP resolver | 完成，真实 AuthN/AuthZ 仍属 D6 | [2026-07-12-strict-tenant-parsing.md](2026-07-12-strict-tenant-parsing.md) |
+| 2026-07-12 | Phase 4：ToolExecutionPolicy 配置注入、显式 decision 与统一阻断 telemetry | 完成，动态/分级预算仍需独立设计 | [2026-07-12-tool-policy-decisions.md](2026-07-12-tool-policy-decisions.md) |
 
 ## 本地任务单策略
 

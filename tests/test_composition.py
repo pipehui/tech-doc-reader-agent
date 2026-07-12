@@ -6,7 +6,12 @@ from tech_doc_agent.app.services.resources import AppResources
 
 
 def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
-    settings_a = Settings(DATA_PATH=str(tmp_path / "a"), SEED_DOC_STORE_ON_EMPTY=False)
+    settings_a = Settings(
+        DATA_PATH=str(tmp_path / "a"),
+        SEED_DOC_STORE_ON_EMPTY=False,
+        MAX_IDENTICAL_TOOL_REPEATS=4,
+        PARSER_MAX_RETRIEVAL_CALLS=9,
+    )
     settings_b = Settings(DATA_PATH=str(tmp_path / "b"), SEED_DOC_STORE_ON_EMPTY=False)
     resources_a = AppResources.create(settings_a)
     resources_b = AppResources.create(settings_b)
@@ -19,6 +24,10 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
     assert [tool.name for tool in parser_a.tools.safe] == ["read_docs", "web_search"]
     assert parser_a.tools.safe[0] is not parser_b.tools.safe[0]
     assert parser_a.tools.safe[0].invoke({"query": "StateGraph"}) == "[]"
+    assert spec_a.tool_execution_policy.max_identical_repeats == 4
+    assert spec_a.tool_execution_policy.parser_max_retrieval_calls == 9
+    assert spec_b.tool_execution_policy.max_identical_repeats == 2
+    assert spec_b.tool_execution_policy.parser_max_retrieval_calls == 6
 
     graph = build_application_graph(MemorySaver(), resources_a)
 

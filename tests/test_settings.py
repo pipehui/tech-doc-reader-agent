@@ -14,6 +14,8 @@ def test_settings_parses_typed_values():
         REDIS_SETUP_MAX_ATTEMPTS="3",
         REDIS_SETUP_RETRY_SECONDS="0.5",
         GUARDRAIL_APPROVAL_TTL_SECONDS="120",
+        MAX_IDENTICAL_TOOL_REPEATS="4",
+        PARSER_MAX_RETRIEVAL_CALLS="9",
         TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
     )
 
@@ -23,6 +25,8 @@ def test_settings_parses_typed_values():
     assert settings.REDIS_SETUP_MAX_ATTEMPTS == 3
     assert settings.REDIS_SETUP_RETRY_SECONDS == 0.5
     assert settings.GUARDRAIL_APPROVAL_TTL_SECONDS == 120
+    assert settings.MAX_IDENTICAL_TOOL_REPEATS == 4
+    assert settings.PARSER_MAX_RETRIEVAL_CALLS == 9
     assert settings.ALLOWED_ORIGINS == [
         "http://127.0.0.1:5173",
         "http://localhost:5173",
@@ -35,6 +39,15 @@ def test_settings_parses_typed_values():
 def test_settings_rejects_weak_telemetry_pseudonym_key():
     with pytest.raises(ValueError, match="at least 16 bytes"):
         Settings(TELEMETRY_PSEUDONYM_KEY="short")
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["MAX_IDENTICAL_TOOL_REPEATS", "PARSER_MAX_RETRIEVAL_CALLS"],
+)
+def test_settings_rejects_negative_tool_policy_limits(field):
+    with pytest.raises(ValueError):
+        Settings(**{field: -1})
 
 
 def test_settings_uses_project_data_path_by_default():

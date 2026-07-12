@@ -15,6 +15,7 @@ from tech_doc_agent.app.graph.specs import (
     CompletionPolicy,
     GraphSpec,
     PrimarySpec,
+    ToolExecutionPolicy,
     ToolPolicy,
 )
 
@@ -138,4 +139,8 @@ def graph_spec() -> GraphSpec:
             "namespace": state.get("namespace", "tech_docs"),
             "learning_target": state.get("learning_target", ""),
         },
+        tool_execution_policy=ToolExecutionPolicy(
+            max_identical_repeats=2,
+            parser_max_retrieval_calls=6,
+        ),
     )

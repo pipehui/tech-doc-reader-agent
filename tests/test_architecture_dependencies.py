@@ -111,6 +111,19 @@ def test_graph_builder_does_not_import_concrete_assistants_or_tools():
     assert violations == []
 
 
+def test_graph_execution_policy_does_not_read_settings_at_runtime():
+    assert _dependency_violations(
+        APP_DIR / "graph",
+        ("tech_doc_agent.app.core.settings",),
+        filenames=(
+            "builder.py",
+            "specs.py",
+            "tool_nodes.py",
+            "tool_policy.py",
+        ),
+    ) == []
+
+
 def test_dependency_bound_tools_do_not_use_legacy_resource_locator():
     assert _dependency_violations(
         TOOLS_DIR,
