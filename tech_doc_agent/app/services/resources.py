@@ -8,18 +8,21 @@ from tech_doc_agent.app.application.learning_state import (
     LearningStateService,
     LearningStateUnitOfWork,
 )
+from tech_doc_agent.app.application.profile_service import UserProfileService
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
     LearningStateSnapshotRepository,
 )
+from tech_doc_agent.app.infrastructure.persistence.user_profile_repository import (
+    JsonUserProfileRepository,
+)
 from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
 from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
-from tech_doc_agent.app.services.user_profile import UserProfileService
 
 
 SEED_DOCS = [
@@ -79,7 +82,10 @@ class AppResources:
             learning_store=learning_store,
             memory_store=memory_store,
             learning_state_service=learning_state_service,
-            profile_service=UserProfileService(settings, memory_store),
+            profile_service=UserProfileService(
+                repository=JsonUserProfileRepository(Path(settings.DATA_PATH)),
+                memory_store=memory_store,
+            ),
             web_search_backend=WebSearchBackend(settings=settings),
         )
 

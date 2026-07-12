@@ -11,7 +11,9 @@ from tech_doc_agent.app.application.learning_models import (
     LearningRecord as DomainLearningRecord,
     MemoryFragment,
 )
+from tech_doc_agent.app.application.profile_models import UserProfile
 from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.core.tenant import TenantContext
 
 
 def test_needs_review_when_score_is_low():
@@ -158,20 +160,20 @@ def test_learning_routes_filter_by_tenant_query_params():
 def test_learning_profile_route_resolves_tenant():
     class FakeProfileService:
         def get_profile(self, *, user_id: str, namespace: str):
-            return {
-                "profile_version": 1,
-                "user_id": user_id,
-                "namespace": namespace,
-                "experience_level": "进阶",
-                "explanation_style": "先看工程实现",
-                "depth": "中等",
-                "language": "中文",
-                "known_topics": ["StateGraph"],
-                "weak_topics": ["Checkpoint"],
-                "notes": "用户主动更新过画像。",
-                "last_update_reason": "测试",
-                "updated_at": "2026-04-30T00:00:00+00:00",
-            }
+            return UserProfile.from_payload(
+                {
+                    "experience_level": "进阶",
+                    "explanation_style": "先看工程实现",
+                    "depth": "中等",
+                    "language": "中文",
+                    "known_topics": ["StateGraph"],
+                    "weak_topics": ["Checkpoint"],
+                    "notes": "用户主动更新过画像。",
+                    "last_update_reason": "测试",
+                    "updated_at": "2026-04-30T00:00:00+00:00",
+                },
+                tenant=TenantContext(user_id, namespace),
+            )
 
     app = FastAPI()
     app.include_router(router)

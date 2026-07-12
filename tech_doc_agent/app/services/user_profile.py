@@ -1,53 +1,81 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from json import JSONDecodeError
-from datetime import UTC, datetime
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
-from urllib.parse import quote
 
+from tech_doc_agent.app.application.profile_models import (
+    DEFAULT_DEPTH,
+    DEFAULT_EXPERIENCE_LEVEL,
+    DEFAULT_EXPLANATION_STYLE,
+    DEFAULT_LANGUAGE,
+    PROFILE_VERSION,
+    UserProfile,
+    UserProfileUpdateResult,
+)
+from tech_doc_agent.app.application.profile_service import (
+    ProfileMemoryReaderPort,
+    UserProfileService as ApplicationUserProfileService,
+    format_user_profile_summary,
+)
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, TenantContext, parse_tenant
-from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
+from tech_doc_agent.app.infrastructure.persistence.user_profile_repository import (
+    JsonUserProfileRepository,
+)
 
 
 DEFAULT_PROFILE = {
-    "experience_level": "初学者",
-    "explanation_style": "先讲原理再看代码",
-    "depth": "详细，多举例",
-    "language": "中文为主，技术术语保留英文",
+    "experience_level": DEFAULT_EXPERIENCE_LEVEL,
+    "explanation_style": DEFAULT_EXPLANATION_STYLE,
+    "depth": DEFAULT_DEPTH,
+    "language": DEFAULT_LANGUAGE,
     "known_topics": [],
     "weak_topics": [],
     "notes": "",
 }
-PROFILE_VERSION = 1
-TEXT_PROFILE_FIELDS = ("experience_level", "explanation_style", "depth", "language", "notes")
-LIST_PROFILE_FIELDS = ("known_topics", "weak_topics")
 
 
-@dataclass(frozen=True, slots=True)
 class UserProfileService:
-    """Resource-scoped facade for profile persistence and context queries."""
+    """Compatibility constructor around the injected application service."""
 
-    settings: Settings
-    memory_store: Any | None = None
+    def __init__(
+        self,
+        settings: Settings,
+        memory_store: ProfileMemoryReaderPort | None = None,
+    ) -> None:
+        self.settings = settings
+        self.memory_store = memory_store
+        self._delegate = _build_service(settings, memory_store=memory_store)
 
-    def get_profile(self, *, user_id: str, namespace: str) -> dict[str, Any]:
-        return get_user_profile(user_id, namespace, settings=self.settings)
+    def get_profile(self, *, user_id: str, namespace: str) -> UserProfile:
+        return self._delegate.get_profile(user_id=user_id, namespace=namespace)
 
     def update_profile(
         self,
         *,
         user_id: str,
         namespace: str,
-        **updates: Any,
-    ) -> dict[str, Any]:
-        return update_user_profile(
-            user_id,
-            namespace,
-            settings=self.settings,
-            **updates,
+        experience_level: str | None = None,
+        explanation_style: str | None = None,
+        depth: str | None = None,
+        language: str | None = None,
+        known_topics: Sequence[str] | None = None,
+        weak_topics: Sequence[str] | None = None,
+        resolved_weak_topics: Sequence[str] | None = None,
+        notes: str | None = None,
+        evidence: str | None = None,
+    ) -> UserProfileUpdateResult:
+        return self._delegate.update_profile(
+            user_id=user_id,
+            namespace=namespace,
+            experience_level=experience_level,
+            explanation_style=explanation_style,
+            depth=depth,
+            language=language,
+            known_topics=known_topics,
+            weak_topics=weak_topics,
+            resolved_weak_topics=resolved_weak_topics,
+            notes=notes,
+            evidence=evidence,
         )
 
     def context_summary(
@@ -58,13 +86,11 @@ class UserProfileService:
         memory_query: str = "",
         memory_limit: int = 5,
     ) -> str:
-        return get_user_context_summary(
-            user_id,
-            namespace,
+        return self._delegate.context_summary(
+            user_id=user_id,
+            namespace=namespace,
             memory_query=memory_query,
             memory_limit=memory_limit,
-            settings=self.settings,
-            memory_store=self.memory_store,
         )
 
 
@@ -74,28 +100,12 @@ def get_user_profile_summary(
     *,
     settings: Settings | None = None,
 ) -> str:
-    tenant = parse_tenant(user_id, namespace)
-    profile = get_user_profile(tenant.user_id, tenant.namespace, settings=settings)
-
-    summary = (
-        f"用户ID：{tenant.user_id}\n"
-        f"知识库命名空间：{tenant.namespace}\n"
-        "用户学习偏好：\n"
-        f"- 经验水平：{profile['experience_level']}\n"
-        f"- 解释风格：{profile['explanation_style']}\n"
-        f"- 解释深度：{profile['depth']}\n"
-        f"- 语言偏好：{profile['language']}"
+    service = _build_service(settings)
+    profile = service.get_profile(
+        user_id=user_id,
+        namespace=namespace,
     )
-    profile_lines = []
-    if profile["known_topics"]:
-        profile_lines.append(f"- 已掌握/熟悉主题：{', '.join(profile['known_topics'])}")
-    if profile["weak_topics"]:
-        profile_lines.append(f"- 仍需巩固主题：{', '.join(profile['weak_topics'])}")
-    if profile["notes"]:
-        profile_lines.append(f"- 其他画像备注：{profile['notes']}")
-    if profile_lines:
-        summary += "\n长期用户画像：\n" + "\n".join(profile_lines)
-    return summary
+    return format_user_profile_summary(profile)
 
 
 def get_user_context_summary(
@@ -105,32 +115,15 @@ def get_user_context_summary(
     memory_query: str = "",
     memory_limit: int = 5,
     settings: Settings | None = None,
-    memory_store: Any | None = None,
+    memory_store: ProfileMemoryReaderPort | None = None,
 ) -> str:
-    tenant = parse_tenant(user_id, namespace)
-    summary = get_user_profile_summary(
-        user_id=tenant.user_id,
-        namespace=tenant.namespace,
-        settings=settings,
+    service = _build_service(settings, memory_store=memory_store)
+    return service.context_summary(
+        user_id=user_id,
+        namespace=namespace,
+        memory_query=memory_query,
+        memory_limit=memory_limit,
     )
-    memories = _load_user_memories(
-        tenant,
-        query=memory_query,
-        limit=memory_limit,
-        memory_store=memory_store,
-    )
-    if not memories:
-        return summary
-
-    memory_lines = [
-        f"- [{memory['kind']}] {memory['topic']}：{memory['content']}"
-        for memory in memories
-        if memory.get("content")
-    ]
-    if not memory_lines:
-        return summary
-
-    return summary + "\n长期学习轨迹记忆：\n" + "\n".join(memory_lines)
 
 
 def get_user_profile(
@@ -138,15 +131,12 @@ def get_user_profile(
     namespace: str | None = None,
     *,
     settings: Settings | None = None,
-) -> dict[str, Any]:
-    tenant = parse_tenant(user_id, namespace)
-    return _normalize_profile(
-        {
-            **DEFAULT_PROFILE,
-            **_load_user_profile(tenant, settings=settings),
-        },
-        tenant,
+) -> dict[str, object]:
+    profile = _build_service(settings).get_profile(
+        user_id=user_id,
+        namespace=namespace,
     )
+    return profile.to_payload()
 
 
 def update_user_profile(
@@ -163,184 +153,41 @@ def update_user_profile(
     notes: str | None = None,
     evidence: str | None = None,
     settings: Settings | None = None,
-) -> dict[str, Any]:
-    tenant = parse_tenant(user_id, namespace)
-    settings = settings or get_settings()
-    profile = get_user_profile(tenant.user_id, tenant.namespace, settings=settings)
-
-    changed = False
-    text_updates = {
-        "experience_level": experience_level,
-        "explanation_style": explanation_style,
-        "depth": depth,
-        "language": language,
-        "notes": notes,
-    }
-    for field, value in text_updates.items():
-        normalized = _string_or_empty(value)
-        if normalized and profile[field] != normalized:
-            profile[field] = normalized
-            changed = True
-
-    merged_known_topics = _merge_unique(profile["known_topics"], known_topics or [])
-    if merged_known_topics != profile["known_topics"]:
-        profile["known_topics"] = merged_known_topics
-        changed = True
-
-    merged_weak_topics = _merge_unique(profile["weak_topics"], weak_topics or [])
-    resolved_keys = {_topic_key(topic) for topic in resolved_weak_topics or []}
-    known_keys = {_topic_key(topic) for topic in profile["known_topics"]}
-    filtered_weak_topics = [
-        topic
-        for topic in merged_weak_topics
-        if _topic_key(topic) not in resolved_keys and _topic_key(topic) not in known_keys
-    ]
-    if filtered_weak_topics != profile["weak_topics"]:
-        profile["weak_topics"] = filtered_weak_topics
-        changed = True
-
-    normalized_evidence = _string_or_empty(evidence)
-    if normalized_evidence:
-        profile["last_update_reason"] = normalized_evidence
-        changed = True
-
-    if changed:
-        profile["updated_at"] = datetime.now(UTC).isoformat()
-        _save_user_profile(tenant, profile, settings=settings)
-        profile["status"] = "updated"
-    else:
-        profile["status"] = "unchanged"
-
-    return profile
+) -> dict[str, object]:
+    result = _build_service(settings).update_profile(
+        user_id=user_id,
+        namespace=namespace,
+        experience_level=experience_level,
+        explanation_style=explanation_style,
+        depth=depth,
+        language=language,
+        known_topics=known_topics,
+        weak_topics=weak_topics,
+        resolved_weak_topics=resolved_weak_topics,
+        notes=notes,
+        evidence=evidence,
+    )
+    return result.to_payload()
 
 
-def _load_user_profile(
-    tenant: TenantContext,
+def _build_service(
+    settings: Settings | None,
     *,
-    settings: Settings | None = None,
-) -> dict[str, Any]:
-    settings = settings or get_settings()
-    path = _profile_read_path(tenant, settings=settings)
-    if not path.exists():
-        return {}
-
-    try:
-        loaded = read_json(path)
-    except (OSError, JSONDecodeError):
-        return {}
-
-    return loaded if isinstance(loaded, dict) else {}
-
-
-def _save_user_profile(
-    tenant: TenantContext,
-    profile: dict[str, Any],
-    *,
-    settings: Settings,
-) -> None:
-    path = _profile_path(tenant, settings=settings)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cleaned = dict(profile)
-    cleaned.pop("namespace", None)
-    cleaned.pop("status", None)
-    write_json_atomic(path, cleaned)
-
-
-def _profile_path(tenant: TenantContext, *, settings: Settings) -> Path:
-    return (
-        Path(settings.DATA_PATH)
-        / "user_profiles"
-        / _profile_path_segment(tenant.user_id)
-        / f"{_profile_path_segment(tenant.namespace)}.json"
+    memory_store: ProfileMemoryReaderPort | None = None,
+) -> ApplicationUserProfileService:
+    resolved = settings or get_settings()
+    return ApplicationUserProfileService(
+        repository=JsonUserProfileRepository(Path(resolved.DATA_PATH)),
+        memory_store=memory_store,
     )
 
 
-def _profile_read_path(tenant: TenantContext, *, settings: Settings) -> Path:
-    path = _profile_path(tenant, settings=settings)
-    if path.exists():
-        return path
-
-    legacy_path = _legacy_profile_path(tenant, settings=settings)
-    if tenant.namespace == DEFAULT_NAMESPACE and legacy_path.exists():
-        return legacy_path
-
-    return path
-
-
-def _legacy_profile_path(tenant: TenantContext, *, settings: Settings) -> Path:
-    return Path(settings.DATA_PATH) / "user_profiles" / f"{tenant.user_id}.json"
-
-
-def _profile_path_segment(value: str) -> str:
-    return quote(value, safe="")
-
-
-def _normalize_profile(profile: dict[str, Any], tenant: TenantContext) -> dict[str, Any]:
-    normalized: dict[str, Any] = {
-        "profile_version": int(profile.get("profile_version") or PROFILE_VERSION),
-        "user_id": tenant.user_id,
-        "namespace": tenant.namespace,
-    }
-    for field in TEXT_PROFILE_FIELDS:
-        default_value = str(DEFAULT_PROFILE.get(field, ""))
-        normalized[field] = _string_or_empty(profile.get(field)) or default_value
-    for field in LIST_PROFILE_FIELDS:
-        field_value = profile.get(field)
-        normalized[field] = _merge_unique([], field_value if isinstance(field_value, list) else [])
-    normalized["last_update_reason"] = _string_or_none(profile.get("last_update_reason"))
-    normalized["updated_at"] = _string_or_none(profile.get("updated_at"))
-    return normalized
-
-
-def _merge_unique(existing: list[str], incoming: list[Any]) -> list[str]:
-    merged: list[str] = []
-    seen = set()
-    for item in [*existing, *incoming]:
-        text = _string_or_empty(item)
-        if not text:
-            continue
-        key = _topic_key(text)
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(text)
-    return merged
-
-
-def _topic_key(topic: str) -> str:
-    return topic.strip().casefold()
-
-
-def _string_or_empty(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
-
-
-def _string_or_none(value: Any) -> str | None:
-    text = _string_or_empty(value)
-    return text or None
-
-
-def _load_user_memories(
-    tenant: TenantContext,
-    *,
-    query: str,
-    limit: int,
-    memory_store: Any | None,
-) -> list[dict[str, Any]]:
-    if memory_store is None:
-        return []
-
-    if query:
-        return memory_store.read_by_query(
-            query,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-            limit=limit,
-        )
-    return memory_store.read_recent(
-        user_id=tenant.user_id,
-        namespace=tenant.namespace,
-        limit=limit,
-    )
+__all__ = [
+    "DEFAULT_PROFILE",
+    "PROFILE_VERSION",
+    "UserProfileService",
+    "get_user_context_summary",
+    "get_user_profile",
+    "get_user_profile_summary",
+    "update_user_profile",
+]

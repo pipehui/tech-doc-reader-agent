@@ -29,7 +29,7 @@ def build_profile_tools(dependencies: ToolDependencies) -> ProfileTools:
             user_id=tenant.user_id,
             namespace=tenant.namespace,
         )
-        return json.dumps(profile, ensure_ascii=False)
+        return json.dumps(profile.to_payload(), ensure_ascii=False)
 
     @tool("update_user_profile")
     def update_user_profile_tool(
@@ -64,7 +64,7 @@ def build_profile_tools(dependencies: ToolDependencies) -> ProfileTools:
             notes=notes,
             evidence=evidence,
         )
-        return json.dumps(profile, ensure_ascii=False)
+        return json.dumps(profile.to_payload(), ensure_ascii=False)
 
     return ProfileTools(
         read_user_profile=read_user_profile,

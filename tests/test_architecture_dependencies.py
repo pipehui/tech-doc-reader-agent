@@ -61,6 +61,22 @@ def test_learning_state_uses_domain_models_until_delivery_serialization():
     assert "memory_store.query_memories(" in api_source
 
 
+def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
+    model_source = (APPLICATION_DIR / "profile_models.py").read_text(encoding="utf-8")
+    service_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")
+    tool_source = (TOOLS_DIR / "profiles.py").read_text(encoding="utf-8")
+    api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
+    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+
+    assert "class UserProfile:" in model_source
+    assert "class UserProfileUpdate:" in model_source
+    assert "-> UserProfile" in service_source
+    assert "-> UserProfileUpdateResult" in service_source
+    assert "json.dumps(profile.to_payload()" in tool_source
+    assert "**profile.to_payload()" in api_source
+    assert "services.user_profile" not in resource_source
+
+
 def test_runtime_does_not_depend_on_api_or_legacy_services():
     assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
 

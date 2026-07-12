@@ -2,6 +2,10 @@ import json
 from types import SimpleNamespace
 
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
+from tech_doc_agent.app.application.profile_models import (
+    UserProfile,
+    UserProfileUpdate,
+)
 from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.tenant import TenantContext
@@ -166,10 +170,14 @@ class FakeWebSearch:
 
 class FakeProfileService:
     def get_profile(self, *, user_id, namespace):
-        return {"user_id": user_id, "namespace": namespace}
+        return UserProfile.default(TenantContext(user_id, namespace))
 
     def update_profile(self, *, user_id, namespace, **updates):
-        return {"user_id": user_id, "namespace": namespace, **updates}
+        profile = UserProfile.default(TenantContext(user_id, namespace))
+        return profile.apply(
+            UserProfileUpdate.create(**updates),
+            timestamp="2026-07-12T00:00:00Z",
+        )
 
 
 def _dependencies(tmp_path, label):

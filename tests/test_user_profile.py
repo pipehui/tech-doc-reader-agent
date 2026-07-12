@@ -1,6 +1,11 @@
 import json
 
+import pytest
+
+from tech_doc_agent.app.application.learning_models import MemoryFragment
+from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.core.tenant import TenantContext
 from tech_doc_agent.app.services.user_profile import (
     get_user_context_summary,
     get_user_profile,
@@ -19,6 +24,17 @@ def test_user_profile_summary_uses_defaults_when_profile_is_missing(tmp_path):
     assert "用户ID：user-a" in summary
     assert "知识库命名空间：tenant-docs" in summary
     assert "经验水平：初学者" in summary
+
+
+def test_user_profile_compatibility_facade_keeps_strict_tenant_validation(tmp_path):
+    with pytest.raises(ValidationError) as raised:
+        get_user_profile(
+            user_id="",
+            namespace="tenant-docs",
+            settings=Settings(DATA_PATH=str(tmp_path)),
+        )
+
+    assert raised.value.code == "invalid_tenant"
 
 
 def test_user_profile_summary_loads_user_profile_file(tmp_path):
@@ -62,6 +78,12 @@ def test_user_profile_update_persists_structured_profile(tmp_path):
     assert loaded["known_topics"] == ["LangGraph StateGraph", "Reducer"]
     assert loaded["weak_topics"] == ["Checkpoint"]
     assert loaded["last_update_reason"] == "根据最近学习记录和用户主动请求更新。"
+    profile_path = tmp_path / "user_profiles" / "user-a" / "tenant-docs.json"
+    persisted = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert persisted["schema_version"] == 1
+    assert persisted["profile"]["experience_level"] == "进阶"
+    assert "namespace" not in persisted["profile"]
+    assert "status" not in persisted["profile"]
 
 
 def test_user_profiles_are_isolated_by_namespace(tmp_path):
@@ -147,17 +169,29 @@ def test_user_profile_summary_includes_long_term_profile_fields(tmp_path):
 
 def test_user_context_summary_includes_tenant_memory(tmp_path):
     class FakeMemoryStore:
-        def read_by_query(self, query: str, user_id: str, namespace: str, limit: int):
+        def query_memories(
+            self,
+            query: str,
+            *,
+            user_id: str,
+            namespace: str,
+            limit: int,
+        ):
             assert query == "StateGraph"
             assert user_id == "user-a"
             assert namespace == "tenant-docs"
             assert limit == 5
             return [
-                {
-                    "kind": "stuck_point",
-                    "topic": "LangGraph StateGraph",
-                    "content": "用户容易混淆 reducer 和普通状态覆盖。",
-                }
+                MemoryFragment.create(
+                    kind="stuck_point",
+                    topic="LangGraph StateGraph",
+                    content="用户容易混淆 reducer 和普通状态覆盖。",
+                    confidence=0.8,
+                    source_session_id="session-a",
+                    tenant=TenantContext(user_id, namespace),
+                    timestamp="2026-07-12T00:00:00Z",
+                    memory_id="memory-a",
+                )
             ]
 
     summary = get_user_context_summary(

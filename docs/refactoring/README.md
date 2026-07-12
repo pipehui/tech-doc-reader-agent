@@ -46,6 +46,7 @@
 | 2026-07-12 | Phase 4：Typed SearchQuery/SearchResult、兼容 facade 与原子 BM25 snapshot | 完成，真实 corpus 基线仍待准备 | [2026-07-12-typed-retrieval-snapshot.md](2026-07-12-typed-retrieval-snapshot.md) |
 | 2026-07-12 | Phase 4：Package-resource PromptRegistry、manifest 校验与 primary 分段 | 完成，model ID/eval identity 仍待接入 | [2026-07-12-prompt-registry.md](2026-07-12-prompt-registry.md) |
 | 2026-07-12 | Phase 4：LearningRecord/MemoryFragment 领域模型与 JSON 交付边界 | learning/memory 完成，profile/approval 继续 | [2026-07-12-learning-domain-models.md](2026-07-12-learning-domain-models.md) |
+| 2026-07-12 | Phase 4：UserProfile 领域模型、application service 与 versioned repository | profile 完成，approval 分层归位继续 | [2026-07-12-user-profile-domain.md](2026-07-12-user-profile-domain.md) |
 
 ## 本地任务单策略
 

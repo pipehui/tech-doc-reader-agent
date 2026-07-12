@@ -128,9 +128,10 @@ def get_learning_profile(
 ):
     tenant = resolve_request_tenant(request, user_id, namespace)
     resources = _runtime_resources(request)
+    profile = resources.profile_service.get_profile(
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
+    )
     return UserProfileResponse(
-        **resources.profile_service.get_profile(
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
-        )
+        **profile.to_payload()
     )

@@ -8,6 +8,10 @@ from tech_doc_agent.app.application.learning_state import (
     UpdateLearningStateResult,
 )
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
+from tech_doc_agent.app.application.profile_models import (
+    UserProfile,
+    UserProfileUpdateResult,
+)
 from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 
 
@@ -66,15 +70,23 @@ class LearningStateServicePort(Protocol):
 
 
 class UserProfilePort(Protocol):
-    def get_profile(self, *, user_id: str, namespace: str) -> dict[str, Any]: ...
+    def get_profile(self, *, user_id: str, namespace: str) -> UserProfile: ...
 
     def update_profile(
         self,
         *,
         user_id: str,
         namespace: str,
-        **updates: Any,
-    ) -> dict[str, Any]: ...
+        experience_level: str | None = None,
+        explanation_style: str | None = None,
+        depth: str | None = None,
+        language: str | None = None,
+        known_topics: list[str] | None = None,
+        weak_topics: list[str] | None = None,
+        resolved_weak_topics: list[str] | None = None,
+        notes: str | None = None,
+        evidence: str | None = None,
+    ) -> UserProfileUpdateResult: ...
 
 
 class ResourceContainer(Protocol):
