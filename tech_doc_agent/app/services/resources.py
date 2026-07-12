@@ -23,8 +23,8 @@ from tech_doc_agent.app.infrastructure.persistence.user_profile_repository impor
 )
 from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
 from tech_doc_agent.app.infrastructure.retrieval.faiss_store import FaissStore
+from tech_doc_agent.app.infrastructure.retrieval.web_search import WebSearchBackend
 from tech_doc_agent.app.infrastructure.model_price_table import load_model_price_table
-from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
 
 
 SEED_DOCS = [

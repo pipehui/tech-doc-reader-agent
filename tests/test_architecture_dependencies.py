@@ -464,6 +464,13 @@ def test_document_index_adapters_share_the_retrieval_infrastructure_boundary():
     assert not (APP_DIR / "services" / "vectordb" / "chunkenizer.py").exists()
 
 
+def test_web_search_provider_is_retrieval_infrastructure_not_vectordb():
+    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+
+    assert "infrastructure.retrieval.web_search import WebSearchBackend" in resource_source
+    assert not (APP_DIR / "services" / "vectordb" / "web_search_backend.py").exists()
+
+
 def test_ambiguous_tenant_fallback_api_is_removed():
     violations = []
     for path in sorted(APP_DIR.rglob("*.py")):

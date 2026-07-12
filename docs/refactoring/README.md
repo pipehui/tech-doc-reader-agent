@@ -78,6 +78,7 @@
 | 2026-07-12 | Phase 4：Extractive conversation summarizer 归位 application | core port、application policy、graph consumer 与 composition 注入已分离 | [2026-07-12-conversation-summarizer-application-boundary.md](2026-07-12-conversation-summarizer-application-boundary.md) |
 | 2026-07-12 | Phase 4：Retrieval implementation 归位 infrastructure 与单文件 services facade | contract/implementation/compatibility 三层分离，深层旧路径删除 | [2026-07-12-retrieval-infrastructure-boundary.md](2026-07-12-retrieval-infrastructure-boundary.md) |
 | 2026-07-12 | Phase 4：FAISS、embedding、chunking document-index slice 归位 | concrete index 闭合依赖进入 infrastructure，native import 保持按需 | [2026-07-12-document-index-infrastructure-boundary.md](2026-07-12-document-index-infrastructure-boundary.md) |
+| 2026-07-12 | Phase 4：WebSearchBackend 归位 infrastructure 并删除 services/vectordb | provider/fallback/cache 所有权明确，delivery 字段兼容 | [2026-07-12-web-search-infrastructure-boundary.md](2026-07-12-web-search-infrastructure-boundary.md) |
 
 ## 本地任务单策略
 

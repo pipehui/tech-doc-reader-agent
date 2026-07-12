@@ -5,8 +5,8 @@ import pytest
 from tech_doc_agent.app.core.errors import DependencyUnavailable, RateLimited, ValidationError
 from tech_doc_agent.app.core.retry_usage import capture_retry_usage
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.vectordb import web_search_backend
-from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
+from tech_doc_agent.app.infrastructure.retrieval import web_search as web_search_backend
+from tech_doc_agent.app.infrastructure.retrieval.web_search import WebSearchBackend
 
 
 class ProviderRateLimit(RuntimeError):
