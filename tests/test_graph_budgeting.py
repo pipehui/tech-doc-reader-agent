@@ -21,7 +21,7 @@ from tech_doc_agent.app.graph.budgeting import (
     budgeted_request_start_node,
 )
 from tech_doc_agent.app.graph.budget_termination import create_budget_termination_node
-from tech_doc_agent.app.graph.nodes import assistant_node
+from tech_doc_agent.app.graph.assistant_execution import assistant_node
 from tech_doc_agent.app.graph.reflection import route_after_tool_result
 from tech_doc_agent.app.graph.routing import make_primary_router
 from tech_doc_agent.app.graph.specs import ReflectionPolicy, ToolExecutionPolicy

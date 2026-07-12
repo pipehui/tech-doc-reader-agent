@@ -6,8 +6,8 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ValidationError as PydanticValidationError
 
 import tech_doc_agent.app.graph.reflection as reflection_module
+from tech_doc_agent.app.graph.assistant_execution import assistant_node
 from tech_doc_agent.app.graph.nodes import (
-    assistant_node,
     create_exit_node,
     create_primary_tool_failure_node,
     create_user_info_node,

@@ -462,6 +462,7 @@ def test_graph_execution_policy_does_not_read_settings_at_runtime():
         APP_DIR / "graph",
         ("tech_doc_agent.app.core.settings",),
         filenames=(
+            "assistant_execution.py",
             "builder.py",
             "budget_termination.py",
             "budgeting.py",
@@ -473,6 +474,16 @@ def test_graph_execution_policy_does_not_read_settings_at_runtime():
             "tool_policy.py",
         ),
     ) == []
+
+
+def test_assistant_execution_is_separate_from_graph_lifecycle_nodes():
+    execution_source = (APP_DIR / "graph" / "assistant_execution.py").read_text(encoding="utf-8")
+    lifecycle_source = (APP_DIR / "graph" / "nodes.py").read_text(encoding="utf-8")
+
+    assert "def assistant_node(" in execution_source
+    assert "def _prepare_assistant_call(" in execution_source
+    assert "def create_entry_node(" not in execution_source
+    assert "def assistant_node(" not in lifecycle_source
 
 
 def test_dependency_bound_tools_do_not_use_legacy_resource_locator():

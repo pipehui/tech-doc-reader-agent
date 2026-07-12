@@ -5,8 +5,8 @@ from collections.abc import Hashable
 from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, START, StateGraph
 
+from .assistant_execution import assistant_node
 from .nodes import (
-    assistant_node,
     create_entry_node,
     create_exit_node,
     create_finish_node,

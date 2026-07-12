@@ -121,6 +121,8 @@ replace-in-place 状态外，不启用自动数据 pruning。
 
 Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph state 并决定 Agent prompt 可见消息，属于 graph orchestration policy，不再由 `services` 反向提供给 graph。
 
+Assistant invocation 模板位于 `graph/assistant_execution.py`：构造 scoped/full state、记录 context snapshot、在每次 LLM attempt 前检查 budget、合并 usage/context delta，并在无 tool output 后完成 reflection state。`graph/nodes.py` 只保留 user-info/entry/exit/finish/failure/plan lifecycle factories；builder 分别从两个模块组装，节点名与 topology 不变。
+
 确定性 `ExtractiveConversationSummarizer` 位于 `application/conversation_summarizer.py`。core 只定义 summary model 与 `ConversationSummarizer` port，graph compactor 消费该 port，composition root 注入具体策略；application implementation 不依赖 graph、provider、settings 或 persistence。
 
 Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`SearchQuery`、`SearchResult` 与 `DocumentRetrieverPort`。`infrastructure/retrieval/models.py` 只承载 ranker/store 实现所需的内部 candidate/port；tools 只构造 application query，不 import taxonomy、filter 或 HybridRetriever 实现。`services/retrieval` 只保留 package-level compatibility facade，具体 resource/eval 组装不经过该 facade。

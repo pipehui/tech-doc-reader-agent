@@ -34,6 +34,7 @@ tech_doc_agent
 │   ├── composition.py
 │   ├── core
 │   ├── graph
+│   │   ├── assistant_execution.py
 │   │   ├── builder.py
 │   │   ├── commands.py
 │   │   ├── nodes.py
@@ -91,7 +92,7 @@ tech_doc_agent
 - safe / sensitive tool 路由
 - interrupt 节点
 
-`builder.py` 只消费注入的 `GraphSpec` 并负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。它们不创建真实模型、工具或存储。
+`builder.py` 只消费注入的 `GraphSpec` 并负责图组装，`assistant_execution.py` 统一 assistant sync/async invocation、budget/context 记录与 reflection completion，`routing.py` 负责条件路由，`nodes.py` 只负责 user-info/entry/exit/finish/failure/plan lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。它们不创建真实模型、工具或存储。
 
 ### `app/application`
 
