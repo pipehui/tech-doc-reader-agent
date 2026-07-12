@@ -11,6 +11,8 @@ from typing import Any
 from uuid import uuid4
 
 from tech_doc_agent.app.core.errors import safe_error_fields
+from tech_doc_agent.app.core.redaction import redact_text, telemetry_redaction_policy
+from tech_doc_agent.app.core.settings import get_settings
 
 
 _LOGGER = logging.getLogger("tech_doc_agent.observability")
@@ -48,7 +50,7 @@ def trace_context(**fields: Any) -> Iterator[dict[str, Any]]:
 
 
 def _json_default(value: Any) -> str:
-    return str(value)
+    return redact_text(str(value))
 
 
 def _elapsed_ms(start: float) -> float:
@@ -63,7 +65,12 @@ def log_event(event: str, **fields: Any) -> None:
         **fields,
     }
 
-    _LOGGER.info(json.dumps(payload, ensure_ascii=False, default=_json_default))
+    settings = get_settings()
+    policy = telemetry_redaction_policy(
+        settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value()
+    )
+    safe_payload = policy.redact(payload)
+    _LOGGER.info(json.dumps(safe_payload, ensure_ascii=False, default=_json_default))
 
 
 @contextmanager

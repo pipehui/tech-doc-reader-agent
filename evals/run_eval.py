@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from evals.artifacts import redact_artifact_rows, safe_artifact_text, write_jsonl
 from evals.judges import judge_case, normalize_plan
 
 
@@ -271,7 +272,10 @@ async def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
     approve_url = approve_url_for(args.api_url, args.approve_url)
     async with httpx.AsyncClient() as client:
         for index, case in enumerate(cases, start=1):
-            print(f"[{index}/{len(cases)}] {case['id']} {case['input'][:60]}")
+            print(
+                f"[{index}/{len(cases)}] "
+                f"{safe_artifact_text(case['id'])} {safe_artifact_text(case['input'][:60])}"
+            )
             result = await run_case(
                 client,
                 case,
@@ -290,21 +294,20 @@ async def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
             e2e_text = f"{e2e:.2f}s" if isinstance(e2e, int | float) else "N/A"
             interrupts = result.get("interrupt_count", 0)
             interrupt_text = f" interrupts={interrupts}" if interrupts else ""
-            print(f"  status={status} plan={plan} plan_score={plan_score} e2e={e2e_text}{interrupt_text}")
+            print(
+                safe_artifact_text(
+                    f"  status={status} plan={plan} plan_score={plan_score} "
+                    f"e2e={e2e_text}{interrupt_text}"
+                )
+            )
             if result.get("error"):
-                print(f"  error={result['error']}")
+                print(f"  error={safe_artifact_text(result['error'])}")
 
     return results
 
 
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        for row in rows:
-            file.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-
 def render_markdown_report(rows: list[dict[str, Any]]) -> str:
+    rows = redact_artifact_rows(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     summary = summarize_results(rows)
     lines = [
@@ -527,8 +530,8 @@ async def async_main() -> None:
     write_jsonl(args.output, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(render_markdown_report(rows), encoding="utf-8")
-    print(f"Raw results saved to {args.output}")
-    print(f"Markdown report saved to {args.report}")
+    print(f"Raw results saved to {safe_artifact_text(args.output)}")
+    print(f"Markdown report saved to {safe_artifact_text(args.report)}")
 
 
 if __name__ == "__main__":

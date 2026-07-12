@@ -11,6 +11,13 @@ from typing import Any
 
 import httpx
 
+if __package__ in (None, ""):
+    repository_root = str(Path(__file__).resolve().parents[1])
+    if repository_root not in sys.path:
+        sys.path.insert(0, repository_root)
+
+from evals.artifacts import redact_artifact_rows, safe_artifact_text
+
 
 DEFAULT_API_URL = "http://127.0.0.1:8000/chat"
 DEFAULT_TEMPLATE = (
@@ -228,8 +235,9 @@ def append_jsonl(path: Path | None, row: dict[str, Any]) -> None:
     if path is None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
+    safe_row = redact_artifact_rows([row])[0]
     with path.open("a", encoding="utf-8") as file:
-        file.write(json.dumps(row, ensure_ascii=False) + "\n")
+        file.write(json.dumps(safe_row, ensure_ascii=False) + "\n")
 
 
 def parse_args() -> argparse.Namespace:
@@ -272,23 +280,20 @@ def main() -> int:
     if args.dry_run:
         for index, topic in enumerate(topics, start=1):
             session_id = build_session_id(args.session_prefix, index, topic)
-            print(
-                json.dumps(
-                    _request_payload(
-                        {"session_id": session_id, "message": build_message(topic, args.template)},
-                        user_id=args.user_id,
-                        namespace=args.namespace,
-                    ),
-                    ensure_ascii=False,
-                )
+            payload = _request_payload(
+                {"session_id": session_id, "message": build_message(topic, args.template)},
+                user_id=args.user_id,
+                namespace=args.namespace,
             )
+            safe_payload = redact_artifact_rows([payload])[0]
+            print(json.dumps(safe_payload, ensure_ascii=False))
         return 0
 
     with httpx.Client() as client:
         for index, topic in enumerate(topics, start=1):
             session_id = build_session_id(args.session_prefix, index, topic)
             message = build_message(topic, args.template)
-            print(f"[{index}/{len(topics)}] {topic}")
+            print(f"[{index}/{len(topics)}] {safe_artifact_text(topic)}")
             started_at = time.perf_counter()
             row = run_topic(
                 client,
@@ -312,7 +317,7 @@ def main() -> int:
                 f"elapsed={row['elapsed_s']:.1f}s"
             )
             if row.get("error"):
-                print(f"  error={row['error']}")
+                print(f"  error={safe_artifact_text(row['error'])}")
 
             if row["status"] != "done":
                 return 1

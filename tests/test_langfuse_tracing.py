@@ -59,6 +59,7 @@ def test_build_langfuse_trace_creates_callback_with_deterministic_trace_id(monke
         LANGFUSE_BASE_URL="https://langfuse.test",
         LANGFUSE_ENVIRONMENT="test",
         LANGFUSE_RELEASE="v-test",
+        TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
     )
 
     trace = tracing.build_langfuse_trace(settings, "trace-local")
@@ -70,6 +71,17 @@ def test_build_langfuse_trace_creates_callback_with_deterministic_trace_id(monke
     assert trace.callback.trace_context == {"trace_id": "lf-trace-local"}
     assert FakeLangfuse.instances[0].kwargs["secret_key"] == "sk-test"
     assert FakeLangfuse.instances[0].kwargs["base_url"] == "https://langfuse.test"
+    mask = FakeLangfuse.instances[0].kwargs["mask"]
+    masked = mask(
+        {
+            "user_id": "user@example.com",
+            "input": "Authorization: Bearer private-token",
+            "trace_id": "550e8400-e29b-41d4-a716-446655440000",
+        }
+    )
+    assert masked["user_id"].startswith("pseudonym:")
+    assert "private-token" not in masked["input"]
+    assert masked["trace_id"] == "550e8400-e29b-41d4-a716-446655440000"
 
 
 def test_flush_and_shutdown_are_best_effort(monkeypatch):

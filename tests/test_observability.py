@@ -2,6 +2,7 @@ import json
 import logging
 
 import pytest
+from pydantic import SecretStr
 
 from tech_doc_agent.app.api.routes.chat import sse_event
 from tech_doc_agent.app.core import observability
@@ -56,6 +57,52 @@ def test_log_event_outputs_structured_json():
     assert payload["trace_id"] == "trace-test"
     assert payload["session_id"] == "session-1"
     assert payload["value"] == {"ok": True}
+
+
+def test_log_event_applies_shared_redaction_and_keyed_user_pseudonym(monkeypatch):
+    class RedactionSettings:
+        TELEMETRY_PSEUDONYM_KEY = SecretStr("controlled-key-with-32-random-bytes")
+
+    monkeypatch.setattr(observability, "get_settings", lambda: RedactionSettings())
+    handler = ListHandler()
+    observability._LOGGER.addHandler(handler)
+
+    try:
+        with trace_context(
+            user_id="person@example.com",
+            session_id="550e8400-e29b-41d4-a716-446655440000",
+        ):
+            log_event(
+                "unit.redaction",
+                authorization="Bearer private-token",
+                note="call 13800138000",
+            )
+    finally:
+        observability._LOGGER.removeHandler(handler)
+
+    payload = json.loads(handler.records[-1].message)
+    assert payload["user_id"].startswith("pseudonym:")
+    assert payload["session_id"] == "550e8400-e29b-41d4-a716-446655440000"
+    assert payload["authorization"] == "[REDACTED:AUTHORIZATION]"
+    assert payload["note"] == "call [REDACTED:PHONE]"
+    assert "private-token" not in handler.records[-1].message
+
+
+def test_log_event_redacts_string_fallback_for_non_json_objects():
+    class SensitiveObject:
+        def __str__(self):
+            return "api_key=private-object-value"
+
+    handler = ListHandler()
+    observability._LOGGER.addHandler(handler)
+    try:
+        log_event("unit.object", value=SensitiveObject())
+    finally:
+        observability._LOGGER.removeHandler(handler)
+
+    payload = json.loads(handler.records[-1].message)
+    assert payload["value"] == "api_key=[REDACTED:CREDENTIAL]"
+    assert "private-object-value" not in handler.records[-1].message
 
 
 def test_timed_node_logs_start_and_finish():

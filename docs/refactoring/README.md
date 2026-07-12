@@ -38,6 +38,7 @@
 | 2026-07-12 | Phase 3：React component、tenant router 与 fake SSE/HITL integration 测试层 | 完成，F5 六层测试门禁完成 | [2026-07-12-frontend-component-integration-tests.md](2026-07-12-frontend-component-integration-tests.md) |
 | 2026-07-12 | Phase 3：CSS tokens/shell/chat/approval/learner/inspector/landing/responsive 边界 | 完成，2023 行规则与 production CSS hash 不变 | [2026-07-12-frontend-css-boundaries.md](2026-07-12-frontend-css-boundaries.md) |
 | 2026-07-12 | Phase 4：统一错误分类、provider/repository 映射与安全 ToolMessage/SSE 边界 | 完成，R1 retry 与 R4 业务字段脱敏继续 | [2026-07-12-unified-error-model.md](2026-07-12-unified-error-model.md) |
+| 2026-07-12 | Phase 4：日志、Langfuse、eval/benchmark artifact 共享 redaction 与 keyed pseudonym | 当前出口完成，R6 replay 接入继续 | [2026-07-12-shared-redaction-policy.md](2026-07-12-shared-redaction-policy.md) |
 
 ## 本地任务单策略
 

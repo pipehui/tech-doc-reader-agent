@@ -1,3 +1,5 @@
+import pytest
+
 from tech_doc_agent.app.core.settings import Settings
 
 
@@ -12,6 +14,7 @@ def test_settings_parses_typed_values():
         REDIS_SETUP_MAX_ATTEMPTS="3",
         REDIS_SETUP_RETRY_SECONDS="0.5",
         GUARDRAIL_APPROVAL_TTL_SECONDS="120",
+        TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
     )
 
     assert settings.TAVILY_DAILY_LIMIT == 7
@@ -26,6 +29,12 @@ def test_settings_parses_typed_values():
     ]
     assert settings.LANGFUSE_ENABLED is True
     assert settings.LANGFUSE_FLUSH_ON_REQUEST is True
+    assert settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value() == "controlled-key-with-32-random-bytes"
+
+
+def test_settings_rejects_weak_telemetry_pseudonym_key():
+    with pytest.raises(ValueError, match="at least 16 bytes"):
+        Settings(TELEMETRY_PSEUDONYM_KEY="short")
 
 
 def test_settings_uses_project_data_path_by_default():

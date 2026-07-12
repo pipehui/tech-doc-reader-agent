@@ -33,6 +33,14 @@ REDIS_URL=redis://localhost:6379
 GUARDRAIL_APPROVAL_TTL_SECONDS=900
 ```
 
+可选 telemetry user-id 稳定假名配置（至少 16 字节，生产环境应由 secret manager 注入）：
+
+```bash
+TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
+```
+
+留空时仍会做 credential/email/phone 模式脱敏，但不会使用无密钥 hash 处理普通 user id。
+
 LangGraph checkpoint 和 medium-risk input guardrail approval 共用 Redis。approval 使用带 TTL 的独立 key，并通过原子 `GETDEL` 保证同一请求只被一个 worker 消费；部署的 Redis 版本需不低于 6.2。
 
 启动 Redis：

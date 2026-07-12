@@ -6,6 +6,7 @@ from typing import Any
 
 from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
+from tech_doc_agent.app.core.redaction import telemetry_redaction_policy
 from tech_doc_agent.app.core.settings import Settings
 
 try:
@@ -48,6 +49,9 @@ def _ensure_client(settings: Settings):
         log_event("langfuse.unavailable", reason="package_not_installed")
         return None
 
+    redaction_policy = telemetry_redaction_policy(
+        settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value()
+    )
     _CLIENT = Langfuse(
         public_key=settings.LANGFUSE_PUBLIC_KEY,
         secret_key=settings.LANGFUSE_SECRET_KEY,
@@ -55,6 +59,7 @@ def _ensure_client(settings: Settings):
         tracing_enabled=True,
         environment=settings.LANGFUSE_ENVIRONMENT or None,
         release=settings.LANGFUSE_RELEASE or None,
+        mask=redaction_policy.redact,
     )
     log_event(
         "langfuse.client.initialized",

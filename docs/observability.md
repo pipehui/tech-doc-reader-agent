@@ -18,6 +18,18 @@
 - `namespace`
 - 当前 agent / tool / node 信息
 
+## Redaction
+
+结构化日志和 Langfuse export 共用 `core/redaction.py`：在离开进程前递归处理 Authorization/cookie、API key、password/secret/token、JWT、带密码 URL、常见邮箱和手机号。UUID 不默认视为 PII，以保留 trace/session correlation。
+
+若需要跨事件关联 user_id，可配置至少 16 字节的随机 HMAC key：
+
+```bash
+TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
+```
+
+配置后 `user_id` 输出为稳定 `pseudonym:<digest>`。这是 keyed pseudonymization，不是匿名化；key 应通过部署 secret manager 注入，不提交到仓库。留空时只做字段/文本模式脱敏，不对普通 opaque user id 做无密钥 hash。
+
 ## SSE Events
 
 前端 Inspector 直接消费后端 SSE 事件。常见事件包括：
@@ -49,6 +61,8 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
 启用后，`ChatRuntime` 会把 Langfuse `CallbackHandler` 注入 LangGraph/LangChain config，并在日志中输出对应的 `langfuse_trace_url`。
+
+Langfuse client 使用与结构化日志相同的 mask callback，因此 callback 自动捕获的 prompt、tool input 和 model output 也经过同一 policy，而不只是 metadata。
 
 本地如果需要请求结束后立即刷新 trace，可设置：
 

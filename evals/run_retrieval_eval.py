@@ -9,8 +9,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from tech_doc_agent.app.services.resources import AppResources
+from evals.artifacts import redact_artifact_rows, safe_artifact_text, write_jsonl
 from tech_doc_agent.app.services.retrieval import HybridRetriever, RetrievalMode
+from tech_doc_agent.app.services.resources import AppResources
 
 
 DEFAULT_CASES = Path("evals/retrieval_cases.json")
@@ -133,7 +134,10 @@ def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
 
     results: list[dict[str, Any]] = []
     for index, case in enumerate(cases, start=1):
-        print(f"[{index}/{len(cases)}] {case['id']} {case['query'][:60]}")
+        print(
+            f"[{index}/{len(cases)}] "
+            f"{safe_artifact_text(case['id'])} {safe_artifact_text(case['query'][:60])}"
+        )
         result = run_case(case, resources.hybrid_retriever, default_top_k=args.k, mode=args.mode)
         results.append(result)
         scores = result["scores"]
@@ -146,18 +150,12 @@ def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
             f"keywords={format_score(scores.get('keyword_coverage'))}"
         )
         if result.get("error"):
-            print(f"  error={result['error']}")
+            print(f"  error={safe_artifact_text(result['error'])}")
     return results
 
 
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        for row in rows:
-            file.write(json.dumps(row, ensure_ascii=False) + "\n")
-
-
 def render_markdown_report(rows: list[dict[str, Any]]) -> str:
+    rows = redact_artifact_rows(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     summary = summarize_results(rows)
     top_k_label = _top_k_label(rows)
@@ -409,8 +407,8 @@ def main() -> None:
     write_jsonl(args.output, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(render_markdown_report(rows), encoding="utf-8")
-    print(f"Raw retrieval results saved to {args.output}")
-    print(f"Markdown retrieval report saved to {args.report}")
+    print(f"Raw retrieval results saved to {safe_artifact_text(args.output)}")
+    print(f"Markdown retrieval report saved to {safe_artifact_text(args.report)}")
 
 
 if __name__ == "__main__":

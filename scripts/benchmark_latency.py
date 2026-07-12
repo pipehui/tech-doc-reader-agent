@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import statistics
+import sys
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -26,6 +27,13 @@ from pathlib import Path
 from typing import Optional
 
 import httpx
+
+if __package__ in (None, ""):
+    repository_root = str(Path(__file__).resolve().parents[1])
+    if repository_root not in sys.path:
+        sys.path.insert(0, repository_root)
+
+from evals.artifacts import safe_artifact_text, write_jsonl
 
 
 # ============================================================
@@ -432,9 +440,10 @@ def print_bucket_summary(title: str, grouped_rows: dict[str, list[dict]], sort_k
         return (value, name)
 
     for name, stats in sorted(table, key=sort_value, reverse=True):
+        safe_name = safe_artifact_text(name)
         if stats["valid"] == 0:
             print(
-                f"{name}: total={stats['total']}  valid=0  "
+                f"{safe_name}: total={stats['total']}  valid=0  "
                 f"interrupted={stats['interrupted']}  errored={stats['errored']}"
             )
             continue
@@ -447,7 +456,7 @@ def print_bucket_summary(title: str, grouped_rows: dict[str, list[dict]], sort_k
             else "TTFT avg=N/A"
         )
         print(
-            f"{name}: total={stats['total']}  valid={stats['valid']}  "
+            f"{safe_name}: total={stats['total']}  valid={stats['valid']}  "
             f"interrupted={stats['interrupted']}  errored={stats['errored']}  "
             f"{ttft_text}  "
             f"E2E avg={stats['e2e_avg']:.2f}s  p50={stats['e2e_p50']:.2f}s  p95={stats['e2e_p95']:.2f}s  "
@@ -489,7 +498,7 @@ async def main():
         queries = queries[: args.limit]
 
     print(
-        f"Loaded {len(queries)} queries from {source}, "
+        f"Loaded {len(queries)} queries from {safe_artifact_text(source)}, "
         f"{args.runs} run(s) each, concurrency={args.concurrency}, "
         f"interrupt_policy={args.interrupt_policy}."
     )
@@ -534,7 +543,7 @@ async def main():
             e2e = result.get("e2e_s")
 
             if has_error(result):
-                print(f"   ERROR: {result['error']}")
+                print(f"   ERROR: {safe_artifact_text(result['error'])}")
                 if result.get("last_event_type") or result.get("last_agent"):
                     print(
                         f"   last_event={result.get('last_event_type')}  "
@@ -543,7 +552,7 @@ async def main():
                     )
                 if result.get("recent_events"):
                     for item in result["recent_events"][-3:]:
-                        print(f"   recent: {json.dumps(item, ensure_ascii=False)}")
+                        print(f"   recent: {safe_artifact_text(json.dumps(item, ensure_ascii=False))}")
                 return
 
             if result.get("interrupted"):
@@ -556,7 +565,7 @@ async def main():
                     )
                 if result.get("recent_events"):
                     for item in result["recent_events"][-3:]:
-                        print(f"   recent: {json.dumps(item, ensure_ascii=False)}")
+                        print(f"   recent: {safe_artifact_text(json.dumps(item, ensure_ascii=False))}")
                 return
 
             ttft_text = f"{ttft:.2f}s" if ttft is not None else "N/A"
@@ -578,10 +587,11 @@ async def main():
             session_id = f"bench_{uuid.uuid4().hex[:12]}"  # 每次新 session，避免历史影响
             plan_note = f" | expected={expected_plan}" if expected_plan else ""
             case_note = f"{case_id} " if case_id else ""
+            safe_job_label = safe_artifact_text(f"{case_note}{query[:50]}{plan_note}")
 
             async with semaphore:
                 async with print_lock:
-                    print(f"[{job_index}/{job_total}] {case_note}{query[:50]}{plan_note}")
+                    print(f"[{job_index}/{job_total}] {safe_job_label}")
 
                 result = await measure_one(
                     client,
@@ -606,10 +616,8 @@ async def main():
         results.extend(await asyncio.gather(*(run_job(job) for job in jobs)))
 
     # ---------- 写入原始结果 ----------
-    with args.output.open("w", encoding="utf-8") as f:
-        for r in results:
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    print(f"\nRaw results saved to {args.output}")
+    write_jsonl(args.output, results)
+    print(f"\nRaw results saved to {safe_artifact_text(args.output)}")
 
     # ---------- 统计 ----------
     valid = [

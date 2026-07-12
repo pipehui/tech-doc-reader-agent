@@ -1,4 +1,7 @@
+import json
+
 from scripts.seed_doc_store import (
+    append_jsonl,
     approve_url_for,
     build_message,
     build_session_id,
@@ -55,6 +58,22 @@ def test_approve_url_defaults_from_chat_endpoint():
     assert approve_url_for("http://127.0.0.1:8000/chat", None) == "http://127.0.0.1:8000/chat/approve"
     assert approve_url_for("http://127.0.0.1:8000/api", None) == "http://127.0.0.1:8000/api/chat/approve"
     assert approve_url_for("http://127.0.0.1:8000/chat", "http://x/approve") == "http://x/approve"
+
+
+def test_seed_run_artifact_uses_shared_redaction(tmp_path):
+    path = tmp_path / "seed.jsonl"
+
+    append_jsonl(
+        path,
+        {
+            "topic": "owner person@example.com",
+            "error": "Authorization: Bearer private-token",
+        },
+    )
+
+    row = json.loads(path.read_text(encoding="utf-8"))
+    assert "person@example.com" not in row["topic"]
+    assert "private-token" not in row["error"]
 
 
 def test_run_topic_auto_approves_save_docs():

@@ -2,6 +2,8 @@
 
 项目把评测分成四类：快速 agent baseline、full agent eval、retrieval eval 和 concurrency smoke。快速 baseline 用于每次改动后的回归，full eval 用于阶段性提交和 README 指标更新。
 
+所有 runner 的 judge/统计在内存中使用原始 case 和结果；写入 JSONL/Markdown、打印动态 query/error/recent payload 时统一使用 `evals/artifacts.py` 脱敏。这样 adversarial case 的评分语义不变，artifact 不保留 Authorization、API key、JWT、常见邮箱/手机号等原文。若配置 `TELEMETRY_PSEUDONYM_KEY`，JSONL 中的 `user_id` 使用与日志/Langfuse 相同的 keyed pseudonym。
+
 ## Agent Eval
 
 快速 baseline：

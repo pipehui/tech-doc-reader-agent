@@ -2,7 +2,7 @@ import json
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     DATA_PATH: str = "./tech_doc_agent/data"
     LOG_LEVEL: str = "DEBUG"
+    TELEMETRY_PSEUDONYM_KEY: SecretStr = SecretStr("")
 
     EMBEDDING_API_KEY: str = ""
     EMBEDDING_API_BASE: str = ""
@@ -69,6 +70,14 @@ class Settings(BaseSettings):
             if value.startswith("["):
                 return json.loads(value)
             return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    @field_validator("TELEMETRY_PSEUDONYM_KEY")
+    @classmethod
+    def validate_telemetry_pseudonym_key(cls, value: SecretStr) -> SecretStr:
+        raw_value = value.get_secret_value()
+        if raw_value and len(raw_value.encode("utf-8")) < 16:
+            raise ValueError("TELEMETRY_PSEUDONYM_KEY must contain at least 16 bytes when configured.")
         return value
 
 
