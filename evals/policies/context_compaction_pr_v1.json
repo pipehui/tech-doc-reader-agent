@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "policy_id": "context_compaction_pr.v1",
+  "runner": "offline_context_compaction_eval",
+  "metrics": {
+    "total": {
+      "direction": "higher",
+      "absolute_limit": 6,
+      "max_regression": 0
+    },
+    "done": {
+      "direction": "higher",
+      "absolute_limit": 6,
+      "max_regression": 0
+    },
+    "errored": {
+      "direction": "lower",
+      "absolute_limit": 0,
+      "max_regression": 0
+    },
+    "baseline_task_correct_avg": {
+      "direction": "higher",
+      "absolute_limit": 1.0,
+      "max_regression": 0.0
+    },
+    "compacted_task_correct_avg": {
+      "direction": "higher",
+      "absolute_limit": 0.83,
+      "max_regression": 0.0
+    },
+    "answer_consistent_avg": {
+      "direction": "higher",
+      "absolute_limit": 0.83,
+      "max_regression": 0.0
+    },
+    "policy_expectation_match_avg": {
+      "direction": "higher",
+      "absolute_limit": 1.0,
+      "max_regression": 0.0
+    },
+    "checkpoint_reduction_avg": {
+      "direction": "higher",
+      "absolute_limit": 0.60,
+      "max_regression": 0.03
+    },
+    "prompt_bytes_reduction_avg": {
+      "direction": "higher",
+      "absolute_limit": 0.65,
+      "max_regression": 0.05
+    },
+    "approximate_input_token_reduction_avg": {
+      "direction": "higher",
+      "absolute_limit": 0.35,
+      "max_regression": 0.06
+    }
+  }
+}

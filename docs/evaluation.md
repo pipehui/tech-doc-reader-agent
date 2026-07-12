@@ -113,6 +113,19 @@ python -m evals.check_manifest_compatibility eval_results/baseline.manifest.json
 
 exit code `0` 表示 workload identity 相同且 Git provenance 可验证；`1` 表示 runner、dataset、settings、remote deployment/runtime 或 retrieval corpus 已知不一致；`2` 表示 manifest 无效或证据不足。PR/CI 不应使用 `--allow-dirty`；该开关只用于明确接受本地 dirty worktree 的诊断运行。两个 runner commit 可以不同，这是代码 before/after 的正常前提，但两边 runner commit 必须可识别，online target deployment commit 必须相同。
 
+manifest compatible 只表示“可以比较”，不表示指标通过。阻断式 metrics gate 使用：
+
+```bash
+python -m evals.check_result_regression \
+  --baseline-manifest evals/baselines/context_compaction_v1/manifest.json \
+  --baseline-results evals/baselines/context_compaction_v1/results.jsonl \
+  --candidate-manifest eval_results/context_compaction_pr.manifest.json \
+  --candidate-results eval_results/context_compaction_pr.jsonl \
+  --policy evals/policies/context_compaction_pr_v1.json
+```
+
+该命令先强制执行 manifest compatibility，再验证 result case ID 集合，最后对每项 policy 同时检查 absolute limit 与相对 baseline 的 max regression。exit code `0` 表示全部通过，`1` 表示指标/结果集回归，`2` 表示 manifest 不可比或输入无效。policy 自带 canonical fingerprint；修改阈值应创建新版本，不覆盖已有 baseline/policy 来让失败变绿。
+
 ## Context Compaction Eval
 
 长会话上下文压缩先使用完全离线的 deterministic recall proxy，不启动后端、不调用模型：
@@ -153,6 +166,8 @@ runner 会对同一 synthetic 长会话分别构建 compaction off/on 状态，�
 | raw tool dependency | 1 | 0.00 | 0.00 | 76.0% | 75.4% |
 | tool result restatement | 1 | 1.00 | 1.00 | 76.0% | 75.4% |
 | bounded long summary | 1 | 1.00 | 1.00 | 76.3% | 73.5% |
+
+这组结果已固化在 `evals/baselines/context_compaction_v1/`，对应 policy 为 `evals/policies/context_compaction_pr_v1.json`，并接入 backend CI。阻断指标包含完成/错误数、correctness/consistency/policy expectation 与 checkpoint/prompt/token-proxy reduction；本地 compaction latency 保留在 rows 中但不阻断，因为 GitHub runner 与开发机的调度噪声不能作为稳定代码回归阈值。
 
 `raw tool dependency` 是刻意保留的反例：关键 marker 只存在于旧 ToolMessage content 时，安全 extractive summarizer 不复制 raw payload，因此压缩后的 recall proxy 返回 unknown；同一 tool 事实如果由 assistant 在自然语言结果中重新表述，则可以保留。
 

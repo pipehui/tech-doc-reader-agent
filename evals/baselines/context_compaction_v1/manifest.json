@@ -1,0 +1,29 @@
+{
+  "dataset": {
+    "name": "context_compaction_cases.json",
+    "sha256": "7ef6f01dfdc0b28fea9bc04619be62bb15d28f48bf1564bf563fccc813a4019a"
+  },
+  "generated_at": "2026-07-12T11:07:48.483464+00:00",
+  "runner": "offline_context_compaction_eval",
+  "runner_git": {
+    "commit": "3559223b5fd7af9be5464e04ae23ee1ab2c55113",
+    "dirty": false
+  },
+  "runtime_identity": {
+    "status": "not_applicable"
+  },
+  "schema_version": 1,
+  "settings": {
+    "fingerprint": "91e0a68195891ce4a56dcdba7628ef41c7c1464d7535d784d92b3747cd24e65c",
+    "values": {
+      "answer_metric": "deterministic_marker_recall_proxy",
+      "iterations": 10,
+      "keep_recent_turns": 3,
+      "limit": null,
+      "max_messages": 12,
+      "max_serialized_bytes": 0,
+      "summary_max_chars": 12000,
+      "token_metric": "langchain_count_tokens_approximately"
+    }
+  }
+}

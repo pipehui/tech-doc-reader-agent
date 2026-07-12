@@ -28,6 +28,20 @@ jobs:
       - name: Pytest
         run: pytest
 
+      - name: Context compaction regression gate
+        run: |
+          python -m evals.run_context_compaction_eval \
+            --iterations 10 \
+            --output eval_results/context_compaction_pr.jsonl \
+            --report eval_reports/context_compaction_pr.md \
+            --manifest eval_results/context_compaction_pr.manifest.json
+          python -m evals.check_result_regression \
+            --baseline-manifest evals/baselines/context_compaction_v1/manifest.json \
+            --baseline-results evals/baselines/context_compaction_v1/results.jsonl \
+            --candidate-manifest eval_results/context_compaction_pr.manifest.json \
+            --candidate-results eval_results/context_compaction_pr.jsonl \
+            --policy evals/policies/context_compaction_pr_v1.json
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
