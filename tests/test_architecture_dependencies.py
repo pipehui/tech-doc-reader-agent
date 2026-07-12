@@ -9,6 +9,7 @@ APPLICATION_DIR = APP_DIR / "application"
 RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
 AGENTS_DIR = APP_DIR / "agents"
+SERVICES_DIR = APP_DIR / "services"
 RETRIEVAL_DIR = APP_DIR / "infrastructure" / "retrieval"
 RESOURCES_PATH = APP_DIR / "infrastructure" / "resources.py"
 FORBIDDEN_CORE_DEPENDENCIES = (
@@ -131,6 +132,20 @@ AGENTS_CONTRACT = DependencyContract(
         "tech_doc_agent.app.services",
     ),
 )
+SERVICES_COMPATIBILITY_CONTRACT = DependencyContract(
+    name="services compatibility isolation",
+    source_prefixes=("tech_doc_agent.app.services",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.agents",
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
+        "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.runtime",
+        "tech_doc_agent.app.tools",
+    ),
+)
 
 
 def test_core_does_not_depend_on_api_or_services():
@@ -159,6 +174,31 @@ def test_tool_adapters_depend_on_application_ports_not_service_implementations()
 
 def test_agent_definitions_do_not_depend_on_services_or_delivery_adapters():
     assert AGENTS_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_services_compatibility_facades_do_not_depend_on_runtime_or_delivery():
+    assert SERVICES_COMPATIBILITY_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_services_namespace_contains_only_explicit_compatibility_facades():
+    modules = {
+        path.relative_to(SERVICES_DIR).as_posix()
+        for path in SERVICES_DIR.rglob("*.py")
+    }
+
+    assert modules == {
+        "__init__.py",
+        "retrieval/__init__.py",
+        "user_profile.py",
+    }
+
+
+def test_composition_roots_do_not_reintroduce_services_imports():
+    assert _dependency_violations(
+        APP_DIR,
+        ("tech_doc_agent.app.services",),
+        filenames=("bootstrap.py", "composition.py", "main.py"),
+    ) == []
 
 
 def test_context_summarizer_is_an_application_policy_not_a_service():

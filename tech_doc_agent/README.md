@@ -154,6 +154,10 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 
 跨层 contract 不放在实现目录：`app/application/retrieval.py` 定义 `SearchQuery`、`SearchResult` 和 `DocumentRetrieverPort`。tools 依赖该 contract，resource factory/eval 直接使用 infrastructure implementation；filter normalization 的所有权只在 retrieval 实现层。`app/services/retrieval/__init__.py` 仅作为已有 package facade re-export 同一个 contract 与 `HybridRetriever`，不保留深层实现或复制 model 定义。
 
+### `app/services`（仅兼容）
+
+该 namespace 不再承载 production implementation，只允许三个 Python 文件：空的根 `__init__.py`、`retrieval/__init__.py` package facade、`user_profile.py` legacy constructor/free-function facade。production app 与 composition roots 禁止 import services；递归 compatibility contract 也禁止 facade 依赖 agents、API、graph、runtime、tools 或组装入口。新增 concrete provider/store/use case 不应放回此目录。
+
 ## 当前状态
 
 这个模块当前只服务于技术文档研读助手场景。所有代码应围绕：
