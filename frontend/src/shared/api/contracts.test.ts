@@ -121,4 +121,32 @@ describe("REST response contracts", () => {
       }]
     })).toThrow("score must be a finite number");
   });
+
+  it("accepts the explicit compacted-history summary item", () => {
+    const history = decodeHistoryResponse({
+      session_id: "session-1",
+      user_id: "user-a",
+      namespace: "docs",
+      learning_target: "RAG",
+      pending_interrupt: false,
+      message_count: 1,
+      messages: [{
+        id: "conversation-summary-digest",
+        role: "system",
+        kind: "conversation_summary",
+        content: "Earlier closed turns.",
+        name: "conversation_summary",
+        tool_call_id: null
+      }]
+    });
+
+    expect(history.messages[0]).toEqual({
+      id: "conversation-summary-digest",
+      role: "system",
+      kind: "conversation_summary",
+      content: "Earlier closed turns.",
+      name: "conversation_summary",
+      tool_call_id: null
+    });
+  });
 });

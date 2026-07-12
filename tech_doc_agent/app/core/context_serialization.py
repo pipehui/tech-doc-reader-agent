@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from hashlib import sha256
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from langchain_core.messages import BaseMessage, message_to_dict
@@ -12,8 +14,8 @@ from tech_doc_agent.app.core.context_metrics import ContextScope, ContextSnapsho
 
 def measure_context(
     *,
-    state: dict[str, Any],
-    prompt_state: dict[str, Any],
+    state: Mapping[str, Any],
+    prompt_state: Mapping[str, Any],
     agent: str,
     scope: ContextScope,
 ) -> ContextSnapshot:
@@ -33,16 +35,29 @@ def estimate_serialized_bytes(value: Any) -> int | None:
     """Estimate UTF-8 JSON bytes without emitting the serialized content."""
 
     try:
-        normalized = _jsonable(value, seen=set(), depth=0)
-        encoded = json.dumps(
-            normalized,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
+        encoded = _canonical_json_bytes(value)
     except Exception:
         return None
     return len(encoded)
+
+
+def serialized_sha256(value: Any) -> str | None:
+    """Hash the same content-safe canonical representation used for sizing."""
+
+    try:
+        return sha256(_canonical_json_bytes(value)).hexdigest()
+    except Exception:
+        return None
+
+
+def _canonical_json_bytes(value: Any) -> bytes:
+    normalized = _jsonable(value, seen=set(), depth=0)
+    return json.dumps(
+        normalized,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
 
 
 def _jsonable(value: Any, *, seen: set[int], depth: int) -> Any:
@@ -81,4 +96,4 @@ def _jsonable(value: Any, *, seen: set[int], depth: int) -> Any:
     return {"type": f"{type(value).__module__}.{type(value).__name__}"}
 
 
-__all__ = ["estimate_serialized_bytes", "measure_context"]
+__all__ = ["estimate_serialized_bytes", "measure_context", "serialized_sha256"]

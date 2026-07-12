@@ -8,7 +8,7 @@ from tech_doc_agent.app.core.execution_budget import ExecutionBudgetExceeded
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.structured_outputs import ResultKind, parse_structured_result
 from tech_doc_agent.app.core.tenant import parse_tenant
-from tech_doc_agent.app.services.message_scope import build_scoped_state
+from tech_doc_agent.app.services.message_scope import build_assistant_state
 
 from .state import State
 from .budgeting import WorkflowBudgetTracker
@@ -26,7 +26,11 @@ def _prepare_assistant_call(
     budget_tracker: WorkflowBudgetTracker | None,
     context_tracker: ContextMetricsTracker | None,
 ):
-    assistant_state = build_scoped_state(state, assistant.name) if scoped_messages else state
+    assistant_state = build_assistant_state(
+        state,
+        assistant.name,
+        scoped_messages=scoped_messages,
+    )
     context_snapshot = (
         context_tracker.snapshot(
             state,

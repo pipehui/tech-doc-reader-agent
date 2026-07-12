@@ -5,6 +5,8 @@ from typing import Any
 from tech_doc_agent.app.graph.builder import build_multi_agentic_graph
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.context_metrics import ContextMetricsTracker
+from tech_doc_agent.app.graph.context_compaction import ContextCompactor
+from tech_doc_agent.app.core.context_compaction import build_context_compaction_policy
 from tech_doc_agent.app.core.execution_budget import build_execution_budget
 from tech_doc_agent.app.graph.nodes import create_user_info_node
 from tech_doc_agent.app.graph.specs import (
@@ -20,6 +22,7 @@ from tech_doc_agent.app.graph.specs import (
 from tech_doc_agent.app.services.assistants.model_factory import build_assistant_model_provider
 from tech_doc_agent.app.services.assistants.prompt_registry import build_prompt_registry
 from tech_doc_agent.app.services.assistants.registry import AssistantRegistry, build_assistant_registry
+from tech_doc_agent.app.services.conversation_summarizer import ExtractiveConversationSummarizer
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
@@ -103,6 +106,10 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
             execution_budget=execution_budget,
         ),
         context_tracker=ContextMetricsTracker(),
+        context_compactor=ContextCompactor(
+            policy=build_context_compaction_policy(resources.settings),
+            summarizer=ExtractiveConversationSummarizer(),
+        ),
     )
 
 

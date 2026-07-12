@@ -89,6 +89,31 @@ describe("session bootstrap use case", () => {
     ]);
   });
 
+  it("keeps a compacted history summary visible as a system message", () => {
+    const messages = historyToMessages({
+      ...HISTORY,
+      message_count: 1,
+      messages: [{
+        id: "conversation-summary-digest",
+        role: "system",
+        kind: "conversation_summary",
+        content: "Earlier closed turns.",
+        name: "conversation_summary"
+      }]
+    }, STATE, {
+      now: () => "2026-07-11T00:00:00.000Z"
+    });
+
+    expect(messages).toEqual([
+      expect.objectContaining({
+        id: "conversation-summary-digest",
+        role: "system",
+        content: "Earlier closed turns.",
+        createdAt: "2026-07-11T00:00:00.000Z"
+      })
+    ]);
+  });
+
   it("hydrates server state but preserves a cached transcript", async () => {
     const target = store(true);
     const controller = new AbortController();

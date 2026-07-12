@@ -30,6 +30,10 @@ def test_settings_parses_typed_values():
         MAX_IDENTICAL_TOOL_REPEATS="4",
         PARSER_MAX_RETRIEVAL_CALLS="9",
         MAX_REFLECTION_ROUNDS="1",
+        CONTEXT_COMPACTION_MAX_MESSAGES="80",
+        CONTEXT_COMPACTION_MAX_SERIALIZED_BYTES="262144",
+        CONTEXT_COMPACTION_KEEP_RECENT_TURNS="5",
+        CONTEXT_SUMMARY_MAX_CHARS="10000",
         TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
         MODEL_PROVIDER_ID="provider-a",
     )
@@ -54,6 +58,10 @@ def test_settings_parses_typed_values():
     assert settings.MAX_IDENTICAL_TOOL_REPEATS == 4
     assert settings.PARSER_MAX_RETRIEVAL_CALLS == 9
     assert settings.MAX_REFLECTION_ROUNDS == 1
+    assert settings.CONTEXT_COMPACTION_MAX_MESSAGES == 80
+    assert settings.CONTEXT_COMPACTION_MAX_SERIALIZED_BYTES == 262144
+    assert settings.CONTEXT_COMPACTION_KEEP_RECENT_TURNS == 5
+    assert settings.CONTEXT_SUMMARY_MAX_CHARS == 10000
     assert settings.ALLOWED_ORIGINS == [
         "http://127.0.0.1:5173",
         "http://localhost:5173",
@@ -86,6 +94,8 @@ def test_settings_rejects_invalid_model_provider_id(provider_id):
         "WORKFLOW_MAX_TOOL_CALLS",
         "WORKFLOW_MAX_TOTAL_TOKENS",
         "WORKFLOW_MAX_ESTIMATED_COST_USD",
+        "CONTEXT_COMPACTION_MAX_MESSAGES",
+        "CONTEXT_COMPACTION_MAX_SERIALIZED_BYTES",
     ],
 )
 def test_settings_rejects_negative_tool_policy_limits(field):
@@ -106,6 +116,18 @@ def test_settings_rejects_negative_tool_policy_limits(field):
     ],
 )
 def test_settings_rejects_invalid_transport_retry_policy(field, value):
+    with pytest.raises(ValueError):
+        Settings(**{field: value})
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("CONTEXT_COMPACTION_KEEP_RECENT_TURNS", 0),
+        ("CONTEXT_SUMMARY_MAX_CHARS", 255),
+    ],
+)
+def test_settings_rejects_invalid_context_compaction_policy(field, value):
     with pytest.raises(ValueError):
         Settings(**{field: value})
 

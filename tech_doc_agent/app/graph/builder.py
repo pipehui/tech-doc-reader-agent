@@ -143,6 +143,8 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         ),
     )
     builder.add_edge(START, "fetch_user_info")
+    builder.add_node("compact_context", spec.context_compactor)
+    builder.add_edge("fetch_user_info", "compact_context")
 
     for subagent in spec.subagents:
         register_subagent(
@@ -187,7 +189,7 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
         "primary_assistant": "primary_assistant",
     }
     builder.add_conditional_edges(
-        "fetch_user_info",
+        "compact_context",
         route_after_user_info,
         fetch_user_info_routes,
     )

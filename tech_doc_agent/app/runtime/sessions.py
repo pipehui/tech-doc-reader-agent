@@ -4,6 +4,10 @@ from typing import Any, Protocol
 
 from langgraph.types import StateSnapshot
 
+from tech_doc_agent.app.core.conversation_summary import (
+    ConversationSummary,
+    read_conversation_summary,
+)
 from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
 from tech_doc_agent.app.runtime.serialization import MessageSerializer
 
@@ -109,6 +113,11 @@ class SessionQueryService:
     ) -> dict[str, Any]:
         read = self._read(session_id, user_id, namespace)
         messages = read.values.get("messages", [])
+        summary = read_conversation_summary(read.values.get("conversation_summary"))
+        serialized_messages = []
+        if summary is not None:
+            serialized_messages.append(_summary_history_message(summary))
+        serialized_messages.extend(self.serializer.serialize(message) for message in messages)
 
         return {
             "session_id": session_id,
@@ -116,8 +125,8 @@ class SessionQueryService:
             "namespace": read.values.get("namespace") or read.tenant.namespace,
             "learning_target": read.values.get("learning_target"),
             "pending_interrupt": read.pending_interrupt,
-            "message_count": len(messages),
-            "messages": [self.serializer.serialize(message) for message in messages],
+            "message_count": len(serialized_messages),
+            "messages": serialized_messages,
         }
 
     def get_history_view(
@@ -130,6 +139,9 @@ class SessionQueryService:
         read = self._read(session_id, user_id, namespace)
         raw_messages = read.values.get("messages", [])
         items = []
+        summary = read_conversation_summary(read.values.get("conversation_summary"))
+        if summary is not None:
+            items.append(_summary_history_view_item(summary))
 
         for message in raw_messages:
             item = self.serializer.to_history_view_item(message)
@@ -159,8 +171,9 @@ class SessionQueryService:
     ) -> dict[str, Any]:
         read = self._read(session_id, user_id, namespace)
         messages = read.values.get("messages", [])
+        summary = read_conversation_summary(read.values.get("conversation_summary"))
         learning_target = read.values.get("learning_target")
-        exists = bool(messages) or bool(learning_target) or read.pending_interrupt
+        exists = bool(messages) or summary is not None or bool(learning_target) or read.pending_interrupt
 
         dialog_stack = read.values.get("dialog_state", [])
         current_agent = (
@@ -178,7 +191,7 @@ class SessionQueryService:
             "exists": exists,
             "pending_interrupt": read.pending_interrupt,
             "learning_target": learning_target,
-            "message_count": len(messages),
+            "message_count": len(messages) + int(summary is not None),
             "current_agent": current_agent,
             "workflow_plan": read.values.get("workflow_plan", []),
             "plan_index": read.values.get("plan_index", 0),
@@ -195,3 +208,26 @@ class SessionQueryService:
         namespace: str | None = None,
     ) -> dict[str, Any]:
         return await asyncio.to_thread(self.get_session_state, session_id, user_id, namespace)
+
+
+def _summary_history_message(summary: ConversationSummary) -> dict[str, Any]:
+    return {
+        "id": f"conversation-summary-{summary.summary_id}",
+        "role": "system",
+        "raw_type": "conversation_summary",
+        "content": summary.content,
+        "name": "conversation_summary",
+        "tool_call_id": None,
+        "tool_calls": [],
+    }
+
+
+def _summary_history_view_item(summary: ConversationSummary) -> dict[str, Any]:
+    return {
+        "id": f"conversation-summary-{summary.summary_id}",
+        "role": "system",
+        "kind": "conversation_summary",
+        "content": summary.content,
+        "name": "conversation_summary",
+        "tool_call_id": None,
+    }

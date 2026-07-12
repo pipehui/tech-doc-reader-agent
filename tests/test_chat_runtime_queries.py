@@ -2,6 +2,10 @@ import asyncio
 from types import SimpleNamespace
 
 from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.core.conversation_summary import (
+    ConversationSummary,
+    SummarySourceRange,
+)
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
 
@@ -206,3 +210,42 @@ def test_sync_and_async_session_state_views_are_equivalent():
             "agents": {"primary": {"invocations": 2}},
         },
     }
+
+
+def test_compacted_history_projects_independent_summary_before_retained_messages():
+    summary = ConversationSummary.create(
+        generator_id="extractive-test-v1",
+        content="Earlier user and assistant discussion.",
+        source_range=SummarySourceRange(
+            start_message_id="old-h",
+            end_message_id="old-a",
+            message_count=2,
+            content_sha256="1" * 64,
+        ),
+    )
+    snapshot = SimpleNamespace(
+        next=(),
+        values={
+            "conversation_summary": summary.to_state(),
+            "messages": [_message("human", "current question", id="current-h")],
+        },
+    )
+    runtime = _runtime_with_snapshot(snapshot)
+
+    history = runtime.get_history("session-1")
+    history_view = runtime.get_history_view("session-1")
+    session_state = runtime.get_session_state("session-1")
+
+    assert history["message_count"] == 2
+    assert history["messages"][0] == {
+        "id": f"conversation-summary-{summary.summary_id}",
+        "role": "system",
+        "raw_type": "conversation_summary",
+        "content": "Earlier user and assistant discussion.",
+        "name": "conversation_summary",
+        "tool_call_id": None,
+        "tool_calls": [],
+    }
+    assert history_view["messages"][0]["kind"] == "conversation_summary"
+    assert history_view["messages"][1]["content"] == "current question"
+    assert session_state["message_count"] == 2

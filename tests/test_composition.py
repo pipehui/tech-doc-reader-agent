@@ -17,6 +17,10 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
         WORKFLOW_MAX_TOOL_CALLS=8,
         WORKFLOW_MAX_TOTAL_TOKENS=900,
         WORKFLOW_MAX_ESTIMATED_COST_USD="1.5",
+        CONTEXT_COMPACTION_MAX_MESSAGES=50,
+        CONTEXT_COMPACTION_MAX_SERIALIZED_BYTES=100_000,
+        CONTEXT_COMPACTION_KEEP_RECENT_TURNS=3,
+        CONTEXT_SUMMARY_MAX_CHARS=8_000,
     )
     settings_b = Settings(DATA_PATH=str(tmp_path / "b"), SEED_DOC_STORE_ON_EMPTY=False)
     resources_a = AppResources.create(settings_a)
@@ -41,6 +45,11 @@ def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):
         spec_a.execution_policy.budget.workflow_max_estimated_cost_usd
     ) == "1.5"
     assert spec_a.budget_tracker.execution_budget is spec_a.execution_policy.budget
+    assert spec_a.context_compactor.policy.max_messages == 50
+    assert spec_a.context_compactor.policy.max_serialized_bytes == 100_000
+    assert spec_a.context_compactor.policy.keep_recent_turns == 3
+    assert spec_a.context_compactor.policy.summary_max_chars == 8_000
+    assert spec_b.context_compactor.policy.enabled is False
     assert spec_b.execution_policy.tools.max_identical_repeats == 2
     assert spec_b.execution_policy.tools.parser_max_retrieval_calls == 6
     assert spec_b.execution_policy.reflection.max_rounds == 1

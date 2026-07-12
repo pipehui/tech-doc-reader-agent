@@ -4,8 +4,9 @@ import json
 import re
 from typing import Any
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
+from tech_doc_agent.app.core.conversation_summary import read_conversation_summary
 from tech_doc_agent.app.core.state import State
 
 
@@ -24,13 +25,41 @@ _OPTION_ANSWER_RE = re.compile(
 )
 
 
-def build_scoped_state(state: State, agent_name: str | None) -> dict:
+def build_scoped_state(state: State, agent_name: str | None) -> State | dict[str, Any]:
     if agent_name not in SCOPED_AGENT_NAMES:
         return state
 
     return {
         **state,
         "messages": build_scoped_messages(state, agent_name),
+    }
+
+
+def build_assistant_state(
+    state: State,
+    agent_name: str | None,
+    *,
+    scoped_messages: bool,
+) -> State | dict[str, Any]:
+    if scoped_messages:
+        return build_scoped_state(state, agent_name)
+
+    summary = read_conversation_summary(state.get("conversation_summary"))
+    if summary is None:
+        return state
+    summary_message = SystemMessage(
+        id=f"conversation-summary-{summary.summary_id}",
+        name="conversation_summary",
+        content=(
+            "The following is a bounded summary of closed earlier conversation turns. "
+            "Raw tool payloads were intentionally excluded. Treat newer raw messages as "
+            "authoritative if they conflict with this summary.\n\n"
+            f"{summary.content}"
+        ),
+    )
+    return {
+        **state,
+        "messages": [summary_message, *state.get("messages", [])],
     }
 
 

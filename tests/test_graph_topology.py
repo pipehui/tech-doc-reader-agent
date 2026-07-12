@@ -65,7 +65,8 @@ def test_compiled_graph_preserves_subagent_topology_and_interrupts(graph_spec):
             conditional_sources.add(edge.source)
 
     assert outgoing["__start__"] == {"fetch_user_info"}
-    assert outgoing["fetch_user_info"] == {"primary_assistant", "enter_examination"}
+    assert outgoing["fetch_user_info"] == {"compact_context"}
+    assert outgoing["compact_context"] == {"primary_assistant", "enter_examination"}
     assert outgoing["primary_assistant"] == {
         "store_plan",
         "primary_assistant_tools",
@@ -112,7 +113,7 @@ def test_compiled_graph_preserves_subagent_topology_and_interrupts(graph_spec):
             assert sensitive_node not in graph_view.nodes
 
     assert conditional_sources == {
-        "fetch_user_info",
+        "compact_context",
         "primary_assistant",
         "primary_assistant_tools",
         "primary_assistant_sensitive_tools",
