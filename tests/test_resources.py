@@ -15,7 +15,7 @@ def test_app_resources_seeds_stores_in_configured_data_path(tmp_path, monkeypatc
         return [[float(index + 1), 0.0, 0.0] for index, _ in enumerate(content)]
 
     monkeypatch.setattr(
-        "tech_doc_agent.app.services.vectordb.faiss_store.generate_embedding",
+        "tech_doc_agent.app.infrastructure.retrieval.faiss_store.generate_embedding",
         fake_generate_embedding,
     )
     settings = Settings(

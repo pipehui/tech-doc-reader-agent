@@ -22,8 +22,8 @@ from tech_doc_agent.app.infrastructure.persistence.user_profile_repository impor
     JsonUserProfileRepository,
 )
 from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
+from tech_doc_agent.app.infrastructure.retrieval.faiss_store import FaissStore
 from tech_doc_agent.app.infrastructure.model_price_table import load_model_price_table
-from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
 
 

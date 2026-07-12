@@ -11,7 +11,7 @@ import pytest
 
 from tech_doc_agent.app.core.errors import ApplicationError, ValidationError
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
+from tech_doc_agent.app.infrastructure.retrieval.faiss_store import FaissStore
 
 
 DOCUMENTS = [
@@ -36,7 +36,7 @@ def fake_embeddings(monkeypatch):
         return [[float(index + 1), float(len(item)), 0.0] for index, item in enumerate(content)]
 
     monkeypatch.setattr(
-        "tech_doc_agent.app.services.vectordb.faiss_store.generate_embedding",
+        "tech_doc_agent.app.infrastructure.retrieval.faiss_store.generate_embedding",
         generate,
     )
 
@@ -161,7 +161,7 @@ def test_build_failure_preserves_active_in_memory_snapshot(tmp_path, monkeypatch
         raise RuntimeError("injected embedding failure")
 
     monkeypatch.setattr(
-        "tech_doc_agent.app.services.vectordb.faiss_store.generate_embedding",
+        "tech_doc_agent.app.infrastructure.retrieval.faiss_store.generate_embedding",
         fail_embedding,
     )
 

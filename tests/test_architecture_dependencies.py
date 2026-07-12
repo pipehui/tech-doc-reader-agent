@@ -455,6 +455,15 @@ def test_retrieval_implementation_is_infrastructure_with_a_package_facade_only()
     assert {path.name for path in facade_dir.glob("*.py")} == {"__init__.py"}
 
 
+def test_document_index_adapters_share_the_retrieval_infrastructure_boundary():
+    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+
+    assert "infrastructure.retrieval.faiss_store import FaissStore" in resource_source
+    assert not (APP_DIR / "services" / "embedding.py").exists()
+    assert not (APP_DIR / "services" / "vectordb" / "faiss_store.py").exists()
+    assert not (APP_DIR / "services" / "vectordb" / "chunkenizer.py").exists()
+
+
 def test_ambiguous_tenant_fallback_api_is_removed():
     violations = []
     for path in sorted(APP_DIR.rglob("*.py")):

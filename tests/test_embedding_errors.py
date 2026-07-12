@@ -5,7 +5,7 @@ import pytest
 from tech_doc_agent.app.core.errors import RateLimited, ValidationError
 from tech_doc_agent.app.core.retry_usage import capture_retry_usage
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services import embedding
+from tech_doc_agent.app.infrastructure.retrieval import embedding
 
 
 class RateLimitError(RuntimeError):

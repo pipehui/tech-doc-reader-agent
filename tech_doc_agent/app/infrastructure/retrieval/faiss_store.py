@@ -13,12 +13,13 @@ from tech_doc_agent.app.core.errors import (
 )
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.infrastructure.persistence.faiss_snapshot import FaissSnapshotRepository
-from tech_doc_agent.app.services.embedding import generate_embedding
-from tech_doc_agent.app.infrastructure.retrieval.normalization import (
+
+from .chunking import recursive_character_splitting
+from .embedding import generate_embedding
+from .normalization import (
     normalize_chunk_metadata,
     normalize_document,
 )
-from tech_doc_agent.app.services.vectordb.chunkenizer import recursive_character_splitting
 
 
 class FaissStore:

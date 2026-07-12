@@ -124,6 +124,8 @@ Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph stat
 
 Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`SearchQuery`、`SearchResult` 与 `DocumentRetrieverPort`。`infrastructure/retrieval/models.py` 只承载 ranker/store 实现所需的内部 candidate/port；tools 只构造 application query，不 import taxonomy、filter 或 HybridRetriever 实现。`services/retrieval` 只保留 package-level compatibility facade，具体 resource/eval 组装不经过该 facade。
 
+文档索引的 `FaissStore`、chunking 与 embedding provider adapter 也位于 `infrastructure/retrieval`。FaissStore 通过同包相对 import 组合三者，并委托 `infrastructure/persistence/FaissSnapshotRepository` 发布 generation；resource factory 与 metadata migration script 不再引用 `services.vectordb`。
+
 Agent role 的执行装配位于 `agents/`：prompt 作为同包资源由 `PromptRegistry` 校验，`AssistantExecutionIdentity` 和 model route identity 与 role 定义共同维护。该包可消费 graph command 和已绑定的 `ToolBundle`，但不能反向读取 services、runtime、API、infrastructure 或 composition root。
 
 LearningStore 与 MemoryStore 位于 `infrastructure/persistence`，共享 application `LearningStateUnitOfWork` 和 versioned snapshot repository。它们提供持久化查询/legacy JSON view，不再与 FAISS、chunking、embedding 或 web provider 一起归入 `services/vectordb`。
