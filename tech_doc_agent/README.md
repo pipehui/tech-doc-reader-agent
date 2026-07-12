@@ -41,6 +41,7 @@ tech_doc_agent
 │   │   ├── specs.py
 │   │   └── tool_policy.py
 │   ├── infrastructure
+│   │   ├── resources.py
 │   │   ├── persistence
 │   │   │   ├── approval_repository.py
 │   │   │   ├── atomic_json.py
@@ -74,9 +75,7 @@ tech_doc_agent
 │   ├── main.py
 │   └── services
 │       ├── retrieval
-│       ├── vectordb
-│       ├── embedding.py
-│       └── resources.py
+│       └── user_profile.py
 └── data
 ```
 
@@ -100,7 +99,7 @@ tech_doc_agent
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 
-`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式组装 settings、Redis approval repository 与 `ChatRuntime`。`composition.py` 再把 runtime resources 组合为 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；`learning_store.py` 与 `memory_store.py` 是共享 snapshot UoW 的查询/兼容 adapter。runtime domain 不依赖这些具体实现。
+`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式选择 `infrastructure/resources.py` 的 concrete resource factory、Redis approval repository 与 `ChatRuntime`。`composition.py` 再把 runtime resources 组合为 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；`learning_store.py` 与 `memory_store.py` 是共享 snapshot UoW 的查询/兼容 adapter。runtime domain 不依赖这些具体实现。
 
 ### `app/runtime`
 

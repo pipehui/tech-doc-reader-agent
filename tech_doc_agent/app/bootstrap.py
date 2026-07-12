@@ -5,10 +5,10 @@ from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.infrastructure.persistence.approval_repository import RedisApprovalRepository
+from tech_doc_agent.app.infrastructure.resources import AppResources
 from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
 from tech_doc_agent.app.agents.identity import build_runtime_execution_identity
-from tech_doc_agent.app.services.resources import AppResources
 
 
 def build_runtime_lifecycle(settings: Settings) -> RuntimeLifecycle:

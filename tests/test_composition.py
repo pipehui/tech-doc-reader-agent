@@ -2,7 +2,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from tech_doc_agent.app.composition import build_application_graph, build_graph_spec
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.resources import AppResources
+from tech_doc_agent.app.infrastructure.resources import AppResources
 
 
 def test_production_graph_composition_is_offline_and_resource_scoped(tmp_path):

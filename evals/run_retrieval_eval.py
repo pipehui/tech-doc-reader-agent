@@ -27,7 +27,7 @@ from tech_doc_agent.app.application.retrieval import (
     SearchResult,
 )
 from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
-from tech_doc_agent.app.services.resources import RetrievalResources
+from tech_doc_agent.app.infrastructure.resources import RetrievalResources
 
 
 DEFAULT_CASES = Path("evals/retrieval_cases.json")

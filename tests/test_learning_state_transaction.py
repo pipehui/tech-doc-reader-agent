@@ -18,7 +18,7 @@ from tech_doc_agent.app.core.tenant import TenantContext
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
     LearningStateSnapshotRepository,
 )
-from tech_doc_agent.app.services.resources import AppResources
+from tech_doc_agent.app.infrastructure.resources import AppResources
 from tech_doc_agent.app.infrastructure.persistence.learning_store import LearningStore
 from tech_doc_agent.app.infrastructure.persistence.memory_store import MemoryStore
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle

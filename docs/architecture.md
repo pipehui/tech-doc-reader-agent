@@ -114,7 +114,7 @@ replace-in-place 状态外，不启用自动数据 pruning。
 | `tools` | agents、API、graph、runtime、services、infrastructure、组装入口 | `application` ports/models、`core`、tool 内部 |
 | `agents` | API、runtime、services、infrastructure、组装入口 | `core`、graph commands、tools、application contract、agent 内部 |
 
-`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool、agent 和 graph 只能在这些边界完成组装。role 定义、prompt、model provider 与 registry 已从混合的 `services/assistants` 迁到独立 `agents` 包，并由双向 contract 阻止重新耦合。`services` 当前只剩 concrete resource container 与少量 compatibility facade；resource wiring 归位后即可为该包建立删除计划，而不是声明虚假的长期层级。
+`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool、agent 和 graph 只能在这些边界完成组装。role 定义、prompt、model provider 与 registry 已从混合的 `services/assistants` 迁到独立 `agents` 包，并由双向 contract 阻止重新耦合。`services` 当前只剩 user-profile 与 retrieval compatibility facade，不再承载 concrete implementation；后续按仓外兼容审计决定 deprecation/delete，而不是声明虚假的长期层级。
 
 `runtime/chat_runtime.py` 是 API/CLI 共用 facade，只依赖 application/core/runtime ports。生产所需的 Redis approval repository、RedisSaver、resource factory、graph builder 与 prompt/model identity builder 由 `bootstrap.py` 显式注入；runtime 模块本身没有具体 adapter fallback。
 
@@ -127,6 +127,8 @@ Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`Searc
 文档索引的 `FaissStore`、chunking 与 embedding provider adapter 也位于 `infrastructure/retrieval`。FaissStore 通过同包相对 import 组合三者，并委托 `infrastructure/persistence/FaissSnapshotRepository` 发布 generation；resource factory 与 metadata migration script 不再引用 `services.vectordb`。
 
 WebSearchBackend 位于 `infrastructure/retrieval/web_search.py`：Tavily、DuckDuckGo fallback、daily usage cache 与 provider retry telemetry 由同一 concrete adapter 管理。`services/vectordb` 已无 tracked code；tools 仍只依赖 `WebSearchPort`，health payload 的 `web_search_backend` 字段保持外部兼容。
+
+`infrastructure/resources.py` 是 concrete resource aggregate：构造 Faiss/Hybrid/Web、Learning/Memory/Profile 与 model price table，并执行受 settings 控制的启动加载/seed。`bootstrap.py` 把 `AppResources.create` 注入 `RuntimeLifecycle`；runtime 只知道 `ResourceFactory` callable，composition 只消费已创建的 container。resource implementation 本身由 infrastructure contract 禁止依赖 services、runtime、graph、API、tools 或 agents。
 
 Agent role 的执行装配位于 `agents/`：prompt 作为同包资源由 `PromptRegistry` 校验，`AssistantExecutionIdentity` 和 model route identity 与 role 定义共同维护。该包可消费 graph command 和已绑定的 `ToolBundle`，但不能反向读取 services、runtime、API、infrastructure 或 composition root。
 

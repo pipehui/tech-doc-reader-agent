@@ -10,6 +10,7 @@ RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
 AGENTS_DIR = APP_DIR / "agents"
 RETRIEVAL_DIR = APP_DIR / "infrastructure" / "retrieval"
+RESOURCES_PATH = APP_DIR / "infrastructure" / "resources.py"
 FORBIDDEN_CORE_DEPENDENCIES = (
     "tech_doc_agent.app.agents",
     "tech_doc_agent.app.api",
@@ -198,7 +199,7 @@ def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
     service_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")
     tool_source = (TOOLS_DIR / "profiles.py").read_text(encoding="utf-8")
     api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
-    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+    resource_source = RESOURCES_PATH.read_text(encoding="utf-8")
 
     assert "class UserProfile:" in model_source
     assert "class UserProfileUpdate:" in model_source
@@ -438,7 +439,7 @@ def test_global_app_resource_locator_symbols_are_removed():
 
 
 def test_learning_state_stores_are_persistence_adapters_not_vectordb_backends():
-    source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+    source = RESOURCES_PATH.read_text(encoding="utf-8")
 
     assert "infrastructure.persistence.learning_store import LearningStore" in source
     assert "infrastructure.persistence.memory_store import MemoryStore" in source
@@ -447,7 +448,7 @@ def test_learning_state_stores_are_persistence_adapters_not_vectordb_backends():
 
 
 def test_retrieval_implementation_is_infrastructure_with_a_package_facade_only():
-    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+    resource_source = RESOURCES_PATH.read_text(encoding="utf-8")
     facade_dir = APP_DIR / "services" / "retrieval"
 
     assert "infrastructure.retrieval import HybridRetriever" in resource_source
@@ -456,7 +457,7 @@ def test_retrieval_implementation_is_infrastructure_with_a_package_facade_only()
 
 
 def test_document_index_adapters_share_the_retrieval_infrastructure_boundary():
-    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+    resource_source = RESOURCES_PATH.read_text(encoding="utf-8")
 
     assert "infrastructure.retrieval.faiss_store import FaissStore" in resource_source
     assert not (APP_DIR / "services" / "embedding.py").exists()
@@ -465,10 +466,17 @@ def test_document_index_adapters_share_the_retrieval_infrastructure_boundary():
 
 
 def test_web_search_provider_is_retrieval_infrastructure_not_vectordb():
-    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+    resource_source = RESOURCES_PATH.read_text(encoding="utf-8")
 
     assert "infrastructure.retrieval.web_search import WebSearchBackend" in resource_source
     assert not (APP_DIR / "services" / "vectordb" / "web_search_backend.py").exists()
+
+
+def test_concrete_resource_container_is_infrastructure_not_a_service():
+    bootstrap_source = (APP_DIR / "bootstrap.py").read_text(encoding="utf-8")
+
+    assert "infrastructure.resources import AppResources" in bootstrap_source
+    assert not (APP_DIR / "services" / "resources.py").exists()
 
 
 def test_ambiguous_tenant_fallback_api_is_removed():

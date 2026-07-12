@@ -4,7 +4,7 @@ from tech_doc_agent.app.application.learning_state import UpdateLearningStateRes
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.resources import AppResources, RetrievalResources
+from tech_doc_agent.app.infrastructure.resources import AppResources, RetrievalResources
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
@@ -75,7 +75,7 @@ def test_retrieval_resources_do_not_initialize_unrelated_learning_state(
         raise AssertionError("retrieval composition must not initialize learning state")
 
     monkeypatch.setattr(
-        "tech_doc_agent.app.services.resources._initialize_learning_state",
+        "tech_doc_agent.app.infrastructure.resources._initialize_learning_state",
         fail_learning_state_initialization,
     )
 
