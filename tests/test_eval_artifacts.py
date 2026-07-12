@@ -78,6 +78,7 @@ def test_eval_runners_delegate_artifact_safety_to_shared_module():
     for path in (
         Path("evals/run_eval.py"),
         Path("evals/run_retrieval_eval.py"),
+        Path("evals/run_context_compaction_eval.py"),
         Path("scripts/benchmark_latency.py"),
         Path("scripts/seed_doc_store.py"),
     ):
@@ -86,6 +87,9 @@ def test_eval_runners_delegate_artifact_safety_to_shared_module():
         assert "def write_jsonl(" not in source
     assert "rows = redact_artifact_rows(rows)" in Path("evals/run_eval.py").read_text(encoding="utf-8")
     assert "rows = redact_artifact_rows(rows)" in Path("evals/run_retrieval_eval.py").read_text(encoding="utf-8")
+    assert "rows = redact_artifact_rows(rows)" in Path(
+        "evals/run_context_compaction_eval.py"
+    ).read_text(encoding="utf-8")
     assert "write_jsonl(args.output, results)" in Path("scripts/benchmark_latency.py").read_text(encoding="utf-8")
     assert "safe_row = redact_artifact_rows([row])[0]" in Path("scripts/seed_doc_store.py").read_text(
         encoding="utf-8"

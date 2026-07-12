@@ -84,6 +84,49 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --m
 |---|---:|---:|---:|---:|---:|---:|
 | Hybrid + metadata filter | 1.00 | 1.00 | 1.00 | 1.00 | 1.145s | 2.833s |
 
+## Context Compaction Eval
+
+长会话上下文压缩先使用完全离线的 deterministic recall proxy，不启动后端、不调用模型：
+
+```bash
+python -m evals.run_context_compaction_eval --iterations 10
+```
+
+默认比较策略为：
+
+- `max_messages=12`；
+- `keep_recent_turns=3`；
+- `summary_max_chars=12000`；
+- byte threshold 关闭，只用 message threshold 触发。
+
+runner 会对同一 synthetic 长会话分别构建 compaction off/on 状态，并比较：
+
+- marker recall proxy 是否保持一致；
+- 完整 checkpoint 与 primary prompt 的估算 UTF-8 JSON bytes；
+- LangChain `count_tokens_approximately` 的输入 token 代理；
+- 多次迭代的 context compaction 本地执行耗时；
+- summary source ranges、covered messages 与 compaction 次数。
+
+当前离线 baseline（2026-07-12，6 cases，10 iterations）：
+
+| Cases | Done | Baseline Correct | Compacted Correct | Answer Consistency | Checkpoint Bytes Reduction | Prompt Bytes Reduction | Approx. Input Token Reduction | Compaction p50 | Compaction p95 |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6 | 6 | 1.00 | 0.83 | 0.83 | 62.8% | 69.3% | 40.1% | 4.107ms | 13.555ms |
+
+各类结果：
+
+| Category | Cases | Compact Correct | Consistent | Checkpoint Reduction | Approx. Token Reduction |
+|---|---:|---:|---:|---:|---:|
+| closed text recall | 2 | 1.00 | 1.00 | 51.3% | 5.8% |
+| recency precedence | 1 | 1.00 | 1.00 | 45.6% | 4.7% |
+| raw tool dependency | 1 | 0.00 | 0.00 | 76.0% | 75.4% |
+| tool result restatement | 1 | 1.00 | 1.00 | 76.0% | 75.4% |
+| bounded long summary | 1 | 1.00 | 1.00 | 76.3% | 73.5% |
+
+`raw tool dependency` 是刻意保留的反例：关键 marker 只存在于旧 ToolMessage content 时，安全 extractive summarizer 不复制 raw payload，因此压缩后的 recall proxy 返回 unknown；同一 tool 事实如果由 assistant 在自然语言结果中重新表述，则可以保留。
+
+这组结果支持“继续默认关闭 compaction”的决定。它不能替代 provider-backed 评测：`count_tokens_approximately` 不是模型 usage，marker recall 也不是真实模型回答。启用非零生产默认值前，仍需在相同模型、prompt、数据与会话集上运行 off/on live 对照，采集 `ContextMetrics` 的 provider input tokens、真实回答一致性和 request latency。
+
 ## Concurrency Smoke
 
 并发压测复用 `evals/cases.json` 中 enabled 的 single-turn baseline，并在遇到写入审批时自动拒绝，以保证链路能继续完成：

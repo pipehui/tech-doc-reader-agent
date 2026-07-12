@@ -57,6 +57,7 @@
 | 2026-07-12 | Phase 4：ExecutionBudget、request deadline、resume recheck 与确定性 partial termination | 强制预算完成，provider-level retry 明细继续 | [2026-07-12-execution-budget-enforcement.md](2026-07-12-execution-budget-enforcement.md) |
 | 2026-07-12 | Phase 4：ContextMetrics、checkpoint/prompt bytes 与 provider input-token 分桶 | 观测基础完成，安全 compaction 继续 | [2026-07-12-context-metrics.md](2026-07-12-context-metrics.md) |
 | 2026-07-12 | Phase 4：闭合历史压缩、版本化 ConversationSummary 与历史投影 | 机制完成且默认关闭，长会话 eval 后再决定启用 | [2026-07-12-safe-context-compaction.md](2026-07-12-safe-context-compaction.md) |
+| 2026-07-12 | Phase 4：长会话 compaction off/on 离线 recall/size/token-proxy 评估 | 离线基线完成，发现 raw-tool-only 信息损失，继续默认关闭 | [2026-07-12-context-compaction-eval.md](2026-07-12-context-compaction-eval.md) |
 
 ## 本地任务单策略
 

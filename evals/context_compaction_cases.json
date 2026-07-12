@@ -1,0 +1,82 @@
+[
+  {
+    "id": "early_user_fact",
+    "category": "closed_text_recall",
+    "turn_count": 30,
+    "filler_chars": 48,
+    "tool_every": 0,
+    "tool_payload_chars": 0,
+    "markers": [
+      {"value": "USER-ORBIT-731", "turn": 1, "role": "human"}
+    ],
+    "expected_marker": "USER-ORBIT-731",
+    "expected_compacted_marker": "USER-ORBIT-731"
+  },
+  {
+    "id": "early_assistant_fact",
+    "category": "closed_text_recall",
+    "turn_count": 30,
+    "filler_chars": 48,
+    "tool_every": 0,
+    "tool_payload_chars": 0,
+    "markers": [
+      {"value": "ASSISTANT-LATTICE-204", "turn": 2, "role": "assistant"}
+    ],
+    "expected_marker": "ASSISTANT-LATTICE-204",
+    "expected_compacted_marker": "ASSISTANT-LATTICE-204"
+  },
+  {
+    "id": "newer_correction_wins",
+    "category": "recency_precedence",
+    "turn_count": 32,
+    "filler_chars": 64,
+    "tool_every": 0,
+    "tool_payload_chars": 0,
+    "markers": [
+      {"value": "OLD-CACHE-111", "turn": 1, "role": "assistant"},
+      {"value": "NEW-CACHE-902", "turn": 28, "role": "human"}
+    ],
+    "expected_marker": "NEW-CACHE-902",
+    "expected_compacted_marker": "NEW-CACHE-902"
+  },
+  {
+    "id": "tool_only_fact_is_not_copied",
+    "category": "raw_tool_dependency",
+    "turn_count": 30,
+    "filler_chars": 48,
+    "tool_every": 4,
+    "tool_payload_chars": 2048,
+    "markers": [
+      {"value": "TOOL-ONLY-DELTA-488", "turn": 2, "role": "tool"}
+    ],
+    "expected_marker": "TOOL-ONLY-DELTA-488",
+    "expected_compacted_marker": null
+  },
+  {
+    "id": "tool_fact_restated_by_assistant",
+    "category": "tool_result_restatement",
+    "turn_count": 30,
+    "filler_chars": 48,
+    "tool_every": 4,
+    "tool_payload_chars": 2048,
+    "markers": [
+      {"value": "RESTATED-SIGMA-552", "turn": 2, "role": "tool"},
+      {"value": "RESTATED-SIGMA-552", "turn": 2, "role": "assistant"}
+    ],
+    "expected_marker": "RESTATED-SIGMA-552",
+    "expected_compacted_marker": "RESTATED-SIGMA-552"
+  },
+  {
+    "id": "bounded_long_summary",
+    "category": "summary_bound",
+    "turn_count": 80,
+    "filler_chars": 180,
+    "tool_every": 0,
+    "tool_payload_chars": 0,
+    "markers": [
+      {"value": "LONG-HORIZON-ALPHA-007", "turn": 0, "role": "human"}
+    ],
+    "expected_marker": "LONG-HORIZON-ALPHA-007",
+    "expected_compacted_marker": "LONG-HORIZON-ALPHA-007"
+  }
+]
