@@ -14,6 +14,8 @@
 
 ## 核心目录
 
+以下列出当前稳定边界和主要所有者；包内 `__init__.py` 与纯辅助文件不作为独立架构入口。
+
 ```text
 tech_doc_agent
 ├── app
@@ -23,10 +25,13 @@ tech_doc_agent
 │   │   │   └── chat.py
 │   │   └── sse
 │   │       ├── agent_metadata.py
+│   │       ├── context.py
 │   │       ├── contract.py
 │   │       ├── encoder.py
+│   │       ├── events.py
 │   │       ├── message_translator.py
 │   │       ├── parts.py
+│   │       ├── payloads.py
 │   │       ├── streaming.py
 │   │       └── update_translator.py
 │   ├── agents
@@ -53,19 +58,32 @@ tech_doc_agent
 │   ├── core
 │   ├── graph
 │   │   ├── assistant_execution.py
+│   │   ├── budget_termination.py
+│   │   ├── budgeting.py
 │   │   ├── builder.py
 │   │   ├── commands.py
+│   │   ├── context_compaction.py
+│   │   ├── context_metrics.py
+│   │   ├── message_scope.py
 │   │   ├── nodes.py
+│   │   ├── provider_retries.py
+│   │   ├── reflection.py
 │   │   ├── routing.py
 │   │   ├── specs.py
+│   │   ├── tool_nodes.py
 │   │   └── tool_policy.py
 │   ├── infrastructure
 │   │   ├── resources.py
 │   │   ├── persistence
 │   │   │   ├── approval_repository.py
 │   │   │   ├── atomic_json.py
+│   │   │   ├── faiss_snapshot.py
+│   │   │   ├── generations.py
+│   │   │   ├── learning_state_repository.py
 │   │   │   ├── learning_store.py
-│   │   │   └── memory_store.py
+│   │   │   ├── legacy_migration.py
+│   │   │   ├── memory_store.py
+│   │   │   └── user_profile_repository.py
 │   │   └── retrieval
 │   │       ├── chunking.py
 │   │       ├── embedding.py
@@ -111,7 +129,7 @@ tech_doc_agent
 - safe / sensitive tool 路由
 - interrupt 节点
 
-`builder.py` 只消费注入的 `GraphSpec` 并负责图组装，`assistant_execution.py` 统一 assistant sync/async invocation、budget/context 记录与 reflection completion，`routing.py` 负责条件路由，`nodes.py` 只负责 user-info/entry/exit/finish/failure/plan lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。它们不创建真实模型、工具或存储。
+`builder.py` 只消费注入的 `GraphSpec` 并负责图组装，`assistant_execution.py` 统一 assistant sync/async invocation、budget/context 记录与 reflection completion，`routing.py` 负责条件路由，`nodes.py` 只负责 user-info/entry/exit/finish/failure/plan lifecycle node。`budgeting.py` / `budget_termination.py` 拥有累计 usage 与硬预算收束，`context_metrics.py` / `context_compaction.py` 拥有上下文测量与闭合历史压缩，`provider_retries.py` 归集 embedding/web transport operation，`reflection.py` 与 `tool_nodes.py` 负责有限参数修复和工具执行状态机，`message_scope.py` 形成各 Agent 的受控 task view。`tool_policy.py` 只负责重复调用和 parser 检索预算。它们都不创建真实模型、工具或存储。
 
 ### `app/application`
 

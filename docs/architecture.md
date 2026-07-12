@@ -76,19 +76,16 @@ Tech Doc Reader Agent 是一个围绕“技术概念学习”设计的多智能�
 
 ## State And Data
 
-LangGraph state 保存：
+LangGraph `State` 的持久化字段按职责分为：
 
-- `messages`
-- `user_id`
-- `namespace`
-- `user_info`
-- `dialog_state`
-- `learning_target`
-- `workflow_plan`
-- `plan_index`
-- `parser_result`
-- `relation_result`
-- `examination_context`
+- 会话与路由：`messages`、`user_id`、`namespace`、`user_info`、`dialog_state`、`learning_target`、`workflow_plan`、`plan_index`。
+- Agent 交付：`parser_result`、`relation_result`、`examination_context`。
+- 有限修复状态：`reflection_rounds_used`、`reflection_status`、`reflection_tool`、`reflection_error_code`、`reflection_terminal_reason`。
+- 执行预算：`budget_usage`、`budget_usage_delta`、`budget_status`、`budget_termination`。
+- 上下文观测与压缩：`context_metrics`、`context_metrics_delta`、`conversation_summary`。
+- Provider transport 重试：`provider_retry_usage`、`provider_retry_usage_delta`。
+
+`*_delta` 只描述当前节点新产生的变化，累计事实分别保存在 `budget_usage`、`context_metrics` 和 `provider_retry_usage`；SSE translator 读取 delta 与累计值生成对应 update event，前端不自行重算账本。
 
 运行时数据层：
 
@@ -112,9 +109,9 @@ replace-in-place 状态外，不启用自动数据 pruning。
 | `core` | 其他全部 app layer | `core` 内部与第三方基础库 |
 | `application` | agents、API、graph、runtime、services、tools、infrastructure、组装入口 | `core` |
 | `runtime` | agents、API、graph、services、tools、infrastructure、组装入口 | `application`、`core` |
-| `graph` | agents、API、runtime、services、tools、infrastructure、组装入口 | `graph`、`core` |
+| `graph` | agents、API、runtime、services、tools、infrastructure、组装入口 | application contract、`core`、`graph` 内部 |
 | `infrastructure` | agents、API、graph、runtime、services、tools、组装入口 | `application`、`core` |
-| `api` | agents、graph、services、persistence/retrieval backend、tools | runtime facade、core、API contract |
+| `api` | agents、graph、services、persistence/retrieval backend、tools | application contract/use case、runtime facade、core、API 内部 contract |
 | `tools` | agents、API、graph、runtime、services、infrastructure、组装入口 | `application` ports/models、`core`、tool 内部 |
 | `agents` | API、runtime、services、infrastructure、组装入口 | `core`、graph commands、tools、application contract、agent 内部 |
 | `services` compatibility | agents、API、bootstrap/composition、graph、main、runtime、tools | application/core/infrastructure 的兼容委托；仅三个受控 facade 文件 |

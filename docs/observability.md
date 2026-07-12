@@ -40,9 +40,14 @@ TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
 - `token`
 - `agent_message`
 - `structured_result`
+- `usage_update`
+- `budget_started`
+- `budget_terminated`
+- `context_metrics_update`
 - `provider_retry_update`
 - `tool_call`
 - `tool_result`
+- `guardrail_blocked`
 - `interrupt_required`
 - `no_pending_interrupt`
 - `done`
@@ -50,7 +55,11 @@ TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
 
 SSE 事件既用于 UI 展示，也用于 eval runner 和 concurrency benchmark。
 
+`usage_update` 与 `budget_started` / `budget_terminated` 分别记录 LLM/tool 累计用量和硬预算生命周期。`context_metrics_update` 记录 checkpoint、受控 prompt 和 provider input-token 等上下文测量。三类事件都同时携带当前节点 delta 和/或累计版本化对象；`session_snapshot` 与 session state API 提供最近一次持久化累计值，消费者不应靠重放全部历史事件重建事实。
+
 `provider_retry_update` 把 embedding/web transport retry 从瞬时 `retry.final` 日志提升为 checkpoint、REST、SSE 和 online eval 共用的版本化事实。一次逻辑 operation 与真实 provider attempts 分开统计；成功但经过 retry 的 operation 计入 `recovered_operations`，重试耗尽计入 `exhausted_operations`。该账本不保存原始异常文本，也不与 LLM/tool 执行预算混算。
+
+`tool_result` 和 terminal `error` 使用显式 `status`、稳定 `code`、`retryable`、`dependency`、`cause_type` 与 `safe_message`。原始异常文本不会进入 SSE payload；前端也不再根据工具自然语言内容猜测成功或失败。
 
 ## Langfuse
 

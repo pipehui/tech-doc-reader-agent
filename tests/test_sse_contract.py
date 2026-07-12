@@ -6,15 +6,18 @@ from tech_doc_agent.app.api.sse.contract import (
     SSE_EVENT_NAMES,
     TOOL_RESULT_STATUSES,
 )
+from tech_doc_agent.app.api.sse.payloads import SSE_PAYLOAD_MODELS
 
 
 FRONTEND_CONTRACT = Path(__file__).resolve().parents[1] / "frontend" / "src" / "sseContract.ts"
+API_DOCUMENTATION = Path(__file__).resolve().parents[1] / "docs" / "api.md"
 FRONTEND_STREAMING_DIR = FRONTEND_CONTRACT.parent / "streaming"
 FRONTEND_TRANSPORT = FRONTEND_CONTRACT.parent / "useChatStream.ts"
 FRONTEND_STREAM_ORCHESTRATOR = FRONTEND_STREAMING_DIR / "chatStream.ts"
 FRONTEND_INSPECTOR_MODEL = (
     FRONTEND_CONTRACT.parent / "features" / "inspector" / "inspectorModel.ts"
 )
+COMMON_SSE_CONTEXT_FIELDS = {"trace_id", "session_id", "user_id", "namespace"}
 
 
 def test_frontend_and_backend_sse_event_names_stay_in_sync():
@@ -27,6 +30,47 @@ def test_frontend_and_backend_sse_event_names_stay_in_sync():
     frontend_events = set(re.findall(r'"([a-z_]+)"', declaration.group(1)))
 
     assert frontend_events == SSE_EVENT_NAMES
+
+
+def test_api_reference_documents_every_sse_event_and_specific_payload_field():
+    source = API_DOCUMENTATION.read_text(encoding="utf-8")
+    declaration = re.search(
+        r"^## SSE 事件\s*$([\s\S]*?)(?=^## |\Z)",
+        source,
+        flags=re.MULTILINE,
+    )
+    assert declaration is not None
+    sse_reference = declaration.group(1)
+    documented_events = set(
+        re.findall(r"^### ([a-z_]+)\s*$", sse_reference, flags=re.MULTILINE)
+    )
+
+    assert documented_events == SSE_EVENT_NAMES
+
+    for event, payload_model in SSE_PAYLOAD_MODELS.items():
+        event_section = re.search(
+            rf"^### {re.escape(event)}\s*$([\s\S]*?)(?=^### |\Z)",
+            sse_reference,
+            flags=re.MULTILINE,
+        )
+        assert event_section is not None
+        documented_fields = set(
+            re.findall(
+                r"^\|\s*`([a-z_]+)`\s*\|",
+                event_section.group(1),
+                flags=re.MULTILINE,
+            )
+        )
+        event_specific_fields = set(payload_model.model_fields) - COMMON_SSE_CONTEXT_FIELDS
+        documented_event_specific_fields = (
+            documented_fields - COMMON_SSE_CONTEXT_FIELDS
+        )
+
+        assert documented_event_specific_fields == event_specific_fields, (
+            event,
+            sorted(event_specific_fields - documented_event_specific_fields),
+            sorted(documented_event_specific_fields - event_specific_fields),
+        )
 
 
 def test_frontend_and_backend_tool_result_statuses_stay_in_sync():

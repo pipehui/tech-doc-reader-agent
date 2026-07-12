@@ -77,20 +77,22 @@
 
 ```bash
 cp .env.example .env
+# PowerShell: Copy-Item .env.example .env
+python -m pip install -r requirements.txt
 ```
 
 启动 Redis 和后端：
 
 ```bash
 docker compose up -d redis
-PYTHONPATH=. uvicorn tech_doc_agent.app.api.server:app --reload
+python -m uvicorn tech_doc_agent.app.api.server:app --reload
 ```
 
 启动前端开发服务：
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -113,6 +115,8 @@ http://127.0.0.1:5173
 | [docs/observability.md](docs/observability.md) | `trace_id`、结构化日志、SSE 事件和 Langfuse tracing |
 | [docs/api.md](docs/api.md) | REST / SSE API 参考 |
 | [docs/development.md](docs/development.md) | 本地启动、Docker、质量检查、项目结构和运行时数据 |
+| [tech_doc_agent/README.md](tech_doc_agent/README.md) | 后端包目录、职责归属与兼容边界 |
+| [docs/refactoring/README.md](docs/refactoring/README.md) | 大规模重构的阶段记录、问题与验证索引 |
 
 ## Tech Stack
 
@@ -129,7 +133,7 @@ http://127.0.0.1:5173
 - **多租户隔离来自请求 user_id / namespace 字段，未做真实鉴权**。生产部署需要在网关或 FastAPI middleware 中接入 JWT / Session，再把校验后的 user_id 注入到 RunnableConfig，而不是直接信任前端。
 - **输入侧 guardrails 基于正则 + HITL 审批兜底**，没有输出侧检测，也没有引入 ML / LLM 判别。可被全角字符、Unicode 同形、拆词改写或 Base64 编码绕过。
 - **parser / relation 的结构化输出依赖 markdown headings + 正则解析**，而不是 function calling / JSON schema。优先了输出长度和自然语言连贯性，但格式稳定性会随模型版本和 prompt 变化波动；解析失败时回退到 raw_text。
-- **FAISS 索引使用 IndexFlatL2 穷举搜索**，文档量超过万级会出现明显延迟。当前规模下召回率 100%、部署简单，规模上去需要切换 HNSW / IVF。
+- **FAISS 索引使用 IndexFlatL2 穷举搜索**，它会对已索引向量执行精确 Top-K 距离计算，但不等于语义检索 Recall 为 100%。文档量上升后延迟会线性增长；达到真实规模瓶颈时再基于版本化 corpus/eval 比较 HNSW / IVF，而不是只按索引类型推断质量。
 - **examination 续答判定基于中文关键词列表，而不是由 primary 在 LLM 层判断意图**。最初尝试让 primary 自己识别"用户当前在答题"再 handoff 给 examination，但实际运行中 primary 经常直接代替 examination 给用户解答、纠错或给参考答案，绕过了 examination 的评估职责；改用硬约束 + 关键词白名单是规避 primary 越权抢答的妥协。
 
 ## Roadmap

@@ -19,13 +19,25 @@ Windows 已有环境使用 `conda activate agent`；若终端输出遇到 GBK �
 
 ## Local Setup
 
+后端以 Python 3.12 为类型检查/CI 基线；前端支持的 Node.js 版本以 `frontend/package.json` 的 `engines` 为准。Windows 已有环境可先执行 `conda activate agent`。
+
 复制环境变量模板：
 
 ```bash
 cp .env.example .env
+# PowerShell: Copy-Item .env.example .env
 ```
 
-至少需要配置：
+安装锁定范围内的后端依赖和 lockfile 对应的前端依赖：
+
+```bash
+python -m pip install -r requirements.txt
+cd frontend
+npm ci
+cd ..
+```
+
+运行完整的在线 chat + vector retrieval 链路通常需要配置：
 
 ```bash
 OPENAI_API_KEY=your_key
@@ -33,12 +45,13 @@ PRIMARY_MODEL=your_model
 EMBEDDING_API_KEY=your_embedding_key
 EMBEDDING_API_BASE=your_embedding_base
 EMBEDDING_MODEL=your_embedding_model
-TAVILY_API_KEY=your_tavily_key
 REDIS_URL=redis://localhost:6379
 GUARDRAIL_APPROVAL_TTL_SECONDS=900
 MAX_IDENTICAL_TOOL_REPEATS=2
 PARSER_MAX_RETRIEVAL_CALLS=6
 ```
+
+`TAVILY_API_KEY` 可选；留空时 Web search 使用 DuckDuckGo fallback。其余 retry、budget、context compaction、RAG 与 telemetry 选项及默认值以 [`.env.example`](../.env.example) 为事实源，不必为了本地启动逐项复制。
 
 两个 tool policy 配置必须是非负整数。前者限制连续相同 tool + args 的允许调用次数，后者限制一个 parser step 内
 `read_docs` 与 `web_search` 的合计调用次数；超过阈值会产生结构化 error ToolMessage，不执行目标工具。
@@ -70,14 +83,13 @@ docker compose up -d redis
 启动后端：
 
 ```bash
-PYTHONPATH=. uvicorn tech_doc_agent.app.api.server:app --reload
+python -m uvicorn tech_doc_agent.app.api.server:app --reload
 ```
 
 启动前端：
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
@@ -101,7 +113,7 @@ npm run build
 启动后端：
 
 ```bash
-PYTHONPATH=. uvicorn tech_doc_agent.app.api.server:app --host 0.0.0.0 --port 8000
+python -m uvicorn tech_doc_agent.app.api.server:app --host 0.0.0.0 --port 8000
 ```
 
 访问：

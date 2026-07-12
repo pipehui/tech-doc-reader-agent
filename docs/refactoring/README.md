@@ -91,6 +91,7 @@
 | 2026-07-12 | Phase 4：Approval application service 与 runtime projection 边界 | repository 用例向内归位，AIMessage mapping 独立，旧 runtime path 兼容 | [2026-07-12-approval-service-application-boundary.md](2026-07-12-approval-service-application-boundary.md) |
 | 2026-07-12 | Phase 4：SSE message、update 与 part translator 边界 | 混合 translator 删除，metadata/content/envelope/update 单向分工 | [2026-07-12-sse-translator-boundaries.md](2026-07-12-sse-translator-boundaries.md) |
 | 2026-07-12 | Phase 4：可复现验证矩阵与无密钥 baseline | clean unit/offline 事实固化，空 corpus 与历史无 manifest 指标降级说明 | [2026-07-12-reproducible-validation-matrix.md](2026-07-12-reproducible-validation-matrix.md) |
+| 2026-07-12 | Documentation：长期文档、API payload 与当前模块所有权对齐 | 完成，SSE 文档 event/field 漂移门禁已接入 | [2026-07-12-maintained-documentation-alignment.md](2026-07-12-maintained-documentation-alignment.md) |
 
 ## 本地任务单策略
 

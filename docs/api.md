@@ -111,7 +111,7 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | `user_id` | `string` | 否 | 用户 ID，默认 `default` |
 | `namespace` | `string` | 否 | 会话/学习记录命名空间，默认 `tech_docs` |
 
-响应：`text/event-stream`。首帧总是 `session_snapshot`，随后可能出现 `token`、`agent_message`、`agent_transition`、`plan_update`、`structured_result`、`tool_call`、`tool_result`，最后以 `done`、`interrupt_required` 或 `error` 结束。
+响应：`text/event-stream`。首帧总是 `session_snapshot`，随后可能出现 `token`、`agent_message`、`agent_transition`、`plan_update`、`structured_result`、`usage_update`、`budget_started`、`budget_terminated`、`context_metrics_update`、`provider_retry_update`、`tool_call`、`tool_result`，最后以 `done`、`interrupt_required` 或 `error` 结束。
 
 如果输入命中 high-risk prompt-injection 规则，会在进入 LangGraph 前返回 `400`，响应体包含 `error=guardrail_blocked`、`risk_level` 和 `findings`，不会触发任何 agent 或工具调用。medium-risk 输入会返回 `interrupt_required`，并等待 `/chat/approve` 显式批准；批准后才继续执行原始用户消息。pending guardrail request 保存在 Redis，并按 `GUARDRAIL_APPROVAL_TTL_SECONDS` 自动过期（默认 900 秒）；过期后该 guardrail approval 不再可用，若同一 session 也没有 graph interrupt，审批接口会返回无 pending interrupt。
 
@@ -163,8 +163,8 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | 字段 | 类型 | 必有 | 说明 |
 |---|---|---|---|
 | `id` | `string \| null` | 否 | 消息 ID |
-| `role` | `string` | 是 | `user`、`assistant` 或 `tool` |
-| `kind` | `string` | 是 | `message` 或 `tool_result` |
+| `role` | `string` | 是 | `user`、`assistant`、`system` 或 `tool` |
+| `kind` | `string` | 是 | `message`、`tool_result` 或 `conversation_summary` |
 | `content` | `string` | 是 | 文本内容 |
 | `name` | `string \| null` | 否 | assistant/tool 名称 |
 | `tool_call_id` | `string \| null` | 否 | tool call ID |
@@ -187,13 +187,17 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | `session_id` | `string` | 是 | 会话 ID |
 | `user_id` | `string \| null` | 否 | 用户 ID |
 | `namespace` | `string \| null` | 否 | 命名空间 |
-| `exists` | `boolean` | 是 | 是否已有消息、学习目标或 pending interrupt |
+| `exists` | `boolean` | 是 | 是否已有消息、压缩摘要、学习目标或 pending interrupt |
 | `pending_interrupt` | `boolean` | 是 | 是否等待用户批准 |
 | `learning_target` | `string \| null` | 是 | 当前学习目标 |
-| `message_count` | `number` | 是 | 状态中的消息数量 |
-| `current_agent` | `string \| null` | 是 | 当前 agent，默认 `primary` |
+| `message_count` | `number` | 是 | 状态中的消息与压缩摘要数量 |
+| `current_agent` | `string \| null` | 是 | 当前 agent；guardrail 审批 pending 时为 `guardrail`，否则默认 `primary` |
 | `workflow_plan` | `string[]` | 是 | 当前工作流计划 |
 | `plan_index` | `number` | 是 | 当前执行到的计划下标 |
+| `budget_usage` | `object \| null` | 否 | 当前 workflow 的版本化 LLM/tool usage 累计账本 |
+| `budget_status` | `"active" \| "terminating" \| "terminated" \| null` | 否 | 当前执行预算生命周期状态 |
+| `budget_termination` | `object \| null` | 否 | 命中硬预算或 deadline 时的结构化终止原因 |
+| `context_metrics` | `object \| null` | 否 | 当前 workflow 的 checkpoint/prompt/provider input context 累计指标 |
 | `provider_retry_usage` | `object \| null` | 否 | 当前 request/workflow 内 embedding、web provider transport operation 的版本化累计账本 |
 
 ### GET /learning/overview
@@ -260,6 +264,8 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | 字段 | 类型 | 必有 | 说明 |
 |---|---|---|---|
 | `id` | `string` | 是 | memory ID |
+| `user_id` | `string \| null` | 否 | 用户 ID |
+| `namespace` | `string \| null` | 否 | 命名空间 |
 | `kind` | `string` | 是 | `learned`、`stuck_point`、`misconception` 或 `review_hint` |
 | `topic` | `string` | 是 | 相关主题 |
 | `content` | `string` | 是 | 具体学习轨迹观察 |
@@ -285,6 +291,7 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 
 | 字段 | 类型 | 必有 | 说明 |
 |---|---|---|---|
+| `profile_version` | `number` | 是 | 当前画像 schema 版本 |
 | `user_id` | `string \| null` | 否 | 用户 ID |
 | `namespace` | `string \| null` | 否 | 当前命名空间 |
 | `experience_level` | `string` | 是 | 经验水平 |
@@ -310,13 +317,17 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | `session_id` | `string` | 是 | 会话 ID |
 | `user_id` | `string \| null` | 否 | 用户 ID |
 | `namespace` | `string \| null` | 否 | 命名空间 |
-| `exists` | `boolean` | 是 | 当前 session 是否已有状态 |
+| `exists` | `boolean` | 是 | 当前 session 是否已有消息、压缩摘要、学习目标或 interrupt |
 | `current_agent` | `string \| null` | 是 | 当前 agent |
 | `learning_target` | `string \| null` | 是 | 当前学习目标 |
 | `workflow_plan` | `string[]` | 是 | 当前计划 |
 | `plan_index` | `number` | 是 | 当前计划下标 |
 | `pending_interrupt` | `boolean` | 是 | 是否等待批准 |
-| `message_count` | `number` | 是 | 状态中的消息数量 |
+| `message_count` | `number` | 是 | 状态中的消息与压缩摘要数量 |
+| `budget_usage` | `object \| null` | 否 | 上一个已持久化 workflow 的 LLM/tool usage 累计账本 |
+| `budget_status` | `"active" \| "terminating" \| "terminated" \| null` | 否 | 上一个已持久化 workflow 的预算状态 |
+| `budget_termination` | `object \| null` | 否 | 上一个 workflow 的结构化预算终止原因 |
+| `context_metrics` | `object \| null` | 否 | 上一个已持久化 workflow 的上下文累计指标 |
 | `provider_retry_usage` | `object \| null` | 否 | 上一个已持久化 request/workflow 的 provider retry 累计账本 |
 
 ### token
@@ -347,7 +358,6 @@ LLM 流式输出片段。
 |---|---|---|---|
 | `phase` | `"enter" \| "finish" \| "leave"` | 是 | 切换阶段 |
 | `agent` | `string` | 是 | `parser`、`relation`、`explanation`、`examination` 或 `summary` |
-| `from` | `string` | 否 | 预留字段，当前后端不发送 |
 
 ### plan_update
 
@@ -369,6 +379,46 @@ parser 或 relation 的结构化结果写入 graph state 时发送。前端 Insp
 | `result_key` | `"parser_result" \| "relation_result"` | 是 | state 字段名 |
 | `result` | `object` | 是 | 结构化结果 |
 | `parsed` | `boolean` | 是 | 当前结果是否通过结构化解析 |
+
+### usage_update
+
+LLM 或 tool 执行量被计入 workflow budget usage 时发送。该事件同时携带本节点 delta 和更新后的累计账本，前端不应把多个累计值再次相加。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `node` | `string` | 是 | 产生本次 usage 的 graph 节点 |
+| `delta` | `object` | 是 | `kind` 为 `llm` 或 `tool` 的本节点增量 |
+| `usage` | `object` | 是 | 更新后的版本化累计 usage |
+
+### budget_started
+
+新 graph request 建立执行预算时发送。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `node` | `string` | 是 | 初始化预算的 graph 节点 |
+| `status` | `"active"` | 是 | 固定为 `active` |
+| `usage` | `object` | 是 | 初始化后的版本化累计 usage |
+
+### budget_terminated
+
+请求命中 deadline、LLM/tool 调用数、token 或估算成本硬限制并进入确定性收束节点时发送。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `node` | `string` | 是 | 预算终止节点 |
+| `termination` | `object` | 是 | 版本化终止维度、限制与安全原因 |
+| `usage` | `object \| null` | 否 | 终止时可用的累计 usage |
+
+### context_metrics_update
+
+request 起点重置上下文指标，或一次 assistant 调用完成上下文测量时发送。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `node` | `string` | 是 | 产生测量的 graph 节点 |
+| `delta` | `object` | 是 | `kind` 为 `reset` 或 `assistant` 的本节点增量 |
+| `metrics` | `object` | 是 | 更新后的版本化上下文累计指标 |
 
 ### provider_retry_update
 
@@ -405,6 +455,13 @@ AI message 中包含 tool call 时发送。
 | `tool` | `string \| null` | 否 | 工具名 |
 | `tool_call_id` | `string \| null` | 否 | tool call ID |
 | `content` | `string` | 是 | 工具返回内容 |
+| `status` | `"success" \| "error"` | 是 | 显式工具执行状态；前端不得从自然语言 content 猜测 |
+| `error` | `string \| null` | 否 | 兼容字段；失败时等于安全错误消息 |
+| `safe_message` | `string \| null` | 否 | 可直接展示的脱敏错误消息 |
+| `code` | `string \| null` | 否 | 稳定错误码 |
+| `retryable` | `boolean \| null` | 否 | 调用方是否可重试 |
+| `dependency` | `string \| null` | 否 | 失败依赖的安全标识 |
+| `cause_type` | `string \| null` | 否 | 受控异常类型，不含原始异常文本 |
 
 ### interrupt_required
 
@@ -415,12 +472,20 @@ AI message 中包含 tool call 时发送。
 | `session_id` | `string` | 是 | 会话 ID |
 | `pending` | `boolean` | 是 | 固定为 `true` |
 | `approval_kind` | `string` | 否 | `guardrail_input` 表示 medium-risk 输入审批；敏感工具审批时可为空 |
+| `source` | `string` | 否 | Guardrail 输入来源，例如 `chat.input` 或 `chat.approval_feedback` |
 | `risk_level` | `string` | 否 | Guardrails 风险级别 |
 | `findings` | `string[]` | 否 | Guardrails 命中的规则名 |
 
 ### guardrail_blocked
 
 同步兼容流在输入被 guardrail 阻止时使用。当前 HTTP endpoint 会在建立 SSE 前优先返回 `400 guardrail_blocked` JSON；该事件名仍保留在跨端 contract 中，防止兼容调用方静默丢弃。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `session_id` | `string` | 是 | 会话 ID |
+| `source` | `string` | 是 | 被检测输入的来源 |
+| `risk_level` | `string` | 是 | Guardrails 风险级别 |
+| `findings` | `string[]` | 是 | 命中的规则名 |
 
 ### no_pending_interrupt
 
@@ -444,8 +509,14 @@ AI message 中包含 tool call 时发送。
 
 | 字段 | 类型 | 必有 | 说明 |
 |---|---|---|---|
-| `message` | `string` | 是 | 错误信息 |
 | `session_id` | `string` | 是 | 会话 ID |
+| `status` | `"error"` | 是 | 固定为 `error` |
+| `code` | `string` | 是 | 稳定错误码 |
+| `retryable` | `boolean` | 是 | 调用方是否可重试 |
+| `message` | `string` | 是 | 脱敏后的兼容错误消息 |
+| `safe_message` | `string` | 是 | 可直接展示的脱敏错误消息 |
+| `dependency` | `string \| null` | 否 | 失败依赖的安全标识 |
+| `cause_type` | `string` | 是 | 受控异常类型，不含原始异常文本 |
 
 ## 状态恢复约定
 
@@ -455,4 +526,4 @@ AI message 中包含 tool call 时发送。
 2. `GET /sessions/{id}/history` 恢复聊天记录。
 3. `GET /sessions/{id}/state` 恢复当前 agent、计划和 interrupt 状态。
 
-用户发消息时调用 `POST /chat`。收到第一帧 `session_snapshot` 后用它作为本次流的 baseline；收到 `plan_update` 后合并更新计划字段；收到 `agent_transition` 后更新当前 agent；收到 `structured_result` 后记录到 Inspector；收到 `token` 时追加到正在流式输出的 assistant 文本；收到 `done` 或 `interrupt_required` 后结束本次流。
+用户发消息时调用 `POST /chat`。收到第一帧 `session_snapshot` 后用它作为本次流的 baseline；收到 `plan_update` 后合并更新计划字段；收到 `agent_transition` 后更新当前 agent；收到 `structured_result` 后记录到 Inspector；`usage_update`、`budget_*`、`context_metrics_update` 和 `provider_retry_update` 应以 payload 中的累计对象覆盖相应视图，并保留 delta 供 Inspector 展示；收到 `token` 时追加到正在流式输出的 assistant 文本；收到 `done`、`interrupt_required` 或 `error` 后结束本次流。
