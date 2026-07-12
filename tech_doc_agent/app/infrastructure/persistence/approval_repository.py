@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
 from typing import Any
 
 from redis import Redis
 
+from tech_doc_agent.app.application.approval_models import (
+    ApprovalRequestPayloadError,
+    GuardrailApprovalRequest,
+)
 from tech_doc_agent.app.core.errors import classify_error
-from tech_doc_agent.app.runtime.approvals import GuardrailApprovalRequest
 
 
 APPROVAL_SCHEMA_VERSION = 1
@@ -79,7 +82,7 @@ class RedisApprovalRepository:
             "status": "pending",
             "created_at": created_at.isoformat(),
             "expires_at": expires_at.isoformat(),
-            "request": asdict(request),
+            "request": request.to_payload(),
         }
         return json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
 
@@ -106,33 +109,12 @@ class RedisApprovalRepository:
             raise ApprovalRepositoryDataError("Approval expiry must be after creation time.")
 
         request = envelope.get("request")
-        if not isinstance(request, dict):
+        if not isinstance(request, Mapping):
             raise ApprovalRepositoryDataError("Approval payload is missing its request object.")
-
-        findings = request.get("findings")
-        if not isinstance(findings, list) or not all(isinstance(item, str) for item in findings):
-            raise ApprovalRepositoryDataError("Approval findings must be a list of strings.")
-
-        required_text_fields = (
-            "session_id",
-            "user_input",
-            "user_id",
-            "namespace",
-            "source",
-            "risk_level",
-        )
-        if any(not isinstance(request.get(field), str) for field in required_text_fields):
-            raise ApprovalRepositoryDataError("Approval request fields must be strings.")
-
-        return GuardrailApprovalRequest(
-            session_id=request["session_id"],
-            user_input=request["user_input"],
-            user_id=request["user_id"],
-            namespace=request["namespace"],
-            source=request["source"],
-            risk_level=request["risk_level"],
-            findings=tuple(findings),
-        )
+        try:
+            return GuardrailApprovalRequest.from_payload(request)
+        except ApprovalRequestPayloadError as exc:
+            raise ApprovalRepositoryDataError(str(exc)) from exc
 
     def put(self, key: str, request: GuardrailApprovalRequest) -> None:
         payload = self._serialize(request)

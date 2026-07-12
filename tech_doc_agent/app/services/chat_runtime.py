@@ -3,15 +3,17 @@ from typing import Any
 from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
 
+from tech_doc_agent.app.application.approval_models import (
+    ApprovalRepository,
+    GuardrailApprovalRequest,
+)
 from tech_doc_agent.app.composition import build_application_graph
 from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.runtime.approvals import (
-    ApprovalRepository,
     ApprovalService,
-    GuardrailApprovalRequest,
     InMemoryApprovalRepository,
 )
 from tech_doc_agent.app.runtime.config import SessionConfigFactory

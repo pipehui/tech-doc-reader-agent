@@ -1,33 +1,15 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Protocol
 
 from langchain_core.messages import AIMessage
 
+from tech_doc_agent.app.application.approval_models import (
+    ApprovalRepository,
+    GuardrailApprovalRequest,
+)
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant, tenant_thread_id
-
-
-@dataclass(frozen=True, slots=True)
-class GuardrailApprovalRequest:
-    session_id: str
-    user_input: str
-    user_id: str
-    namespace: str
-    source: str
-    risk_level: str
-    findings: tuple[str, ...]
-
-
-class ApprovalRepository(Protocol):
-    def put(self, key: str, request: GuardrailApprovalRequest) -> None: ...
-
-    def get(self, key: str) -> GuardrailApprovalRequest | None: ...
-
-    def pop(self, key: str) -> GuardrailApprovalRequest | None: ...
-
-    def close(self) -> None: ...
 
 
 @dataclass(slots=True)
@@ -73,14 +55,13 @@ class ApprovalService:
         namespace: str | None = None,
     ) -> GuardrailApprovalRequest:
         tenant = parse_tenant(user_id, namespace, prefer_context=True)
-        request = GuardrailApprovalRequest(
+        request = GuardrailApprovalRequest.create(
             session_id=session_id,
             user_input=user_input,
-            user_id=tenant.user_id,
-            namespace=tenant.namespace,
+            tenant=tenant,
             source=source,
             risk_level=risk_level,
-            findings=tuple(findings),
+            findings=findings,
         )
         self.repository.put(self._key(session_id, tenant), request)
         self.event_logger(
@@ -168,3 +149,11 @@ class ApprovalService:
             approved=approved,
             feedback_length=len(feedback),
         )
+
+
+__all__ = [
+    "ApprovalRepository",
+    "ApprovalService",
+    "GuardrailApprovalRequest",
+    "InMemoryApprovalRepository",
+]

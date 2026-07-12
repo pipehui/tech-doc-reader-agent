@@ -77,6 +77,18 @@ def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
     assert "services.user_profile" not in resource_source
 
 
+def test_approval_domain_does_not_live_under_runtime_or_leak_into_redis_adapter():
+    runtime_source = (RUNTIME_DIR / "approvals.py").read_text(encoding="utf-8")
+    repository_source = (
+        APP_DIR / "infrastructure" / "persistence" / "approval_repository.py"
+    ).read_text(encoding="utf-8")
+
+    assert "class GuardrailApprovalRequest" not in runtime_source
+    assert "class ApprovalRepository(Protocol)" not in runtime_source
+    assert "tech_doc_agent.app.application.approval_models" in repository_source
+    assert "tech_doc_agent.app.runtime" not in repository_source
+
+
 def test_runtime_does_not_depend_on_api_or_legacy_services():
     assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
 

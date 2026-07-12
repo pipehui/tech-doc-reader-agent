@@ -6,6 +6,7 @@ from threading import Lock
 import pytest
 from redis.exceptions import ConnectionError
 
+from tech_doc_agent.app.application.approval_models import GuardrailApprovalRequest
 from tech_doc_agent.app.core.errors import DependencyUnavailable
 from tech_doc_agent.app.infrastructure.persistence import approval_repository
 from tech_doc_agent.app.infrastructure.persistence.approval_repository import (
@@ -13,7 +14,6 @@ from tech_doc_agent.app.infrastructure.persistence.approval_repository import (
     RedisApprovalRepository,
 )
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.runtime.approvals import GuardrailApprovalRequest
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
 
