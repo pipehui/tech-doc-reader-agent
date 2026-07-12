@@ -4,7 +4,7 @@ import logging
 import pytest
 from pydantic import SecretStr
 
-from tech_doc_agent.app.api.routes.chat import sse_event
+from tech_doc_agent.app.api.sse import sse_event
 from tech_doc_agent.app.core import observability
 from tech_doc_agent.app.core.observability import (
     get_trace_context,

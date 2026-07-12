@@ -12,15 +12,7 @@ from tech_doc_agent.app.api.schemas import (
     SessionStateResponse,
 )
 from tech_doc_agent.app.api.tenant import resolve_request_tenant
-from tech_doc_agent.app.api.sse import (
-    aiter_with_trace_context,
-    astream_parts_as_sse,
-    event_source_response,
-    iter_update_events,
-    iter_with_trace_context,
-    sse_event,
-    stream_parts_as_sse,
-)
+from tech_doc_agent.app.api import sse as _sse
 from tech_doc_agent.app.core.guardrails import InputRisk, record_input_risk
 from tech_doc_agent.app.core.observability import (
     get_trace_context,
@@ -32,16 +24,6 @@ from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 
 
 router = APIRouter()
-
-__all__ = [
-    "aiter_with_trace_context",
-    "astream_parts_as_sse",
-    "iter_update_events",
-    "iter_with_trace_context",
-    "router",
-    "sse_event",
-    "stream_parts_as_sse",
-]
 
 
 def get_runtime(request: Request) -> ChatRuntime:
@@ -95,7 +77,7 @@ def _guardrail_blocked_response(risk: InputRisk, *, session_id: str, source: str
 
 
 def _guardrail_blocked_event(risk: InputRisk, *, session_id: str, source: str) -> ServerSentEvent:
-    return sse_event(
+    return _sse.sse_event(
         "guardrail_blocked",
         {
             "session_id": session_id,
@@ -126,7 +108,7 @@ def _request_guardrail_approval(
 
 
 def _guardrail_interrupt_event(risk: InputRisk, *, session_id: str, source: str) -> ServerSentEvent:
-    return sse_event(
+    return _sse.sse_event(
         "interrupt_required",
         {
             "session_id": session_id,
@@ -148,7 +130,7 @@ async def astream_guardrail_approval_events(
     namespace: str | None = None,
 ) -> AsyncIterable[ServerSentEvent]:
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
-    yield sse_event("session_snapshot", snapshot)
+    yield _sse.sse_event("session_snapshot", snapshot)
     yield _guardrail_interrupt_event(risk, session_id=session_id, source=source)
 
 
@@ -193,7 +175,7 @@ async def astream_chat_events(
             return
 
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
-    yield sse_event("session_snapshot", snapshot)
+    yield _sse.sse_event("session_snapshot", snapshot)
 
     parts = runtime.astream_user_message(
         session_id,
@@ -202,7 +184,13 @@ async def astream_chat_events(
         namespace=namespace,
         request_started_monotonic=request_started_monotonic,
     )
-    async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
+    async for event in _sse.astream_parts_as_sse(
+        runtime,
+        session_id,
+        parts,
+        user_id=user_id,
+        namespace=namespace,
+    ):
         yield event
 
 
@@ -228,11 +216,11 @@ async def astream_approval_events(
             return
 
     snapshot = await runtime.aget_session_state(session_id, user_id=user_id, namespace=namespace)
-    yield sse_event("session_snapshot", snapshot)
+    yield _sse.sse_event("session_snapshot", snapshot)
 
     if not await runtime.ahas_pending_interrupt(session_id, user_id=user_id, namespace=namespace):
         log_event("chat.approval.no_pending_interrupt", approved=approved, async_runtime=True)
-        yield sse_event(
+        yield _sse.sse_event(
             "no_pending_interrupt",
             {
                 "session_id": session_id,
@@ -248,7 +236,13 @@ async def astream_approval_events(
         namespace=namespace,
         request_started_monotonic=request_started_monotonic,
     )
-    async for event in astream_parts_as_sse(runtime, session_id, parts, user_id=user_id, namespace=namespace):
+    async for event in _sse.astream_parts_as_sse(
+        runtime,
+        session_id,
+        parts,
+        user_id=user_id,
+        namespace=namespace,
+    ):
         yield event
 
 
@@ -278,8 +272,8 @@ async def chat(body: ChatRequest, request: Request):
                 user_id=tenant.user_id,
                 namespace=tenant.namespace,
             )
-            return event_source_response(
-                aiter_with_trace_context(
+            return _sse.event_source_response(
+                _sse.aiter_with_trace_context(
                     astream_guardrail_approval_events(
                         runtime,
                         body.session_id,
@@ -296,8 +290,8 @@ async def chat(body: ChatRequest, request: Request):
                 )
             )
 
-    return event_source_response(
-        aiter_with_trace_context(
+    return _sse.event_source_response(
+        _sse.aiter_with_trace_context(
             astream_chat_events(
                 runtime,
                 body.session_id,
@@ -338,8 +332,8 @@ async def approve(body: ApproveRequest, request: Request):
                     source="chat.approval.feedback",
                 )
 
-    return event_source_response(
-        aiter_with_trace_context(
+    return _sse.event_source_response(
+        _sse.aiter_with_trace_context(
             astream_approval_events(
                 runtime,
                 body.session_id,

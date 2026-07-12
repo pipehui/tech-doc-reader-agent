@@ -370,6 +370,14 @@ def test_fastapi_chat_routes_only_use_async_runtime_surface():
     assert "runtime.stream_approval(" in cli_source
 
 
+def test_chat_route_does_not_reexport_sse_internal_helpers():
+    source = (APP_DIR / "api" / "routes" / "chat.py").read_text(encoding="utf-8")
+
+    assert "__all__" not in source
+    assert "from tech_doc_agent.app.api.sse import" not in source
+    assert "from tech_doc_agent.app.api import sse as _sse" in source
+
+
 def test_runtime_package_init_does_not_eagerly_load_components():
     path = RUNTIME_DIR / "__init__.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

@@ -46,9 +46,11 @@ api/sse/
 
 ### 问题 C：兼容 re-export 被 ruff 判定为未使用
 
-测试仍从 `routes.chat` import SSE helpers。迁移后这些 import 只用于兼容，不被 route 本身调用，ruff F401 会失败。
+测试仍从 `routes.chat` import 六个 SSE helpers。其中 `iter_update_events`、`iter_with_trace_context` 和 `stream_parts_as_sse` 只用于测试兼容，其他 helper 同时也是 route 的真实依赖；仅保留测试兼容的 import 会被 ruff F401 判定为未使用。
 
 解决：在 route module 的 `__all__` 明确声明兼容 public names；不复制 wrapper 实现。
+
+这是一项有明确删除条件的临时措施。2026-07-12 在测试调用方全部迁到 `api.sse` 后，`__all__` 与 helper 直接 import 一并删除；route 改用私有 `_sse` 模块依赖，详见 [2026-07-12-chat-sse-facade-removal.md](2026-07-12-chat-sse-facade-removal.md)。
 
 ### 问题 D：typing Literal 的运行时枚举方式
 

@@ -13,6 +13,8 @@ Tech Doc Reader Agent 是一个围绕“技术概念学习”设计的多智能�
 5. LangGraph 根据计划进入 `parser`、`relation`、`explanation`、`examination` 或 `summary`。
 6. 敏感工具节点使用 `interrupt_before` 暂停，等待 `/chat/approve` 继续。
 
+`api/routes/chat.py` 只编排 HTTP 参数、tenant/trace、guardrail 与 runtime 调用。SSE event contract、payload translation、trace-context iterator 和 wire encoding 的唯一事实源是 `api/sse/`；route 通过私有模块依赖 `_sse` 消费这些能力，不再把 SSE helper 作为 `routes.chat` 的兼容 API 暴露。测试和其他调用方必须直接 import `tech_doc_agent.app.api.sse`。
+
 ## Agents
 
 | Agent | Responsibility |

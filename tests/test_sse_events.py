@@ -4,12 +4,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from tech_doc_agent.app.api.routes.chat import (
+from tech_doc_agent.app.api.routes.chat import router
+from tech_doc_agent.app.api.sse import (
     aiter_with_trace_context,
     astream_parts_as_sse,
     iter_update_events,
     iter_with_trace_context,
-    router,
     sse_event,
     stream_parts_as_sse,
 )

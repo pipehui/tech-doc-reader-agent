@@ -126,6 +126,8 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 - `GET /sessions/{id}/history`
 - `GET /sessions/{id}/state`
 
+该 route 只负责 HTTP/tenant/trace/guardrail/runtime 编排；SSE contract、translator、trace-context iterator 与 encoder 统一由 `app/api/sse/` 拥有。route 通过私有 `_sse` 模块依赖调用它们，不提供 SSE helper 兼容 re-export；测试与其他模块应直接 import `tech_doc_agent.app.api.sse`。
+
 ### `app/agents`
 
 内聚当前系统的 role 定义、prompt、执行身份与模型绑定工厂：
