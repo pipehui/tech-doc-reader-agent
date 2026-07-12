@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from tech_doc_agent.app.services.assistants.definition import AssistantDefinition
 from tech_doc_agent.app.services.assistants.examination_assistant import build_examination_assistant
 from tech_doc_agent.app.services.assistants.explanation_assistant import build_explanation_assistant
+from tech_doc_agent.app.services.assistants.identity import AssistantExecutionIdentity
 from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
 from tech_doc_agent.app.services.assistants.parser_assistant import build_parser_assistant
 from tech_doc_agent.app.services.assistants.primary_assistant import build_primary_assistant
@@ -20,6 +21,19 @@ class AssistantRegistry:
     explanation: AssistantDefinition
     examination: AssistantDefinition
     summary: AssistantDefinition
+
+    def identities(self) -> tuple[AssistantExecutionIdentity, ...]:
+        return tuple(
+            getattr(self, role).identity
+            for role in (
+                "primary",
+                "parser",
+                "relation",
+                "explanation",
+                "examination",
+                "summary",
+            )
+        )
 
 
 def build_assistant_registry(

@@ -22,6 +22,8 @@ class AssistantModelProvider:
     backup: Any | None = None
     retry_executor: RetryExecutor | None = None
     provider_id: str = "openai_compatible"
+    primary_model_id: str | None = None
+    backup_model_id: str | None = None
 
     def bind_tools(self, tools: list[Any], *, parallel_tool_calls: bool = False) -> Any:
         primary_bound = self.primary.bind_tools(
@@ -39,8 +41,9 @@ class AssistantModelProvider:
 
 
 def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider:
+    primary_model_id = settings.PRIMARY_MODEL or "gpt-4o-mini"
     primary = ChatOpenAI(
-        model=settings.PRIMARY_MODEL or "gpt-4o-mini",
+        model=primary_model_id,
         api_key=_secret_or_placeholder(settings.OPENAI_API_KEY),
         base_url=_base_url_or_none(settings.OPENAI_BASE_URL),
         temperature=0,
@@ -48,9 +51,11 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
     )
 
     backup = None
+    backup_model_id = None
     if settings.BACKUP_MODEL and settings.BACKUP_API_KEY:
+        backup_model_id = settings.BACKUP_MODEL
         backup = ChatOpenAI(
-            model=settings.BACKUP_MODEL,
+            model=backup_model_id,
             api_key=_secret_or_placeholder(settings.BACKUP_API_KEY),
             base_url=_base_url_or_none(settings.BACKUP_API_BASE),
             temperature=0,
@@ -62,4 +67,6 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
         backup=backup,
         retry_executor=build_retry_executor(settings),
         provider_id=settings.MODEL_PROVIDER_ID,
+        primary_model_id=primary_model_id,
+        backup_model_id=backup_model_id,
     )

@@ -64,7 +64,11 @@ def _tool_bundle() -> ToolBundle:
 def test_assistant_registry_binds_each_role_to_declared_tools():
     model = RecordingBindableModel()
     registry = build_assistant_registry(
-        AssistantModelProvider(primary=model),
+        AssistantModelProvider(
+            primary=model,
+            provider_id="provider-a",
+            primary_model_id="primary-model",
+        ),
         _tool_bundle(),
         build_prompt_registry(),
     )
@@ -137,7 +141,17 @@ def test_assistant_registry_binds_each_role_to_declared_tools():
         "assistant_role": "primary",
         "prompt_id": "tech-doc-reader.primary.v1",
         "prompt_sha256": "034f2970a0d7fead2f8efdca693dbb6c59585c2400b839a0dc3dc9e9609ba9a3",
+        "model_provider_id": "provider-a",
+        "primary_model_id": "primary-model",
     }
+    assert [identity.role for identity in registry.identities()] == [
+        "primary",
+        "parser",
+        "relation",
+        "explanation",
+        "examination",
+        "summary",
+    ]
 
 
 def test_model_provider_binds_primary_and_backup_before_adding_fallback():
@@ -181,6 +195,10 @@ def test_model_provider_disables_sdk_retries_and_owns_shared_transport_policy(mo
     assert provider.retry_executor is not None
     assert provider.retry_executor.policy.max_attempts == 4
     assert provider.provider_id == "provider-a"
+    assert provider.primary_model_id == "primary-model"
+    assert provider.backup_model_id == "backup-model"
+    assert created[0].kwargs["model"] == provider.primary_model_id
+    assert created[1].kwargs["model"] == provider.backup_model_id
 
 
 def test_model_visible_command_names_and_required_fields_are_stable():

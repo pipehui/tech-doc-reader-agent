@@ -2,45 +2,62 @@ from dataclasses import dataclass
 from typing import Any
 
 from tech_doc_agent.app.services.assistants.assistant_base import Assistant
+from tech_doc_agent.app.services.assistants.identity import AssistantExecutionIdentity
 from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
-from tech_doc_agent.app.services.assistants.prompt_registry import PromptArtifact
+from tech_doc_agent.app.services.assistants.prompt_registry import (
+    AssistantRole,
+    PromptArtifact,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class AssistantDefinition:
     assistant: Assistant
     safe_tools: tuple[Any, ...]
-    prompt_id: str
-    prompt_sha256: str
+    identity: AssistantExecutionIdentity
     sensitive_tools: tuple[Any, ...] = ()
 
     @property
     def all_tools(self) -> tuple[Any, ...]:
         return (*self.safe_tools, *self.sensitive_tools)
 
+    @property
+    def prompt_id(self) -> str:
+        return self.identity.prompt_id
+
+    @property
+    def prompt_sha256(self) -> str:
+        return self.identity.prompt_sha256
+
 
 def build_assistant_definition(
     *,
     prompt: PromptArtifact,
     models: AssistantModelProvider,
-    name: str,
+    name: AssistantRole,
     safe_tools: tuple[Any, ...],
     sensitive_tools: tuple[Any, ...] = (),
     control_tools: tuple[Any, ...] = (),
 ) -> AssistantDefinition:
+    if name != prompt.role:
+        raise ValueError(
+            f"Assistant role {name!r} cannot use prompt role {prompt.role!r}."
+        )
+    identity = AssistantExecutionIdentity(
+        role=name,
+        prompt_id=prompt.prompt_id,
+        prompt_sha256=prompt.sha256,
+        model_provider_id=models.provider_id,
+        primary_model_id=models.primary_model_id,
+        backup_model_id=models.backup_model_id,
+    )
     runnable = (
         prompt.template
         | models.bind_tools(
             [*safe_tools, *sensitive_tools, *control_tools],
             parallel_tool_calls=False,
         )
-    ).with_config(
-        metadata={
-            "assistant_role": name,
-            "prompt_id": prompt.prompt_id,
-            "prompt_sha256": prompt.sha256,
-        }
-    )
+    ).with_config(metadata=identity.to_metadata())
     return AssistantDefinition(
         assistant=Assistant(
             runnable,
@@ -49,7 +66,6 @@ def build_assistant_definition(
             default_provider=models.provider_id,
         ),
         safe_tools=safe_tools,
-        prompt_id=prompt.prompt_id,
-        prompt_sha256=prompt.sha256,
+        identity=identity,
         sensitive_tools=sensitive_tools,
     )
