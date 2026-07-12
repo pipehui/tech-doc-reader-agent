@@ -197,7 +197,9 @@ def test_render_retrieval_markdown_report_contains_summary_and_cases():
             "dataset": {"sha256": "dataset-hash"},
             "settings": {"fingerprint": "settings-hash"},
             "runner_git": {"commit": "commit-a"},
+            "subject_identity": {"fingerprint": "corpus-hash"},
         },
     )
     assert "Dataset SHA-256: `dataset-hash`" in manifested_report
     assert "Runtime identity: `not_applicable`" in manifested_report
+    assert "Retrieval corpus fingerprint: `corpus-hash`" in manifested_report

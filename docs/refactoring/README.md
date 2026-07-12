@@ -66,6 +66,7 @@
 | 2026-07-12 | Phase 4：Versioned runtime identity manifest 与 default-off 诊断端点 | 服务端事实源完成，eval artifact 消费继续 | [2026-07-12-runtime-identity-manifest.md](2026-07-12-runtime-identity-manifest.md) |
 | 2026-07-12 | Phase 4：Online eval run manifest、远端 identity 握手与安全 settings fingerprint | online eval 完成，offline runners 继续 | [2026-07-12-online-eval-run-manifest.md](2026-07-12-online-eval-run-manifest.md) |
 | 2026-07-12 | Phase 4：Retrieval/context-compaction shared run manifest 与 `not_applicable` identity | offline runners 完成，corpus fingerprint 继续 | [2026-07-12-offline-eval-run-manifest.md](2026-07-12-offline-eval-run-manifest.md) |
+| 2026-07-12 | Phase 4：Eval baseline compatibility、retrieval corpus 内容指纹与 retrieval-only composition | 基础门禁完成，真实 corpus/metrics threshold 继续 | [2026-07-12-eval-baseline-compatibility.md](2026-07-12-eval-baseline-compatibility.md) |
 
 ## 本地任务单策略
 

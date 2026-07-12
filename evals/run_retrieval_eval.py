@@ -20,13 +20,14 @@ from evals.manifests import (
     build_eval_run_manifest,
     retrieval_eval_settings,
 )
+from evals.retrieval_corpus import build_retrieval_corpus_identity
 from tech_doc_agent.app.services.retrieval import (
     HybridRetriever,
     RetrievalMode,
     SearchQuery,
     SearchResult,
 )
-from tech_doc_agent.app.services.resources import AppResources
+from tech_doc_agent.app.services.resources import RetrievalResources
 
 
 DEFAULT_CASES = Path("evals/retrieval_cases.json")
@@ -139,7 +140,11 @@ def score_case(case: dict[str, Any], results: list[SearchResult], *, top_k: int)
     }
 
 
-def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
+def run_all(
+    args: argparse.Namespace,
+    *,
+    resources: RetrievalResources | None = None,
+) -> list[dict[str, Any]]:
     cases = load_cases(args.cases)
     skipped = [case for case in cases if case.get("enabled", True) is False]
     if not args.include_disabled:
@@ -150,7 +155,7 @@ def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
     if skipped and not args.include_disabled:
         print(f"Skipping {len(skipped)} disabled retrieval case(s). Use --include-disabled to run them.")
 
-    resources = AppResources.create()
+    resources = resources or RetrievalResources.create()
     if args.vector_top_k is not None:
         resources.hybrid_retriever.vector_top_k = args.vector_top_k
 
@@ -186,6 +191,19 @@ def render_markdown_report(
     summary = summarize_results(rows)
     top_k_label = _top_k_label(rows)
     mode_label = _mode_label(rows)
+    manifest_lines: list[str] = []
+    if manifest is not None:
+        manifest_lines = [
+            f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
+            f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
+            f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
+            "- Runtime identity: `not_applicable`",
+        ]
+        subject_identity = manifest.get("subject_identity")
+        if isinstance(subject_identity, dict):
+            manifest_lines.append(
+                f"- Retrieval corpus fingerprint: `{subject_identity['fingerprint']}`"
+            )
     lines = [
         "# Retrieval Eval Report",
         "",
@@ -195,16 +213,7 @@ def render_markdown_report(
         f"- Done: `{summary['done']}`",
         f"- Errored: `{summary['errored']}`",
         f"- Top K: `{top_k_label}`",
-        *(
-            [
-                f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
-                f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
-                f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
-                "- Runtime identity: `not_applicable`",
-            ]
-            if manifest is not None
-            else []
-        ),
+        *manifest_lines,
         "",
         "## Summary",
         "",
@@ -444,14 +453,20 @@ def _md_text(value: Any) -> str:
 
 def main() -> None:
     args = parse_args()
+    resources = RetrievalResources.create()
+    corpus_identity = build_retrieval_corpus_identity(resources.faiss_store)
     manifest = build_eval_run_manifest(
         runner="offline_retrieval_eval",
         dataset_path=args.cases,
-        settings=retrieval_eval_settings(args),
+        settings=retrieval_eval_settings(
+            args,
+            app_settings=resources.settings,
+        ),
         runtime_identity=RuntimeIdentityLookup(status="not_applicable"),
+        subject_identity=corpus_identity.to_payload(),
     )
     write_json(args.manifest, manifest)
-    rows = run_all(args)
+    rows = run_all(args, resources=resources)
     write_jsonl(args.output, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(

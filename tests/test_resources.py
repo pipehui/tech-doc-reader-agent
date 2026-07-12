@@ -4,7 +4,7 @@ from tech_doc_agent.app.application.learning_state import UpdateLearningStateRes
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.resources import AppResources
+from tech_doc_agent.app.services.resources import AppResources, RetrievalResources
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
@@ -63,6 +63,26 @@ def test_app_resources_keeps_document_store_empty_when_seed_is_disabled(tmp_path
     resources = AppResources.create(settings)
 
     assert resources.faiss_store.index is None
+    assert resources.faiss_store.documents == []
+    assert resources.hybrid_retriever.search("StateGraph") == []
+
+
+def test_retrieval_resources_do_not_initialize_unrelated_learning_state(
+    tmp_path,
+    monkeypatch,
+):
+    def fail_learning_state_initialization(settings):
+        raise AssertionError("retrieval composition must not initialize learning state")
+
+    monkeypatch.setattr(
+        "tech_doc_agent.app.services.resources._initialize_learning_state",
+        fail_learning_state_initialization,
+    )
+
+    resources = RetrievalResources.create(
+        Settings(DATA_PATH=str(tmp_path), SEED_DOC_STORE_ON_EMPTY=False)
+    )
+
     assert resources.faiss_store.documents == []
     assert resources.hybrid_retriever.search("StateGraph") == []
 

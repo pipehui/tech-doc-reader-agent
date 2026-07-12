@@ -16,6 +16,7 @@ from evals.manifests import (
     identity_url_for,
     online_eval_settings,
     retrieval_eval_settings,
+    validate_eval_run_manifest,
     validate_runtime_identity,
 )
 from tech_doc_agent.app.core.settings import Settings
@@ -106,6 +107,7 @@ def test_eval_manifest_binds_dataset_settings_git_and_remote_identity(tmp_path):
     assert len(manifest["settings"]["fingerprint"]) == 64
     assert "private-value" not in str(manifest)
     assert manifest["generated_at"] == "2026-07-12T00:00:00+00:00"
+    assert validate_eval_run_manifest(manifest) == manifest
 
 
 def test_online_eval_settings_hashes_feedback_and_endpoint_hosts():
@@ -176,7 +178,12 @@ def test_offline_runner_settings_are_explicit_and_runtime_is_not_applicable():
             vector_top_k=8,
             limit=10,
             include_disabled=False,
-        )
+        ),
+        app_settings=Settings(
+            HYBRID_RAG_BM25_TOP_K=9,
+            HYBRID_RAG_VECTOR_TOP_K=7,
+            HYBRID_RAG_RRF_K=61,
+        ),
     )
     compaction = context_compaction_eval_settings(
         SimpleNamespace(
@@ -193,10 +200,42 @@ def test_offline_runner_settings_are_explicit_and_runtime_is_not_applicable():
     assert retrieval == {
         "mode": "bm25",
         "top_k": 5,
+        "bm25_top_k": 9,
         "vector_top_k": 8,
+        "rrf_k": 61,
+        "embedding": None,
         "limit": 10,
         "include_disabled": False,
     }
     assert compaction["answer_metric"] == "deterministic_marker_recall_proxy"
     assert compaction["token_metric"] == "langchain_count_tokens_approximately"
     assert lookup.to_payload() == {"status": "not_applicable"}
+
+
+def test_retrieval_eval_settings_identify_effective_vector_configuration():
+    args = SimpleNamespace(
+        mode="hybrid",
+        k=5,
+        vector_top_k=None,
+        limit=None,
+        include_disabled=False,
+    )
+    settings = Settings(
+        EMBEDDING_MODEL="embedding-model-a",
+        EMBEDDING_API_BASE="https://user:password@embedding.example/v1?token=secret",
+        HYBRID_RAG_BM25_TOP_K=9,
+        HYBRID_RAG_VECTOR_TOP_K=11,
+        HYBRID_RAG_RRF_K=63,
+    )
+
+    identity = retrieval_eval_settings(args, app_settings=settings)
+    serialized = json.dumps(identity)
+
+    assert identity["bm25_top_k"] == 9
+    assert identity["vector_top_k"] == 11
+    assert identity["rrf_k"] == 63
+    assert identity["embedding"]["model_id"] == "embedding-model-a"
+    assert identity["embedding"]["endpoint"]["path"] == "/v1"
+    assert "password" not in serialized
+    assert "embedding.example" not in serialized
+    assert "secret" not in serialized

@@ -62,6 +62,23 @@ SEED_LEARNING_HISTORY = [
 
 
 @dataclass
+class RetrievalResources:
+    settings: Settings
+    faiss_store: FaissStore
+    hybrid_retriever: HybridRetriever
+
+    @classmethod
+    def create(cls, settings: Settings | None = None) -> RetrievalResources:
+        settings = settings or get_settings()
+        faiss_store = _initialize_faiss_store(settings)
+        return cls(
+            settings=settings,
+            faiss_store=faiss_store,
+            hybrid_retriever=HybridRetriever(faiss_store, settings=settings),
+        )
+
+
+@dataclass
 class AppResources:
     settings: Settings
     faiss_store: FaissStore
@@ -76,12 +93,12 @@ class AppResources:
     @classmethod
     def create(cls, settings: Settings | None = None) -> AppResources:
         settings = settings or get_settings()
-        faiss_store = _initialize_faiss_store(settings)
+        retrieval = RetrievalResources.create(settings)
         learning_store, memory_store, learning_state_service = _initialize_learning_state(settings)
         return cls(
             settings=settings,
-            faiss_store=faiss_store,
-            hybrid_retriever=HybridRetriever(faiss_store, settings=settings),
+            faiss_store=retrieval.faiss_store,
+            hybrid_retriever=retrieval.hybrid_retriever,
             learning_store=learning_store,
             memory_store=memory_store,
             learning_state_service=learning_state_service,

@@ -93,6 +93,26 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --m
 |---|---:|---:|---:|---:|---:|---:|
 | Hybrid + metadata filter | 1.00 | 1.00 | 1.00 | 1.00 | 1.145s | 2.833s |
 
+Retrieval manifest 除 case dataset、runner commit/dirty 外，还绑定：
+
+- effective BM25/vector candidate Top K 与 RRF K；
+- vector/hybrid 查询侧的 embedding model 与安全 endpoint identity；
+- 有序 documents、chunk metadata 的 canonical content SHA-256；
+- FAISS serialized index SHA-256、dimension、vector count；
+- chunk size / overlap 和总 corpus fingerprint。
+
+manifest 不保存文档/分块原文或本地数据路径。历史表格只有在 companion manifest 通过下述 compatibility gate 时才能直接作为 PR baseline；旧 manifest 缺 corpus identity 时会返回 `unverified`，不能仅凭 case hash 或相同文档数比较质量指标。
+
+## Baseline Compatibility Gate
+
+比较任何 baseline/candidate metrics 前先运行：
+
+```bash
+python -m evals.check_manifest_compatibility eval_results/baseline.manifest.json eval_results/candidate.manifest.json
+```
+
+exit code `0` 表示 workload identity 相同且 Git provenance 可验证；`1` 表示 runner、dataset、settings、remote runtime 或 retrieval corpus 已知不一致；`2` 表示 manifest 无效或证据不足。PR/CI 不应使用 `--allow-dirty`；该开关只用于明确接受本地 dirty worktree 的诊断运行。两个 commit 可以不同，这是代码 before/after 的正常前提，但两边 commit 都必须可识别。
+
 ## Context Compaction Eval
 
 长会话上下文压缩先使用完全离线的 deterministic recall proxy，不启动后端、不调用模型：
@@ -101,7 +121,7 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --m
 python -m evals.run_context_compaction_eval --iterations 10 --manifest eval_results/context_compaction_latest.manifest.json
 ```
 
-retrieval 与 context-compaction 是本地离线 runner；它们使用同一 run manifest schema，但明确记录 `runtime_identity=not_applicable`。这表示“不依赖远端 agent runtime”，不是缺失数据。当前 retrieval manifest 绑定 case/settings/runner commit，真实 corpus generation/content fingerprint 仍需在准备版本化 corpus 后补齐，不能仅凭 dataset hash 比较检索质量基线。
+retrieval 与 context-compaction 是本地离线 runner；它们使用同一 run manifest schema，但明确记录 `runtime_identity=not_applicable`。这表示“不依赖远端 agent runtime”，不是缺失数据。retrieval 另有 corpus subject identity；context-compaction 当前不需要该字段。
 
 默认比较策略为：
 
