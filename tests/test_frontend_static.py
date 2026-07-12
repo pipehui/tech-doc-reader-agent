@@ -104,3 +104,13 @@ def test_container_build_generates_dist_and_compose_does_not_mask_it():
     assert "RUN npm run build" in dockerfile
     assert "COPY --from=frontend-builder /frontend/dist /app/frontend/dist" in dockerfile
     assert "./frontend:/app/frontend" not in compose
+
+
+def test_frontend_ci_smoke_does_not_load_full_backend_conftest():
+    workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert (
+        "python -m pytest tests/test_frontend_static.py -q --noconftest" in workflow
+    )

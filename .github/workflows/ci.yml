@@ -78,4 +78,6 @@ jobs:
 
       - name: FastAPI static smoke
         working-directory: ${{ github.workspace }}
-        run: python -m pytest tests/test_frontend_static.py -q
+        # This job installs only the static-serving smoke dependencies. The shared
+        # tests/conftest.py imports the full LangChain/LangGraph backend test stack.
+        run: python -m pytest tests/test_frontend_static.py -q --noconftest
