@@ -61,6 +61,36 @@ def test_build_config_omits_callbacks_for_state_reads():
     assert config["metadata"]["langfuse_session_id"] == "session-1"
     assert config["run_name"] == "tech_doc_agent.state"
     assert REQUEST_BUDGET_METADATA_KEY not in config["metadata"]
+    identity = config["metadata"]["runtime_execution_identity"]
+    assert identity["schema_version"] == 1
+    assert identity["fingerprint"] == runtime.execution_identity.fingerprint
+    assert len(identity["assistants"]) == 6
+
+
+def test_runtime_identity_tracks_compatibility_settings_reassignment():
+    runtime = ChatRuntime(settings=Settings(PRIMARY_MODEL="model-a"))
+    first_fingerprint = runtime.execution_identity.fingerprint
+
+    runtime.settings = Settings(PRIMARY_MODEL="model-b")
+    config = runtime.build_config("session-identity")
+
+    assert runtime.execution_identity.fingerprint != first_fingerprint
+    assert config["metadata"]["runtime_execution_identity"][
+        "fingerprint"
+    ] == runtime.execution_identity.fingerprint
+
+
+def test_explicit_runtime_identity_is_not_replaced_by_settings_reassignment():
+    identity_runtime = ChatRuntime(settings=Settings(PRIMARY_MODEL="model-a"))
+    injected_identity = identity_runtime.execution_identity
+    runtime = ChatRuntime(
+        settings=Settings(PRIMARY_MODEL="model-b"),
+        execution_identity=injected_identity,
+    )
+
+    runtime.settings = Settings(PRIMARY_MODEL="model-c")
+
+    assert runtime.execution_identity is injected_identity
 
 
 def test_session_config_uses_injected_request_start_without_persisting_deadline():

@@ -7,6 +7,8 @@ from pydantic import SecretStr
 from tech_doc_agent.app.core.retry import RetryExecutor, build_retry_executor
 from tech_doc_agent.app.core.settings import Settings
 
+from .identity import build_model_route_identity
+
 
 def _secret_or_placeholder(value: str) -> SecretStr:
     return SecretStr(value or "not-set")
@@ -41,9 +43,9 @@ class AssistantModelProvider:
 
 
 def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider:
-    primary_model_id = settings.PRIMARY_MODEL or "gpt-4o-mini"
+    route = build_model_route_identity(settings)
     primary = ChatOpenAI(
-        model=primary_model_id,
+        model=route.primary_model_id,
         api_key=_secret_or_placeholder(settings.OPENAI_API_KEY),
         base_url=_base_url_or_none(settings.OPENAI_BASE_URL),
         temperature=0,
@@ -51,11 +53,9 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
     )
 
     backup = None
-    backup_model_id = None
-    if settings.BACKUP_MODEL and settings.BACKUP_API_KEY:
-        backup_model_id = settings.BACKUP_MODEL
+    if route.backup_model_id is not None:
         backup = ChatOpenAI(
-            model=backup_model_id,
+            model=route.backup_model_id,
             api_key=_secret_or_placeholder(settings.BACKUP_API_KEY),
             base_url=_base_url_or_none(settings.BACKUP_API_BASE),
             temperature=0,
@@ -66,7 +66,7 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
         primary=primary,
         backup=backup,
         retry_executor=build_retry_executor(settings),
-        provider_id=settings.MODEL_PROVIDER_ID,
-        primary_model_id=primary_model_id,
-        backup_model_id=backup_model_id,
+        provider_id=route.provider_id,
+        primary_model_id=route.primary_model_id,
+        backup_model_id=route.backup_model_id,
     )

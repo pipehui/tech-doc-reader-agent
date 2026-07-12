@@ -56,6 +56,40 @@
 
 任一检查失败时返回 `503`，并在 `checks` 中包含失败原因。
 
+### GET /runtime/identity
+
+返回当前部署的 versioned execution identity manifest，供受信 eval/运维流程把结果绑定到实际 prompt 与 model route。默认关闭；仅当：
+
+```dotenv
+RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
+```
+
+时可访问。当前项目尚未接入管理员鉴权，因此生产环境只应在受信内网或受保护网关后启用。关闭时返回 `404`。
+
+响应只包含：
+
+- schema version 与整体 SHA-256 fingerprint；
+- 六个 Assistant 的 role、prompt ID、prompt SHA-256；
+- configured provider、primary model ID 与可选 backup model ID。
+
+它不会返回 prompt 正文、API key、provider base URL 或其他 secret。`backup_model_id` 表示 fallback 已配置，不表示本次请求实际使用了 backup；实际模型仍以 provider response usage metadata 为准。
+
+```json
+{
+  "schema_version": 1,
+  "fingerprint": "<sha256>",
+  "assistants": [
+    {
+      "assistant_role": "primary",
+      "prompt_id": "tech-doc-reader.primary.v1",
+      "prompt_sha256": "<sha256>",
+      "model_provider_id": "openai_compatible",
+      "primary_model_id": "configured-model"
+    }
+  ]
+}
+```
+
 ### POST /chat
 
 发送用户消息并返回 SSE 事件流。

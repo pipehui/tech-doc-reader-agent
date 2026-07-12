@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from redis import Redis
 from redis.exceptions import RedisError
 
 from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
+from tech_doc_agent.app.api.schemas import RuntimeExecutionIdentityResponse
 
 
 router = APIRouter()
@@ -113,3 +114,25 @@ def ready(request: Request):
         payload,
         status_code=status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE,
     )
+
+
+@router.get(
+    "/runtime/identity",
+    response_model=RuntimeExecutionIdentityResponse,
+    response_model_exclude_none=True,
+)
+async def get_runtime_identity(request: Request):
+    runtime = getattr(request.app.state, "runtime", None)
+    identity = getattr(runtime, "execution_identity", None)
+    if identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Runtime execution identity is unavailable.",
+        )
+    settings = getattr(runtime, "settings", None)
+    if not getattr(settings, "RUNTIME_IDENTITY_ENDPOINT_ENABLED", False):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Runtime execution identity endpoint is disabled.",
+        )
+    return RuntimeExecutionIdentityResponse(**identity.to_payload())

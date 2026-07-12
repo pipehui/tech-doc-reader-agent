@@ -63,6 +63,7 @@
 | 2026-07-12 | Phase 4：FastAPI async runtime surface 与 CLI sync facade 分界 | route 同步重复编排删除，native async graph benchmark 后续独立执行 | [2026-07-12-fastapi-async-runtime-boundary.md](2026-07-12-fastapi-async-runtime-boundary.md) |
 | 2026-07-12 | Phase 4：Graph finish 行为契约与 CompletionPolicy 值对象收口 | 五个 Agent 终态更新锁定，B7 provider spike 继续 | [2026-07-12-graph-finish-contract.md](2026-07-12-graph-finish-contract.md) |
 | 2026-07-12 | Phase 4：Assistant execution identity 与 prompt/model trace metadata | trace 子项完成，远程 eval identity manifest 继续 | [2026-07-12-assistant-execution-identity.md](2026-07-12-assistant-execution-identity.md) |
+| 2026-07-12 | Phase 4：Versioned runtime identity manifest 与 default-off 诊断端点 | 服务端事实源完成，eval artifact 消费继续 | [2026-07-12-runtime-identity-manifest.md](2026-07-12-runtime-identity-manifest.md) |
 
 ## 本地任务单策略
 

@@ -23,6 +23,10 @@ from tech_doc_agent.app.runtime.execution import GraphExecutionService
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
 from tech_doc_agent.app.runtime.sessions import SessionQueryService
 from tech_doc_agent.app.services.resources import AppResources
+from tech_doc_agent.app.services.assistants.identity import (
+    RuntimeExecutionIdentity,
+    build_runtime_execution_identity,
+)
 
 
 class ChatRuntime:
@@ -32,13 +36,18 @@ class ChatRuntime:
         *,
         settings: Settings | None = None,
         lifecycle: RuntimeLifecycle | None = None,
+        execution_identity: RuntimeExecutionIdentity | None = None,
     ) -> None:
-        self.settings = settings if settings is not None else get_settings()
+        self._settings = settings if settings is not None else get_settings()
+        self._execution_identity_override = execution_identity
+        self._execution_identity = execution_identity or build_runtime_execution_identity(
+            self._settings
+        )
         self._lifecycle = (
             lifecycle
             if lifecycle is not None
             else RuntimeLifecycle(
-                settings=self.settings,
+                settings=self._settings,
                 resource_factory=AppResources.create,
                 checkpointer_context_factory=RedisSaver.from_conn_string,
                 graph_factory=build_application_graph,
@@ -62,6 +71,20 @@ class ChatRuntime:
             session_queries=self._session_queries,
             approvals=self._approval_service,
         )
+
+    @property
+    def settings(self) -> Settings:
+        return self._settings
+
+    @settings.setter
+    def settings(self, value: Settings) -> None:
+        self._settings = value
+        if self._execution_identity_override is None:
+            self._execution_identity = build_runtime_execution_identity(value)
+
+    @property
+    def execution_identity(self) -> RuntimeExecutionIdentity:
+        return self._execution_identity
 
     @property
     def resources(self) -> Any | None:
@@ -128,7 +151,10 @@ class ChatRuntime:
         with_callbacks: bool = False,
         request_started_monotonic: float | None = None,
     ) -> dict:
-        return SessionConfigFactory(self.settings).build(
+        return SessionConfigFactory(
+            self.settings,
+            execution_identity_metadata=self.execution_identity.to_payload(),
+        ).build(
             session_id,
             user_id=user_id,
             namespace=namespace,

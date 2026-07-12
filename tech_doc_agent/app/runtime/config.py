@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from time import monotonic
 from typing import Any
@@ -19,6 +19,7 @@ class SessionConfigFactory:
 
     settings: Settings
     monotonic_clock: Callable[[], float] = monotonic
+    execution_identity_metadata: Mapping[str, Any] | None = None
 
     def build(
         self,
@@ -49,6 +50,10 @@ class SessionConfigFactory:
                 langfuse_trace=langfuse_trace,
             ),
         }
+        if self.execution_identity_metadata is not None:
+            metadata["runtime_execution_identity"] = dict(
+                self.execution_identity_metadata
+            )
         if operation in {"chat", "approval"}:
             request_window = build_execution_budget(self.settings).start_request(
                 now=(

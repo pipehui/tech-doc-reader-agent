@@ -1,7 +1,9 @@
 import pytest
 
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.assistants.identity import (
     AssistantExecutionIdentity,
+    build_runtime_execution_identity,
 )
 from tech_doc_agent.app.services.assistants.definition import (
     build_assistant_definition,
@@ -59,6 +61,63 @@ def test_assistant_definition_rejects_prompt_from_another_role():
             name="parser",
             safe_tools=(),
         )
+
+
+def test_runtime_execution_identity_is_versioned_deterministic_and_secret_free():
+    settings = Settings(
+        MODEL_PROVIDER_ID="provider-a",
+        PRIMARY_MODEL="model-primary",
+        BACKUP_MODEL="model-backup",
+        BACKUP_API_KEY="private-backup-key",
+        OPENAI_API_KEY="private-primary-key",
+        OPENAI_BASE_URL="https://private-provider.example/v1",
+    )
+
+    first = build_runtime_execution_identity(settings)
+    second = build_runtime_execution_identity(settings)
+    payload = first.to_payload()
+
+    assert first.fingerprint == second.fingerprint
+    assert payload["schema_version"] == 1
+    assert payload["fingerprint"] == first.fingerprint
+    assert [item["assistant_role"] for item in payload["assistants"]] == [
+        "primary",
+        "parser",
+        "relation",
+        "explanation",
+        "examination",
+        "summary",
+    ]
+    assert all(
+        item["model_provider_id"] == "provider-a"
+        and item["primary_model_id"] == "model-primary"
+        and item["backup_model_id"] == "model-backup"
+        for item in payload["assistants"]
+    )
+    serialized = str(payload)
+    assert "private-backup-key" not in serialized
+    assert "private-primary-key" not in serialized
+    assert "private-provider.example" not in serialized
+    assert "You are" not in serialized
+
+
+def test_runtime_execution_fingerprint_changes_with_active_model_route():
+    primary = build_runtime_execution_identity(
+        Settings(PRIMARY_MODEL="model-a")
+    )
+    changed = build_runtime_execution_identity(
+        Settings(PRIMARY_MODEL="model-b")
+    )
+    inactive_backup = build_runtime_execution_identity(
+        Settings(
+            PRIMARY_MODEL="model-a",
+            BACKUP_MODEL="model-backup",
+            BACKUP_API_KEY="",
+        )
+    )
+
+    assert primary.fingerprint != changed.fingerprint
+    assert primary.fingerprint == inactive_backup.fingerprint
 
 
 @pytest.mark.parametrize(

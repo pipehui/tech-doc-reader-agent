@@ -25,6 +25,28 @@ class ApproveRequest(BaseModel):
     user_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=TENANT_ID_PATTERN)
     namespace: str | None = Field(default=None, min_length=1, max_length=128, pattern=TENANT_ID_PATTERN)
 
+
+class AssistantExecutionIdentityResponse(BaseModel):
+    assistant_role: Literal[
+        "primary",
+        "parser",
+        "relation",
+        "explanation",
+        "examination",
+        "summary",
+    ]
+    prompt_id: str
+    prompt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    model_provider_id: str
+    primary_model_id: str | None = None
+    backup_model_id: str | None = None
+
+
+class RuntimeExecutionIdentityResponse(BaseModel):
+    schema_version: Literal[1]
+    fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    assistants: list[AssistantExecutionIdentityResponse]
+
 class HistoryMessage(BaseModel):
     id: str | None = None
     role: Literal["user", "assistant", "system", "tool"]

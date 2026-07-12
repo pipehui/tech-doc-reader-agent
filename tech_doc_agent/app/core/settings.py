@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     CONTEXT_COMPACTION_MAX_SERIALIZED_BYTES: int = Field(default=0, ge=0)
     CONTEXT_COMPACTION_KEEP_RECENT_TURNS: int = Field(default=4, ge=1)
     CONTEXT_SUMMARY_MAX_CHARS: int = Field(default=12_000, ge=256)
+    RUNTIME_IDENTITY_ENDPOINT_ENABLED: bool = False
 
     HYBRID_RAG_TOP_K: int = 5
     HYBRID_RAG_BM25_TOP_K: int = 8

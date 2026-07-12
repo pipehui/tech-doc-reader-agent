@@ -1,3 +1,5 @@
+import hashlib
+import json
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -6,6 +8,9 @@ from redis.exceptions import ConnectionError
 
 from tech_doc_agent.app.api.routes import health
 from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.services.assistants.identity import (
+    build_runtime_execution_identity,
+)
 
 
 class FakeRedis:
@@ -97,3 +102,61 @@ def test_ready_endpoint_returns_503_when_redis_is_unavailable(monkeypatch):
     assert redis_check["error_code"] == "dependency_unavailable"
     assert redis_check["retryable"] is True
     assert "redis down" not in str(redis_check)
+
+
+def test_runtime_identity_endpoint_returns_versioned_secret_free_manifest():
+    settings = Settings(
+        PRIMARY_MODEL="model-primary",
+        OPENAI_API_KEY="private-key",
+        OPENAI_BASE_URL="https://private-provider.example/v1",
+        RUNTIME_IDENTITY_ENDPOINT_ENABLED=True,
+    )
+    runtime = SimpleNamespace(
+        settings=settings,
+        execution_identity=build_runtime_execution_identity(settings),
+    )
+
+    response = TestClient(_app_with_runtime(runtime)).get("/runtime/identity")
+    payload = response.json()
+
+    assert response.status_code == 200
+    assert payload["schema_version"] == 1
+    assert len(payload["fingerprint"]) == 64
+    assert len(payload["assistants"]) == 6
+    assert payload["assistants"][0]["primary_model_id"] == "model-primary"
+    canonical_payload = dict(payload)
+    fingerprint = canonical_payload.pop("fingerprint")
+    assert hashlib.sha256(
+        json.dumps(
+            canonical_payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest() == fingerprint
+    assert "private-key" not in response.text
+    assert "private-provider.example" not in response.text
+
+
+def test_runtime_identity_endpoint_is_unavailable_without_runtime():
+    response = TestClient(_app_with_runtime()).get("/runtime/identity")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Runtime execution identity is unavailable."
+    }
+
+
+def test_runtime_identity_endpoint_is_disabled_by_default():
+    settings = Settings()
+    runtime = SimpleNamespace(
+        settings=settings,
+        execution_identity=build_runtime_execution_identity(settings),
+    )
+
+    response = TestClient(_app_with_runtime(runtime)).get("/runtime/identity")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Runtime execution identity endpoint is disabled."
+    }
