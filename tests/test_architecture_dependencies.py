@@ -508,6 +508,30 @@ def test_chat_route_only_owns_http_endpoint_functions():
     assert public_delivery_functions == ["chat_response", "approval_response"]
 
 
+def test_sse_message_update_and_part_translation_have_distinct_owners():
+    sse_dir = APP_DIR / "api" / "sse"
+    streaming_source = (sse_dir / "streaming.py").read_text(encoding="utf-8")
+    message_source = (sse_dir / "message_translator.py").read_text(encoding="utf-8")
+    update_source = (sse_dir / "update_translator.py").read_text(encoding="utf-8")
+    parts_source = (sse_dir / "parts.py").read_text(encoding="utf-8")
+    package_source = (sse_dir / "__init__.py").read_text(encoding="utf-8")
+
+    assert not (sse_dir / "translators.py").exists()
+    assert "from .agent_metadata import infer_agent_from_metadata" in streaming_source
+    assert "from .message_translator import extract_text_from_chunk" in streaming_source
+    assert "from .parts import (" in streaming_source
+    assert "from .update_translator import iter_update_events" in streaming_source
+    assert "def extract_text_from_chunk(" in message_source
+    assert "def extract_text_from_content(" in message_source
+    assert "ServerSentEvent" not in message_source
+    assert "def iter_update_events(" in update_source
+    assert "extract_text_from_content" in update_source
+    assert "def stream_part_type_and_data(" in parts_source
+    assert "fastapi" not in parts_source
+    assert "tech_doc_agent.app.core" not in parts_source
+    assert "from .update_translator import iter_update_events" in package_source
+
+
 def test_runtime_package_init_does_not_eagerly_load_components():
     path = RUNTIME_DIR / "__init__.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))

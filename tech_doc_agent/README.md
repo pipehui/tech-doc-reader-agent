@@ -22,6 +22,13 @@ tech_doc_agent
 │   │   ├── routes
 │   │   │   └── chat.py
 │   │   └── sse
+│   │       ├── agent_metadata.py
+│   │       ├── contract.py
+│   │       ├── encoder.py
+│   │       ├── message_translator.py
+│   │       ├── parts.py
+│   │       ├── streaming.py
+│   │       └── update_translator.py
 │   ├── agents
 │   │   ├── definition.py
 │   │   ├── identity.py
@@ -145,6 +152,10 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 ### `app/api/chat_delivery.py`
 
 提供 route 唯一使用的 `chat_response` 与 `approval_response`。模块内部负责 guardrail 的 JSON/SSE 投影、审批暂停事件、chat/approval stream 编排和 trace-context response wrapping；私有细节不从 route re-export。SSE contract、translator、iterator 与 encoder 仍统一由 `app/api/sse/` 拥有，delivery 仅通过私有 `_sse` 依赖消费。
+
+### `app/api/sse`
+
+按 LangGraph part 类型分工：`parts.py` 只解析 dict/tuple envelope，`agent_metadata.py` 解析 agent identity，`message_translator.py` 规范化 token/message content，`update_translator.py` 按固定顺序生成 transition/plan/result/usage/budget/context/retry/message/tool events，`streaming.py` 组合二者并收束 interrupt/done/error。Package-level `iter_update_events` 仍是稳定入口；旧的混合 `translators.py` 已删除。
 
 ### `app/agents`
 

@@ -77,3 +77,5 @@ api/sse/
 - 将 guardrail/chat/approval workflow 从 route 继续移到 application service。
 - tool_result 增加显式 status/error code，前端停止解析自然语言判断失败。
 - 前端 `applySseEvent` 改为可单测 pure reducer。
+
+后续 2026-07-12 批次进一步把本日志中的混合 `translators.py` 按 metadata/message/part/update 物理拆分；package-level API 与 event 顺序不变。见 [2026-07-12-sse-translator-boundaries.md](2026-07-12-sse-translator-boundaries.md)。

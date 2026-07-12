@@ -512,7 +512,7 @@ def test_stream_translation_ignores_unknown_parts_with_safe_telemetry(monkeypatc
 def test_update_translation_ignores_malformed_nodes_with_safe_telemetry(monkeypatch):
     logged_events = []
     monkeypatch.setattr(
-        "tech_doc_agent.app.api.sse.translators.log_event",
+        "tech_doc_agent.app.api.sse.update_translator.log_event",
         lambda event, **fields: logged_events.append((event, fields)),
     )
 

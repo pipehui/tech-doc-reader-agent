@@ -15,6 +15,8 @@ Tech Doc Reader Agent 是一个围绕“技术概念学习”设计的多智能�
 
 `api/routes/chat.py` 是仅含四个 endpoint 的 request facade：解析 HTTP 参数、tenant 与 trace ID，然后调用 `api/chat_delivery.py` 的 `chat_response` 或 `approval_response`。输入风险评估与 warning/blocked disposition telemetry 由 `application/input_guardrails.py` 统一完成；JSON/SSE guardrail 投影、stream 编排和 trace-context response wrapping 由 chat delivery 拥有。SSE event contract、payload translation、iterator 和 wire encoding 的唯一事实源仍是 `api/sse/`，只有 delivery 通过私有 `_sse` 模块依赖消费它，route 不再直接理解 SSE helper。
 
+`api/sse` 内部不再用单个 translator 文件理解所有输入：`parts.py` 解析 LangGraph envelope，`agent_metadata.py` 解析 node/path identity，`message_translator.py` 只做 token/content normalization，`update_translator.py` 拥有 update pipeline，`streaming.py` 负责选择 part translator 与 terminal event。Update translator 只单向复用 message content normalization；message/parts 不依赖 update 或 FastAPI event。
+
 ## Agents
 
 | Agent | Responsibility |

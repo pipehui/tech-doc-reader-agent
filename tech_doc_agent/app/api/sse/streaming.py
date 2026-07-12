@@ -6,14 +6,14 @@ from tech_doc_agent.app.core.errors import ApplicationError, classify_error, saf
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 
+from .agent_metadata import infer_agent_from_metadata
 from .events import sse_event
-from .translators import (
+from .message_translator import extract_text_from_chunk
+from .parts import (
     extract_message_part_data,
-    extract_text_from_chunk,
-    infer_agent_from_metadata,
-    iter_update_events,
     stream_part_type_and_data,
 )
+from .update_translator import iter_update_events
 
 
 def _stream_error(exc: BaseException) -> ApplicationError:
