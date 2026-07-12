@@ -22,6 +22,7 @@ RuntimeIdentityStatus = Literal[
     "disabled",
     "unavailable",
     "invalid",
+    "not_applicable",
 ]
 
 
@@ -185,6 +186,29 @@ def online_eval_settings(args: Any) -> dict[str, Any]:
     }
 
 
+def retrieval_eval_settings(args: Any) -> dict[str, Any]:
+    return {
+        "mode": args.mode,
+        "top_k": args.k,
+        "vector_top_k": args.vector_top_k,
+        "limit": args.limit,
+        "include_disabled": args.include_disabled,
+    }
+
+
+def context_compaction_eval_settings(args: Any) -> dict[str, Any]:
+    return {
+        "limit": args.limit,
+        "iterations": args.iterations,
+        "max_messages": args.max_messages,
+        "max_serialized_bytes": args.max_serialized_bytes,
+        "keep_recent_turns": args.keep_recent_turns,
+        "summary_max_chars": args.summary_max_chars,
+        "answer_metric": "deterministic_marker_recall_proxy",
+        "token_metric": "langchain_count_tokens_approximately",
+    }
+
+
 def _safe_settings_payload(settings: dict[str, Any]) -> dict[str, Any]:
     serialized = json.loads(
         json.dumps(settings, ensure_ascii=False, sort_keys=True, default=str)
@@ -241,8 +265,10 @@ __all__ = [
     "RuntimeIdentityLookup",
     "approve_url_for",
     "build_eval_run_manifest",
+    "context_compaction_eval_settings",
     "fetch_runtime_identity",
     "identity_url_for",
     "online_eval_settings",
+    "retrieval_eval_settings",
     "validate_runtime_identity",
 ]

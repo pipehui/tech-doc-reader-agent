@@ -190,3 +190,14 @@ def test_render_retrieval_markdown_report_contains_summary_and_cases():
     assert summary["recall_at_k_avg"] == 0.5
     assert summary["hit_at_1_avg"] == 0.5
     assert summary["mrr_avg"] == 0.5
+
+    manifested_report = render_markdown_report(
+        rows,
+        manifest={
+            "dataset": {"sha256": "dataset-hash"},
+            "settings": {"fingerprint": "settings-hash"},
+            "runner_git": {"commit": "commit-a"},
+        },
+    )
+    assert "Dataset SHA-256: `dataset-hash`" in manifested_report
+    assert "Runtime identity: `not_applicable`" in manifested_report

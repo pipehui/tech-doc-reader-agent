@@ -9,7 +9,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from evals.artifacts import redact_artifact_rows, safe_artifact_text, write_jsonl
+from evals.artifacts import (
+    redact_artifact_rows,
+    safe_artifact_text,
+    write_json,
+    write_jsonl,
+)
+from evals.manifests import (
+    RuntimeIdentityLookup,
+    build_eval_run_manifest,
+    retrieval_eval_settings,
+)
 from tech_doc_agent.app.services.retrieval import (
     HybridRetriever,
     RetrievalMode,
@@ -166,7 +176,11 @@ def run_all(args: argparse.Namespace) -> list[dict[str, Any]]:
     return results
 
 
-def render_markdown_report(rows: list[dict[str, Any]]) -> str:
+def render_markdown_report(
+    rows: list[dict[str, Any]],
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> str:
     rows = redact_artifact_rows(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
     summary = summarize_results(rows)
@@ -181,6 +195,16 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         f"- Done: `{summary['done']}`",
         f"- Errored: `{summary['errored']}`",
         f"- Top K: `{top_k_label}`",
+        *(
+            [
+                f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
+                f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
+                f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
+                "- Runtime identity: `not_applicable`",
+            ]
+            if manifest is not None
+            else []
+        ),
         "",
         "## Summary",
         "",
@@ -306,6 +330,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--include-disabled", action="store_true", help="Run cases marked enabled=false.")
     parser.add_argument("--output", type=Path, default=Path("eval_results/retrieval_latest.jsonl"))
     parser.add_argument("--report", type=Path, default=Path("eval_reports/retrieval_latest.md"))
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("eval_results/retrieval_latest.manifest.json"),
+    )
     return parser.parse_args()
 
 
@@ -415,12 +444,23 @@ def _md_text(value: Any) -> str:
 
 def main() -> None:
     args = parse_args()
+    manifest = build_eval_run_manifest(
+        runner="offline_retrieval_eval",
+        dataset_path=args.cases,
+        settings=retrieval_eval_settings(args),
+        runtime_identity=RuntimeIdentityLookup(status="not_applicable"),
+    )
+    write_json(args.manifest, manifest)
     rows = run_all(args)
     write_jsonl(args.output, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_markdown_report(rows), encoding="utf-8")
+    args.report.write_text(
+        render_markdown_report(rows, manifest=manifest),
+        encoding="utf-8",
+    )
     print(f"Raw retrieval results saved to {safe_artifact_text(args.output)}")
     print(f"Markdown retrieval report saved to {safe_artifact_text(args.report)}")
+    print(f"Retrieval run manifest saved to {safe_artifact_text(args.manifest)}")
 
 
 if __name__ == "__main__":

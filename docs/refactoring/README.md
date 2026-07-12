@@ -65,6 +65,7 @@
 | 2026-07-12 | Phase 4：Assistant execution identity 与 prompt/model trace metadata | trace 子项完成，远程 eval identity manifest 继续 | [2026-07-12-assistant-execution-identity.md](2026-07-12-assistant-execution-identity.md) |
 | 2026-07-12 | Phase 4：Versioned runtime identity manifest 与 default-off 诊断端点 | 服务端事实源完成，eval artifact 消费继续 | [2026-07-12-runtime-identity-manifest.md](2026-07-12-runtime-identity-manifest.md) |
 | 2026-07-12 | Phase 4：Online eval run manifest、远端 identity 握手与安全 settings fingerprint | online eval 完成，offline runners 继续 | [2026-07-12-online-eval-run-manifest.md](2026-07-12-online-eval-run-manifest.md) |
+| 2026-07-12 | Phase 4：Retrieval/context-compaction shared run manifest 与 `not_applicable` identity | offline runners 完成，corpus fingerprint 继续 | [2026-07-12-offline-eval-run-manifest.md](2026-07-12-offline-eval-run-manifest.md) |
 
 ## 本地任务单策略
 

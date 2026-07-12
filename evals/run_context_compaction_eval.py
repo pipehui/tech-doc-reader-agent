@@ -7,11 +7,21 @@ from pathlib import Path
 import statistics
 from typing import Any
 
-from evals.artifacts import redact_artifact_rows, safe_artifact_text, write_jsonl
+from evals.artifacts import (
+    redact_artifact_rows,
+    safe_artifact_text,
+    write_json,
+    write_jsonl,
+)
 from evals.context_compaction_eval import (
     ContextCompactionCase,
     evaluate_context_compaction_case,
     load_context_compaction_cases,
+)
+from evals.manifests import (
+    RuntimeIdentityLookup,
+    build_eval_run_manifest,
+    context_compaction_eval_settings,
 )
 from tech_doc_agent.app.core.context_compaction import ContextCompactionPolicy
 
@@ -93,7 +103,11 @@ def summarize_by_category(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
     }
 
 
-def render_markdown_report(rows: list[dict[str, Any]]) -> str:
+def render_markdown_report(
+    rows: list[dict[str, Any]],
+    *,
+    manifest: dict[str, Any] | None = None,
+) -> str:
     rows = redact_artifact_rows(rows)
     summary = summarize_results(rows)
     generated_at = datetime.now(timezone.utc).isoformat()
@@ -108,6 +122,16 @@ def render_markdown_report(rows: list[dict[str, Any]]) -> str:
         f"- Policy: `{policy}`",
         "- Answer metric: `deterministic_marker_recall_proxy`",
         "- Token metric: `langchain_count_tokens_approximately` (not provider usage)",
+        *(
+            [
+                f"- Dataset SHA-256: `{manifest['dataset']['sha256']}`",
+                f"- Eval settings fingerprint: `{manifest['settings']['fingerprint']}`",
+                f"- Runner commit: `{manifest['runner_git']['commit'] or 'N/A'}`",
+                "- Runtime identity: `not_applicable`",
+            ]
+            if manifest is not None
+            else []
+        ),
         "",
         "## Summary",
         "",
@@ -197,15 +221,30 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("eval_reports/context_compaction_latest.md"),
     )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("eval_results/context_compaction_latest.manifest.json"),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
+    manifest = build_eval_run_manifest(
+        runner="offline_context_compaction_eval",
+        dataset_path=args.cases,
+        settings=context_compaction_eval_settings(args),
+        runtime_identity=RuntimeIdentityLookup(status="not_applicable"),
+    )
+    write_json(args.manifest, manifest)
     rows = run_all(args)
     write_jsonl(args.output, rows)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render_markdown_report(rows), encoding="utf-8")
+    args.report.write_text(
+        render_markdown_report(rows, manifest=manifest),
+        encoding="utf-8",
+    )
     summary = summarize_results(rows)
     print(
         "Summary: "
@@ -215,6 +254,7 @@ def main() -> int:
     )
     print(f"JSONL: {args.output}")
     print(f"Report: {args.report}")
+    print(f"Manifest: {args.manifest}")
     return 1 if summary["errored"] else 0
 
 

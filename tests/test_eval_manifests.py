@@ -11,9 +11,11 @@ from evals.manifests import (
     RuntimeIdentityLookup,
     approve_url_for,
     build_eval_run_manifest,
+    context_compaction_eval_settings,
     fetch_runtime_identity,
     identity_url_for,
     online_eval_settings,
+    retrieval_eval_settings,
     validate_runtime_identity,
 )
 from tech_doc_agent.app.core.settings import Settings
@@ -164,3 +166,37 @@ def test_approve_url_derivation_preserves_prefix_and_auth_query():
     ) == (
         "https://user:password@target.example/api/chat/approve?token=secret"
     )
+
+
+def test_offline_runner_settings_are_explicit_and_runtime_is_not_applicable():
+    retrieval = retrieval_eval_settings(
+        SimpleNamespace(
+            mode="bm25",
+            k=5,
+            vector_top_k=8,
+            limit=10,
+            include_disabled=False,
+        )
+    )
+    compaction = context_compaction_eval_settings(
+        SimpleNamespace(
+            limit=None,
+            iterations=10,
+            max_messages=12,
+            max_serialized_bytes=0,
+            keep_recent_turns=3,
+            summary_max_chars=12_000,
+        )
+    )
+    lookup = RuntimeIdentityLookup(status="not_applicable")
+
+    assert retrieval == {
+        "mode": "bm25",
+        "top_k": 5,
+        "vector_top_k": 8,
+        "limit": 10,
+        "include_disabled": False,
+    }
+    assert compaction["answer_metric"] == "deterministic_marker_recall_proxy"
+    assert compaction["token_metric"] == "langchain_count_tokens_approximately"
+    assert lookup.to_payload() == {"status": "not_applicable"}

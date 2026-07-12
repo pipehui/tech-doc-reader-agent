@@ -109,6 +109,17 @@ def test_summary_and_report_keep_proxy_limitations_explicit():
     assert "model_answer_consistency" in report
     assert "tool_only_fact_is_not_copied" in report
 
+    manifested_report = render_markdown_report(
+        rows,
+        manifest={
+            "dataset": {"sha256": "dataset-hash"},
+            "settings": {"fingerprint": "settings-hash"},
+            "runner_git": {"commit": "commit-a"},
+        },
+    )
+    assert "Dataset SHA-256: `dataset-hash`" in manifested_report
+    assert "Runtime identity: `not_applicable`" in manifested_report
+
 
 def test_case_payload_rejects_unsupported_marker_role():
     payload = {

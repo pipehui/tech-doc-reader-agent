@@ -68,9 +68,9 @@ runner 不会用本地 `.env` 或 prompt 文件替代远端 identity。目标服
 离线检索评测不需要启动后端：
 
 ```bash
-python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode bm25 --k 5 --output eval_results/retrieval_bm25.jsonl --report eval_reports/retrieval_bm25.md
-python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode vector --k 5 --output eval_results/retrieval_vector.jsonl --report eval_reports/retrieval_vector.md
-python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode hybrid --k 5 --output eval_results/retrieval_hybrid.jsonl --report eval_reports/retrieval_hybrid.md
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode bm25 --k 5 --output eval_results/retrieval_bm25.jsonl --report eval_reports/retrieval_bm25.md --manifest eval_results/retrieval_bm25.manifest.json
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode vector --k 5 --output eval_results/retrieval_vector.jsonl --report eval_reports/retrieval_vector.md --manifest eval_results/retrieval_vector.manifest.json
+python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode hybrid --k 5 --output eval_results/retrieval_hybrid.jsonl --report eval_reports/retrieval_hybrid.md --manifest eval_results/retrieval_hybrid.manifest.json
 ```
 
 当前 full retrieval eval（2026-04-29，60 cases，Top K=5）：
@@ -84,7 +84,7 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mod
 Metadata filter eval：
 
 ```bash
-python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --mode hybrid --k 5 --output eval_results/retrieval_filter.jsonl --report eval_reports/retrieval_filter.md
+python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --mode hybrid --k 5 --output eval_results/retrieval_filter.jsonl --report eval_reports/retrieval_filter.md --manifest eval_results/retrieval_filter.manifest.json
 ```
 
 当前 metadata filter eval（2026-04-29，8 filtered-confusable cases，Top K=5）：
@@ -98,8 +98,10 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --m
 长会话上下文压缩先使用完全离线的 deterministic recall proxy，不启动后端、不调用模型：
 
 ```bash
-python -m evals.run_context_compaction_eval --iterations 10
+python -m evals.run_context_compaction_eval --iterations 10 --manifest eval_results/context_compaction_latest.manifest.json
 ```
+
+retrieval 与 context-compaction 是本地离线 runner；它们使用同一 run manifest schema，但明确记录 `runtime_identity=not_applicable`。这表示“不依赖远端 agent runtime”，不是缺失数据。当前 retrieval manifest 绑定 case/settings/runner commit，真实 corpus generation/content fingerprint 仍需在准备版本化 corpus 后补齐，不能仅凭 dataset hash 比较检索质量基线。
 
 默认比较策略为：
 
