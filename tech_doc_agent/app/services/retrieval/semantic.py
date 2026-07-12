@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.services.retrieval.documents import document_key
 from tech_doc_agent.app.services.retrieval.filters import metadata_matches
@@ -25,6 +26,7 @@ class SemanticRanker:
         *,
         top_k: int,
         filters: MetadataFilter,
+        degrade_on_failure: bool = True,
     ) -> list[RankedCandidate]:
         if top_k <= 0:
             return []
@@ -32,11 +34,16 @@ class SemanticRanker:
         try:
             candidate_k = top_k * 5 if filters else top_k
             chunks = self.store.search_related(query, k=candidate_k)
-        except Exception as exc:
+        except ApplicationError as exc:
+            if not degrade_on_failure:
+                raise
             log_event(
                 "retrieval.semantic.skipped",
-                error_type=type(exc).__name__,
-                error=str(exc),
+                **safe_error_fields(
+                    exc,
+                    dependency="semantic_search",
+                    tool="search_related_docs",
+                ),
             )
             return []
 

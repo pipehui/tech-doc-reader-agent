@@ -21,3 +21,13 @@ SSE_EVENT_NAMES: frozenset[str] = frozenset(get_args(SseEventName))
 
 ToolResultStatus = Literal["success", "error"]
 TOOL_RESULT_STATUSES: frozenset[str] = frozenset(get_args(ToolResultStatus))
+
+ERROR_DETAIL_FIELDS: frozenset[str] = frozenset(
+    {
+        "code",
+        "retryable",
+        "safe_message",
+        "dependency",
+        "cause_type",
+    }
+)

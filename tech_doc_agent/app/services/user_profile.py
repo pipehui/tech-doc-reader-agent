@@ -332,18 +332,15 @@ def _load_user_memories(
     if memory_store is None:
         return []
 
-    try:
-        if query:
-            return memory_store.read_by_query(
-                query,
-                user_id=tenant.user_id,
-                namespace=tenant.namespace,
-                limit=limit,
-            )
-        return memory_store.read_recent(
+    if query:
+        return memory_store.read_by_query(
+            query,
             user_id=tenant.user_id,
             namespace=tenant.namespace,
             limit=limit,
         )
-    except Exception:
-        return []
+    return memory_store.read_recent(
+        user_id=tenant.user_id,
+        namespace=tenant.namespace,
+        limit=limit,
+    )

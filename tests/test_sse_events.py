@@ -14,6 +14,7 @@ from tech_doc_agent.app.api.routes.chat import (
     stream_parts_as_sse,
 )
 from tech_doc_agent.app.core.observability import get_trace_context
+from tech_doc_agent.app.core.errors import Timeout
 
 
 class FakeRuntime:
@@ -197,6 +198,9 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     tool_result_event = next(event for event in events if event.event == "tool_result")
     assert tool_result_event.data["status"] == "success"
     assert tool_result_event.data["error"] is None
+    assert tool_result_event.data["safe_message"] is None
+    assert tool_result_event.data["code"] is None
+    assert tool_result_event.data["retryable"] is None
 
 
 def test_iter_update_events_emits_explicit_tool_error_status_and_message():
@@ -207,10 +211,18 @@ def test_iter_update_events_emits_explicit_tool_error_status_and_message():
                     "parser_assistant_safe_tools": {
                         "messages": [
                             ToolMessage(
-                                content="request rejected",
+                                content="safe structured summary",
                                 name="read_docs",
                                 tool_call_id="call-error",
                                 status="error",
+                                artifact={
+                                    "error": Timeout(
+                                        "Document retrieval timed out.",
+                                        dependency="embedding",
+                                        tool="read_docs",
+                                        cause_type="ProviderTimeout",
+                                    ).to_payload()
+                                },
                             )
                         ]
                     }
@@ -226,10 +238,70 @@ def test_iter_update_events_emits_explicit_tool_error_status_and_message():
         "node": "parser_assistant_safe_tools",
         "tool": "read_docs",
         "tool_call_id": "call-error",
-        "content": "request rejected",
+        "content": "safe structured summary",
         "status": "error",
-        "error": "request rejected",
+        "error": "Document retrieval timed out.",
+        "safe_message": "Document retrieval timed out.",
+        "code": "dependency_timeout",
+        "retryable": True,
+        "dependency": "embedding",
+        "cause_type": "ProviderTimeout",
     }
+
+
+def test_iter_update_events_sanitizes_legacy_error_without_structured_artifact():
+    events = list(
+        iter_update_events(
+            {
+                "data": {
+                    "parser_assistant_safe_tools": {
+                        "messages": [
+                            ToolMessage(
+                                content="redis://admin:private-password@internal-host",
+                                name="read_docs",
+                                tool_call_id="legacy-error",
+                                status="error",
+                            )
+                        ]
+                    }
+                }
+            }
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].data["content"] == "Tool execution failed."
+    assert events[0].data["safe_message"] == "Tool execution failed."
+    assert events[0].data["code"] == "tool_execution_failed"
+    assert "private-password" not in str(events[0].data)
+
+
+def test_stream_parts_as_sse_emits_safe_structured_error_without_raw_exception_text():
+    def failing_parts():
+        raise ConnectionError("redis://admin:private-password@internal-host")
+        yield
+
+    events = list(
+        stream_parts_as_sse(
+            FakeRuntime(),
+            "session-error",
+            failing_parts(),
+        )
+    )
+
+    assert len(events) == 1
+    assert events[0].event == "error"
+    assert events[0].data == {
+        "status": "error",
+        "code": "dependency_unavailable",
+        "retryable": True,
+        "message": "A required dependency is temporarily unavailable.",
+        "safe_message": "A required dependency is temporarily unavailable.",
+        "dependency": "agent_runtime",
+        "cause_type": "ConnectionError",
+        "session_id": "session-error",
+    }
+    assert "private-password" not in str(events[0].data)
 
 
 def test_iter_update_events_accepts_langgraph_tuple_updates():

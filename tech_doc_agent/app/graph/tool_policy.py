@@ -4,6 +4,8 @@ import json
 
 from langchain_core.messages import ToolMessage
 
+from tech_doc_agent.app.core.errors import Conflict
+
 from .state import State
 
 
@@ -102,18 +104,26 @@ def maybe_block_repeated_tool_calls(state: State, max_identical_repeats: int = 2
     dialog_state = state.get("dialog_state", [])
     current_step = dialog_state[-1] if dialog_state else "current"
     tool_name = tool_call.get("name", "tool")
+    content = (
+        f"Blocked repeated identical tool call to '{tool_name}' in step '{current_step}'. "
+        f"The same request has already been made {repeat_count - 1} times in a row and its prior result is already in context. "
+        "Do not call the same tool again with the same arguments in this step. "
+        "Use the existing tool result to continue the task, produce your structured output, or call CompleteOrEscalate if you truly cannot proceed."
+    )
+    error = Conflict(
+        content,
+        code="repeated_tool_call_blocked",
+        tool=tool_name,
+        cause_type="ToolPolicy",
+    )
 
     return {
         "messages": [
             ToolMessage(
                 tool_call_id=tool_call["id"],
                 status="error",
-                content=(
-                    f"Blocked repeated identical tool call to '{tool_name}' in step '{current_step}'. "
-                    f"The same request has already been made {repeat_count - 1} times in a row and its prior result is already in context. "
-                    "Do not call the same tool again with the same arguments in this step. "
-                    "Use the existing tool result to continue the task, produce your structured output, or call CompleteOrEscalate if you truly cannot proceed."
-                ),
+                content=content,
+                artifact={"error": error.to_payload()},
             )
         ]
     }
@@ -150,18 +160,27 @@ def maybe_block_parser_tool_budget(
     if total_calls <= max_total_calls:
         return None
 
+    content = (
+        "Blocked parser retrieval budget overflow. "
+        f"In the current parser step, read_docs and web_search have already been called {total_calls - 1} times. "
+        f"The total budget for these retrieval tools is {max_total_calls}. "
+        "Do not continue searching. Use the existing retrieved material to finish the structured parsing result, "
+        "or call CompleteOrEscalate if the remaining uncertainty is too high."
+    )
+    error = Conflict(
+        content,
+        code="tool_budget_exceeded",
+        tool=tool_name,
+        cause_type="ToolPolicy",
+    )
+
     return {
         "messages": [
             ToolMessage(
                 tool_call_id=tool_call["id"],
                 status="error",
-                content=(
-                    "Blocked parser retrieval budget overflow. "
-                    f"In the current parser step, read_docs and web_search have already been called {total_calls - 1} times. "
-                    f"The total budget for these retrieval tools is {max_total_calls}. "
-                    "Do not continue searching. Use the existing retrieved material to finish the structured parsing result, "
-                    "or call CompleteOrEscalate if the remaining uncertainty is too high."
-                ),
+                content=content,
+                artifact={"error": error.to_payload()},
             )
         ]
     }

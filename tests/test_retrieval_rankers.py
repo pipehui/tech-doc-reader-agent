@@ -1,3 +1,6 @@
+import pytest
+
+from tech_doc_agent.app.core.errors import Timeout
 from tech_doc_agent.app.services.retrieval.models import IndexedDocument
 from tech_doc_agent.app.services.retrieval.semantic import SemanticRanker, semantic_score
 
@@ -78,7 +81,11 @@ def test_semantic_ranker_preserves_dependency_failure_as_empty_degradation(monke
 
     class FailingStore:
         def search_related(self, query: str, k: int):
-            raise TimeoutError("semantic backend timed out")
+            raise Timeout(
+                dependency="embedding",
+                tool="search_related_docs",
+                cause_type="ProviderTimeout",
+            )
 
     monkeypatch.setattr(
         "tech_doc_agent.app.services.retrieval.semantic.log_event",
@@ -97,11 +104,32 @@ def test_semantic_ranker_preserves_dependency_failure_as_empty_degradation(monke
         (
             "retrieval.semantic.skipped",
             {
-                "error_type": "TimeoutError",
-                "error": "semantic backend timed out",
+                "error_code": "dependency_timeout",
+                "retryable": True,
+                "safe_message": "A dependency timed out. Try again.",
+                "dependency": "embedding",
+                "tool": "search_related_docs",
+                "cause_type": "ProviderTimeout",
             },
         )
     ]
+
+
+def test_semantic_ranker_propagates_typed_failure_when_degradation_is_disabled():
+    class FailingStore:
+        def search_related(self, query: str, k: int):
+            raise Timeout(dependency="embedding", cause_type="ProviderTimeout")
+
+    with pytest.raises(Timeout) as exc_info:
+        SemanticRanker(FailingStore()).rank(
+            "query",
+            [_document("known", "Known")],
+            top_k=3,
+            filters={},
+            degrade_on_failure=False,
+        )
+
+    assert exc_info.value.dependency == "embedding"
 
 
 def test_semantic_score_uses_distance_then_rank_fallback():

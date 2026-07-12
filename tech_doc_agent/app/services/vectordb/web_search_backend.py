@@ -5,6 +5,14 @@ from typing import Any
 
 from duckduckgo_search import DDGS
 from tavily import TavilyClient
+from tech_doc_agent.app.core.errors import (
+    ApplicationError,
+    DependencyUnavailable,
+    ValidationError,
+    classify_error,
+    safe_error_fields,
+)
+from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
@@ -27,7 +35,25 @@ class WebSearchBackend:
     def load_usage_state(self) -> bool:
         if not self.usage_path.exists():
             return False
-        self.usage_state = read_json(self.usage_path)
+        loaded = read_json(self.usage_path)
+        date = loaded.get("date") if isinstance(loaded, dict) else None
+        tavily_calls = loaded.get("tavily_calls") if isinstance(loaded, dict) else None
+        if (
+            not isinstance(date, str)
+            or isinstance(tavily_calls, bool)
+            or not isinstance(tavily_calls, int)
+            or tavily_calls < 0
+        ):
+            raise ValidationError(
+                "The web search usage state is invalid.",
+                code="web_search_usage_state_invalid",
+                dependency="file_repository",
+                cause_type=type(loaded).__name__,
+            )
+        self.usage_state = {
+            "date": date,
+            "tavily_calls": tavily_calls,
+        }
         return True
     
     def save_usage_state(self) -> bool:
@@ -146,8 +172,12 @@ class WebSearchBackend:
             with DDGS(proxy=self.proxy_url, timeout=20) as ddgs:
                 raw_results = list(ddgs.text(query, max_results=max_results))
             return self._normalize_ddg_results(raw_results)
-        except Exception:
-            return []
+        except Exception as exc:
+            raise classify_error(
+                exc,
+                dependency="duckduckgo",
+                tool="web_search",
+            ) from exc
 
     def search_with_tavily(self, query: str, max_results: int = 5) -> list[dict]:
         try:
@@ -158,16 +188,42 @@ class WebSearchBackend:
                 max_results=max_results
             )
             return self._normalize_tavily_results(response.get("results", []))
-        except Exception:
-            return []
+        except Exception as exc:
+            raise classify_error(
+                exc,
+                dependency="tavily",
+                tool="web_search",
+            ) from exc
 
     def search(self, query: str) -> list[dict]:
         self.sync_today_usage()
+        tavily_error: ApplicationError | None = None
         if self.can_use_tavily():
             self.consume_tavily_quota()
-            results = self.search_with_tavily(query)
-            if results:
-                return results
-        
-        return self.search_with_ddg(query)
+            try:
+                results = self.search_with_tavily(query)
+            except ApplicationError as exc:
+                tavily_error = exc
+                log_event(
+                    "web_search.provider.degraded",
+                    provider="tavily",
+                    fallback="duckduckgo",
+                    **safe_error_fields(exc),
+                )
+            else:
+                if results:
+                    return results
+
+        try:
+            return self.search_with_ddg(query)
+        except ApplicationError as exc:
+            if tavily_error is None:
+                raise
+            raise DependencyUnavailable(
+                "All configured web search providers are unavailable.",
+                code="web_search_unavailable",
+                dependency="web_search",
+                tool="web_search",
+                cause_type=exc.cause_type,
+            ) from exc
     

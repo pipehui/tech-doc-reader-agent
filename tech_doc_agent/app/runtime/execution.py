@@ -7,6 +7,7 @@ from typing import Any, Protocol
 from langchain_core.messages import ToolMessage
 from langgraph.types import StateSnapshot
 
+from tech_doc_agent.app.core.errors import PermissionDenied
 from tech_doc_agent.app.core.langfuse_tracing import flush_langfuse
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import TenantContext, tenant_from_values
@@ -53,10 +54,17 @@ def _interrupted_node(snapshot: StateSnapshot) -> str | None:
 def _rejection_tool_message(snapshot: StateSnapshot, feedback: str) -> ToolMessage:
     tool_call_id = snapshot.values["messages"][-1].tool_calls[0]["id"]
     feedback = feedback or "用户未提供原因"
+    content = f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。"
+    error = PermissionDenied(
+        "The user rejected this tool execution.",
+        code="tool_execution_rejected",
+        cause_type="UserDecision",
+    )
     return ToolMessage(
         tool_call_id=tool_call_id,
         status="error",
-        content=f"用户拒绝了此操作。原因：'{feedback}'。请根据用户的反馈继续协助。",
+        content=content,
+        artifact={"error": error.to_payload()},
     )
 
 

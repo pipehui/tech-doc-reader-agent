@@ -134,6 +134,7 @@ class HybridRetriever:
                     query,
                     documents,
                     filters=filters,
+                    degrade_on_failure=False,
                 ),
             }
 
@@ -149,6 +150,7 @@ class HybridRetriever:
                     query,
                     documents,
                     filters=filters,
+                    degrade_on_failure=True,
                 ),
             }
 
@@ -198,12 +200,14 @@ class HybridRetriever:
         documents: list[IndexedDocument],
         *,
         filters: MetadataFilter,
+        degrade_on_failure: bool,
     ) -> list[RankedCandidate]:
         return SemanticRanker(self.store).rank(
             query,
             documents,
             top_k=self.vector_top_k,
             filters=filters,
+            degrade_on_failure=degrade_on_failure,
         )
 
 

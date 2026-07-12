@@ -1,3 +1,5 @@
+import asyncio
+import json
 from types import SimpleNamespace
 
 from langchain_core.messages import AIMessage, ToolMessage
@@ -18,8 +20,8 @@ def test_tool_fallback_marks_every_result_as_an_explicit_error():
         "messages": [
             SimpleNamespace(
                 tool_calls=[
-                    {"id": "call-1"},
-                    {"id": "call-2"},
+                    {"id": "call-1", "name": "read_docs"},
+                    {"id": "call-2", "name": "web_search"},
                 ]
             )
         ],
@@ -27,12 +29,19 @@ def test_tool_fallback_marks_every_result_as_an_explicit_error():
 
     result = handle_tool_error(state)
 
-    assert [message["tool_call_id"] for message in result["messages"]] == [
+    assert [message.tool_call_id for message in result["messages"]] == [
         "call-1",
         "call-2",
     ]
-    assert {message["status"] for message in result["messages"]} == {"error"}
-    assert all("RuntimeError" in message["content"] for message in result["messages"])
+    assert {message.status for message in result["messages"]} == {"error"}
+    assert [message.artifact["error"]["dependency"] for message in result["messages"]] == [
+        "document_repository",
+        "web_search",
+    ]
+    assert all(message.artifact["error"]["code"] == "unknown_dependency_error" for message in result["messages"])
+    assert all(message.artifact["error"]["cause_type"] == "RuntimeError" for message in result["messages"])
+    assert all("offline" not in message.content for message in result["messages"])
+    assert all(json.loads(message.content)["status"] == "error" for message in result["messages"])
 
 
 def test_tool_node_fallback_preserves_error_status_after_message_conversion():
@@ -60,4 +69,40 @@ def test_tool_node_fallback_preserves_error_status_after_message_conversion():
     assert isinstance(message, ToolMessage)
     assert message.tool_call_id == "call-error"
     assert message.status == "error"
-    assert "RuntimeError" in message.content
+    assert message.name == "exploding_tool"
+    assert message.artifact["error"]["code"] == "unknown_dependency_error"
+    assert message.artifact["error"]["tool"] == "exploding_tool"
+    assert message.artifact["error"]["cause_type"] == "RuntimeError"
+    assert "offline: StateGraph" not in message.content
+
+
+def test_async_tool_node_uses_the_same_structured_fallback_contract():
+    node = create_tool_node_with_fallback([exploding_tool])
+
+    result = asyncio.run(
+        node.ainvoke(
+            {
+                "messages": [
+                    AIMessage(
+                        content="",
+                        name="parser",
+                        tool_calls=[
+                            {
+                                "name": "exploding_tool",
+                                "args": {"query": "StateGraph"},
+                                "id": "call-async-error",
+                            }
+                        ],
+                    )
+                ],
+                "dialog_state": ["parser"],
+            }
+        )
+    )
+
+    message = result["messages"][0]
+    assert isinstance(message, ToolMessage)
+    assert message.status == "error"
+    assert message.artifact["error"]["code"] == "unknown_dependency_error"
+    assert message.artifact["error"]["cause_type"] == "RuntimeError"
+    assert "offline: StateGraph" not in message.content

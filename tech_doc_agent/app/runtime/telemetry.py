@@ -4,16 +4,13 @@ from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any
 
+from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.observability import log_event, timed_node
 from tech_doc_agent.app.core.tenant import TenantContext
 
 
 def _elapsed_ms(start: float, clock: Callable[[], float]) -> float:
     return round((clock() - start) * 1000, 2)
-
-
-def _error_message(exc: Exception) -> str:
-    return str(exc) or type(exc).__name__
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,8 +98,7 @@ class RuntimeOperationTelemetry:
         self.event_logger(
             f"{trace.event_prefix}.error",
             **self._base_fields(trace, elapsed=True),
-            error_type=type(exc).__name__,
-            error=_error_message(exc),
+            **safe_error_fields(exc),
         )
 
     def no_pending_interrupt(self, trace: OperationTrace) -> None:

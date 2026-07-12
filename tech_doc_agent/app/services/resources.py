@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.services.retrieval import HybridRetriever
@@ -112,13 +113,12 @@ def _initialize_faiss_store(settings: Settings) -> FaissStore:
             documents=result["added_documents"],
             chunks=result["added_chunks"],
         )
-    except Exception as exc:
+    except ApplicationError as exc:
         _seed_documents_without_index(store)
         log_event(
             "resources.faiss.seeded_without_index",
             documents=len(store.documents),
-            error_type=type(exc).__name__,
-            error=str(exc),
+            **safe_error_fields(exc),
         )
 
     return store

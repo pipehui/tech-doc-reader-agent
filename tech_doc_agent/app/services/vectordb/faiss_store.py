@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any
 
+from tech_doc_agent.app.core.errors import ApplicationError, DependencyUnavailable, classify_error
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.services.embedding import generate_embedding
@@ -119,12 +120,17 @@ class FaissStore:
                     "added_documents": 0,
                     "added_chunks": 0,
                 }
-            embeddings = generate_embedding(chunks)
-            vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
+            try:
+                embeddings = generate_embedding(chunks)
+                vectors = np.ascontiguousarray(np.array(embeddings, dtype="float32"))
 
-            self._ensure_index(vectors.shape[1])
-            assert self.index is not None
-            self.index.add(vectors)
+                self._ensure_index(vectors.shape[1])
+                assert self.index is not None
+                self.index.add(vectors)
+            except ApplicationError:
+                raise
+            except Exception as exc:
+                raise classify_error(exc, dependency="vector_index") from exc
             self.documents.extend(new_docs)
             self.chunk_metadata.extend(metadata)
             return {
@@ -149,12 +155,21 @@ class FaissStore:
 
     def search_related(self, query: str, k: int = 3) -> list[dict]:
         if self.index is None:
-            raise ValueError("FAISS index has not been built yet.")
-        
-        query_embedding = generate_embedding(query)
-        query_vector = np.ascontiguousarray(np.array([query_embedding], dtype="float32"))
+            raise DependencyUnavailable(
+                "The semantic search index is unavailable.",
+                code="vector_index_unavailable",
+                retryable=False,
+                dependency="vector_index",
+            )
 
-        distances, indices = self.index.search(query_vector, k)
+        try:
+            query_embedding = generate_embedding(query)
+            query_vector = np.ascontiguousarray(np.array([query_embedding], dtype="float32"))
+            distances, indices = self.index.search(query_vector, k)
+        except ApplicationError:
+            raise
+        except Exception as exc:
+            raise classify_error(exc, dependency="vector_index") from exc
 
         results = []
         for distance, idx in zip(distances[0], indices[0]):
@@ -181,13 +196,16 @@ class FaissStore:
                 return False
             self.normalize_metadata()
 
-            self.store_dir.mkdir(parents=True, exist_ok=True)
-            faiss.write_index(self.index, str(self.index_path))
-            with open(self.documents_path, "w", encoding="utf-8") as f:
-                json.dump(self.documents, f, ensure_ascii=False, indent=2)
+            try:
+                self.store_dir.mkdir(parents=True, exist_ok=True)
+                faiss.write_index(self.index, str(self.index_path))
+                with open(self.documents_path, "w", encoding="utf-8") as f:
+                    json.dump(self.documents, f, ensure_ascii=False, indent=2)
 
-            with open(self.metadata_path, "w", encoding="utf-8") as f:
-                json.dump(self.chunk_metadata, f, ensure_ascii=False, indent=2)
+                with open(self.metadata_path, "w", encoding="utf-8") as f:
+                    json.dump(self.chunk_metadata, f, ensure_ascii=False, indent=2)
+            except Exception as exc:
+                raise classify_error(exc, dependency="file_repository") from exc
 
             return True
 
@@ -198,13 +216,19 @@ class FaissStore:
             and self.metadata_path.exists()
         ):
             return False
-        index = faiss.read_index(str(self.index_path))
+        try:
+            index = faiss.read_index(str(self.index_path))
+            with open(self.documents_path, "r", encoding="utf-8") as f:
+                documents = json.load(f)
+            with open(self.metadata_path, "r", encoding="utf-8") as f:
+                chunk_metadata = json.load(f)
+        except Exception as exc:
+            raise classify_error(exc, dependency="file_repository") from exc
+
         self.index = index
         self.dimension = index.d
-        with open(self.documents_path, "r", encoding="utf-8") as f:
-            self.documents = json.load(f)
-        with open(self.metadata_path, "r", encoding="utf-8") as f:
-            self.chunk_metadata = json.load(f)
+        self.documents = documents
+        self.chunk_metadata = chunk_metadata
         self.normalize_metadata()
         return True
 

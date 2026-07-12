@@ -210,6 +210,26 @@ export function reduceSseEvent(
         : options.createId();
       const existing = state.toolCalls[id];
       const content = typeof data.content === "string" ? data.content : "";
+      const errorMetadata = data.status === "error"
+        ? {
+            ...(typeof data.code === "string"
+              ? { errorCode: data.code }
+              : existing?.errorCode ? { errorCode: existing.errorCode } : {}),
+            ...(typeof data.safe_message === "string"
+              ? { safeMessage: data.safe_message }
+              : typeof data.error === "string" ? { safeMessage: data.error }
+              : existing?.safeMessage ? { safeMessage: existing.safeMessage } : {}),
+            ...(typeof data.retryable === "boolean"
+              ? { retryable: data.retryable }
+              : existing?.retryable !== undefined ? { retryable: existing.retryable } : {}),
+            ...(typeof data.dependency === "string"
+              ? { dependency: data.dependency }
+              : existing?.dependency ? { dependency: existing.dependency } : {}),
+            ...(typeof data.cause_type === "string"
+              ? { causeType: data.cause_type }
+              : existing?.causeType ? { causeType: existing.causeType } : {})
+          }
+        : {};
       const toolCall: ToolCall = {
         id,
         agent: existing?.agent || agent,
@@ -217,6 +237,7 @@ export function reduceSseEvent(
         tool: typeof data.tool === "string" ? data.tool : existing?.tool || "tool",
         args: existing?.args || {},
         result: content,
+        ...errorMetadata,
         status: data.status === "error" ? "error" : "done",
         createdAt: existing?.createdAt || options.now,
         updatedAt: options.now

@@ -1,6 +1,8 @@
 import json
 import logging
 
+import pytest
+
 from tech_doc_agent.app.api.routes.chat import sse_event
 from tech_doc_agent.app.core import observability
 from tech_doc_agent.app.core.observability import (
@@ -70,3 +72,25 @@ def test_timed_node_logs_start_and_finish():
     events = [json.loads(record.message)["event"] for record in handler.records]
     assert "node.started" in events
     assert "node.finished" in events
+
+
+def test_timed_node_logs_safe_error_fields_without_raw_exception_text():
+    handler = ListHandler()
+    observability._LOGGER.addHandler(handler)
+
+    try:
+        with pytest.raises(TimeoutError):
+            with timed_node("sample_node", phase="unit"):
+                raise TimeoutError("Bearer private-token and internal URL")
+    finally:
+        observability._LOGGER.removeHandler(handler)
+
+    payload = next(
+        json.loads(record.message)
+        for record in handler.records
+        if json.loads(record.message)["event"] == "node.error"
+    )
+    assert payload["error_code"] == "dependency_timeout"
+    assert payload["retryable"] is True
+    assert payload["cause_type"] == "TimeoutError"
+    assert "private-token" not in json.dumps(payload)

@@ -96,15 +96,52 @@ def _tool_result_payload(message, node_name: str) -> dict:
     content = extract_text_from_content(getattr(message, "content", ""))
     raw_status = getattr(message, "status", "success")
     status = "error" if raw_status == "error" else "success"
+    artifact = getattr(message, "artifact", None)
+    raw_error = artifact.get("error") if isinstance(artifact, dict) else None
+    error_payload = raw_error if isinstance(raw_error, dict) else {}
+
+    if status == "error":
+        structured_safe_message = error_payload.get("safe_message")
+        if isinstance(structured_safe_message, str) and structured_safe_message:
+            safe_message = structured_safe_message
+        else:
+            safe_message = "Tool execution failed."
+            content = safe_message
+        code = error_payload.get("code")
+        if not isinstance(code, str) or not code:
+            code = "tool_execution_failed"
+        retryable = error_payload.get("retryable")
+        retryable = retryable if isinstance(retryable, bool) else False
+        dependency = _optional_string(error_payload.get("dependency"))
+        cause_type = _optional_string(error_payload.get("cause_type"))
+    else:
+        safe_message = None
+        code = None
+        retryable = None
+        dependency = None
+        cause_type = None
+
+    message_name = _optional_string(getattr(message, "name", None))
+    error_tool = _optional_string(error_payload.get("tool"))
+
     return {
         "agent": node_name,
         "node": node_name,
-        "tool": getattr(message, "name", None),
+        "tool": message_name or error_tool,
         "tool_call_id": getattr(message, "tool_call_id", None),
         "content": content,
         "status": status,
-        "error": content if status == "error" else None,
+        "error": safe_message,
+        "safe_message": safe_message,
+        "code": code,
+        "retryable": retryable,
+        "dependency": dependency,
+        "cause_type": cause_type,
     }
+
+
+def _optional_string(value) -> str | None:
+    return value if isinstance(value, str) and value else None
 
 
 def _agent_transition_payload(node_name: str) -> dict | None:

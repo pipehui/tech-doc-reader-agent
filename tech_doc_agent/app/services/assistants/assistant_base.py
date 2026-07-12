@@ -2,6 +2,7 @@ from typing import Optional
 
 from langchain_core.runnables import Runnable, RunnableConfig
 
+from tech_doc_agent.app.core.errors import classify_error
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.state import State
 
@@ -47,7 +48,10 @@ class Assistant:
         assistant_name = self.name or "unknown"
 
         for attempt in range(self.max_retries + 1):
-            result = self.runnable.invoke(state, config)
+            try:
+                result = self.runnable.invoke(state, config)
+            except Exception as exc:
+                raise classify_error(exc, dependency="llm") from exc
 
             if is_empty_assistant_output(result):
                 log_event(
@@ -78,7 +82,10 @@ class Assistant:
         assistant_name = self.name or "unknown"
 
         for attempt in range(self.max_retries + 1):
-            result = await self.runnable.ainvoke(state, config)
+            try:
+                result = await self.runnable.ainvoke(state, config)
+            except Exception as exc:
+                raise classify_error(exc, dependency="llm") from exc
 
             if is_empty_assistant_output(result):
                 log_event(

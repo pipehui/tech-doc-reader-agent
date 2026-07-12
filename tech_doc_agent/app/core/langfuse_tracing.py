@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import Any
 
+from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings
 
@@ -130,8 +131,7 @@ def get_langfuse_trace_url(settings: Settings, trace_id: str) -> str | None:
         log_event(
             "langfuse.trace_url.error",
             langfuse_trace_id=trace_id,
-            error_type=type(exc).__name__,
-            error=str(exc),
+            **safe_error_fields(exc, dependency="langfuse"),
         )
         return None
 
@@ -145,8 +145,7 @@ def flush_langfuse(settings: Settings) -> None:
     except Exception as exc:  # pragma: no cover - SDK documents this as non-throwing
         log_event(
             "langfuse.flush.error",
-            error_type=type(exc).__name__,
-            error=str(exc),
+            **safe_error_fields(exc, dependency="langfuse"),
         )
 
 
@@ -159,6 +158,5 @@ def shutdown_langfuse(settings: Settings) -> None:
     except Exception as exc:  # pragma: no cover - shutdown is best effort
         log_event(
             "langfuse.shutdown.error",
-            error_type=type(exc).__name__,
-            error=str(exc),
+            **safe_error_fields(exc, dependency="langfuse"),
         )

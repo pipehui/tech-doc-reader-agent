@@ -4,7 +4,9 @@ import json
 from threading import Lock
 
 import pytest
+from redis.exceptions import ConnectionError
 
+from tech_doc_agent.app.core.errors import DependencyUnavailable
 from tech_doc_agent.app.infrastructure.persistence import approval_repository
 from tech_doc_agent.app.infrastructure.persistence.approval_repository import (
     ApprovalRepositoryDataError,
@@ -46,6 +48,11 @@ class FakeRedisClient:
         self.closed = True
 
 
+class FailingRedisClient(FakeRedisClient):
+    def get(self, key):
+        raise ConnectionError("redis://admin:private-password@internal-host")
+
+
 def _request() -> GuardrailApprovalRequest:
     return GuardrailApprovalRequest(
         session_id="session-1",
@@ -56,6 +63,20 @@ def _request() -> GuardrailApprovalRequest:
         risk_level="medium",
         findings=("ignore_previous_instructions",),
     )
+
+
+def test_redis_repository_maps_transport_error_without_exposing_connection_details():
+    repository = RedisApprovalRepository(
+        client=FailingRedisClient(),
+        ttl_seconds=900,
+    )
+
+    with pytest.raises(DependencyUnavailable) as exc_info:
+        repository.get("tenant:session")
+
+    assert exc_info.value.dependency == "redis"
+    assert exc_info.value.cause_type == "ConnectionError"
+    assert "private-password" not in str(exc_info.value)
 
 
 def test_redis_repository_shares_pending_request_and_resolves_atomically():

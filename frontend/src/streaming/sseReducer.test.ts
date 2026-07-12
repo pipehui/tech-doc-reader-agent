@@ -271,13 +271,23 @@ describe("pure SSE reducer", () => {
         tool_call_id: "call-1",
         content: "request failed without a magic keyword",
         status: "error",
-        error: "request failed without a magic keyword"
+        error: "Document retrieval timed out.",
+        safe_message: "Safe timeout summary.",
+        code: "dependency_timeout",
+        retryable: true,
+        dependency: "embedding",
+        cause_type: "ProviderTimeout"
       },
       options("2026-07-11T00:00:00.000Z")
     );
     expect(result.state.toolCalls["call-1"]).toEqual({
       ...existing,
       result: "request failed without a magic keyword",
+      errorCode: "dependency_timeout",
+      safeMessage: "Safe timeout summary.",
+      retryable: true,
+      dependency: "embedding",
+      causeType: "ProviderTimeout",
       status: "error",
       updatedAt: "2026-07-11T00:00:00.000Z"
     });

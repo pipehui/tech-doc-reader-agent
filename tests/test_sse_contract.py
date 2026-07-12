@@ -1,7 +1,11 @@
 import re
 from pathlib import Path
 
-from tech_doc_agent.app.api.sse.contract import SSE_EVENT_NAMES, TOOL_RESULT_STATUSES
+from tech_doc_agent.app.api.sse.contract import (
+    ERROR_DETAIL_FIELDS,
+    SSE_EVENT_NAMES,
+    TOOL_RESULT_STATUSES,
+)
 
 
 FRONTEND_CONTRACT = Path(__file__).resolve().parents[1] / "frontend" / "src" / "sseContract.ts"
@@ -15,7 +19,12 @@ FRONTEND_INSPECTOR_MODEL = (
 
 def test_frontend_and_backend_sse_event_names_stay_in_sync():
     source = FRONTEND_CONTRACT.read_text(encoding="utf-8")
-    frontend_events = set(re.findall(r'^\s+"([a-z_]+)",?$', source, flags=re.MULTILINE))
+    declaration = re.search(
+        r"SSE_EVENT_TYPES\s*=\s*\[([^\]]+)\]",
+        source,
+    )
+    assert declaration is not None
+    frontend_events = set(re.findall(r'"([a-z_]+)"', declaration.group(1)))
 
     assert frontend_events == SSE_EVENT_NAMES
 
@@ -30,6 +39,18 @@ def test_frontend_and_backend_tool_result_statuses_stay_in_sync():
     frontend_statuses = set(re.findall(r'"([a-z_]+)"', declaration.group(1)))
 
     assert frontend_statuses == TOOL_RESULT_STATUSES
+
+
+def test_frontend_and_backend_error_detail_fields_stay_in_sync():
+    source = FRONTEND_CONTRACT.read_text(encoding="utf-8")
+    declaration = re.search(
+        r"ERROR_DETAIL_FIELDS\s*=\s*\[([^\]]+)\]",
+        source,
+    )
+    assert declaration is not None
+    frontend_fields = set(re.findall(r'"([a-z_]+)"', declaration.group(1)))
+
+    assert frontend_fields == ERROR_DETAIL_FIELDS
 
 
 def test_frontend_sse_parser_and_reducer_are_store_and_browser_independent():

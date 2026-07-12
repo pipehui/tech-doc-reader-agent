@@ -36,6 +36,15 @@ def test_repeated_tool_policy_blocks_third_identical_call():
     assert blocked["messages"][0].tool_call_id == "call-3"
     assert blocked["messages"][0].status == "error"
     assert "Blocked repeated identical tool call" in blocked["messages"][0].content
+    assert blocked["messages"][0].artifact["error"] == {
+        "status": "error",
+        "code": "repeated_tool_call_blocked",
+        "retryable": False,
+        "safe_message": blocked["messages"][0].content,
+        "dependency": None,
+        "tool": "read_docs",
+        "cause_type": "ToolPolicy",
+    }
 
 
 def test_repeated_tool_policy_allows_changed_arguments():
@@ -69,6 +78,8 @@ def test_parser_budget_blocks_call_after_configured_total():
     assert blocked["messages"][0].tool_call_id == "call-3"
     assert blocked["messages"][0].status == "error"
     assert "parser retrieval budget overflow" in blocked["messages"][0].content
+    assert blocked["messages"][0].artifact["error"]["code"] == "tool_budget_exceeded"
+    assert blocked["messages"][0].artifact["error"]["retryable"] is False
 
 
 def test_parser_budget_does_not_apply_outside_parser_step():

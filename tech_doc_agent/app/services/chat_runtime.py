@@ -4,6 +4,7 @@ from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
 
 from tech_doc_agent.app.composition import build_application_graph
+from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
@@ -106,8 +107,7 @@ class ChatRuntime:
         except Exception as exc:
             log_event(
                 "approval.repository.close.error",
-                error_type=type(exc).__name__,
-                error=str(exc),
+                **safe_error_fields(exc, dependency="approval_repository"),
             )
 
     def _require_graph(self) -> Any:

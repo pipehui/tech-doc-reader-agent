@@ -118,3 +118,5 @@ sync/async runtime 共用同一个 `iter_update_events` translator，因此不�
 保持不变：SSE event name、tool content/call id、ToolCall UI 的 pending/done/error 三态、sync/async translator 入口和 Inspector filter。
 
 后续：component tests 验证 ToolCallCard 三态展示；fake SSE integration 覆盖 tool success/error/interrupt/approve/done。
+
+> 2026-07-12 后续更正：R0 统一错误模型的真实异常测试发现，LangGraph `ToolNode` 默认在内部处理工具异常，因此本文当时的测试只证明了最终 ToolMessage status，并未证明外层自定义 fallback 实际执行。后续已显式设置 `handle_tool_errors=False`，由应用 fallback 统一生成安全 content 与结构化 artifact；详见 [统一错误模型记录](2026-07-12-unified-error-model.md)。

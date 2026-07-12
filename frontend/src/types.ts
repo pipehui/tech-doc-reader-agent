@@ -44,6 +44,11 @@ export interface ToolCall {
   tool: string;
   args: unknown;
   result?: string;
+  errorCode?: string;
+  safeMessage?: string;
+  retryable?: boolean;
+  dependency?: string;
+  causeType?: string;
   status: "pending" | "done" | "error";
   createdAt: string;
   updatedAt: string;

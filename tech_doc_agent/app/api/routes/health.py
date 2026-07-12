@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from redis import Redis
 from redis.exceptions import RedisError
 
+from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 
 
@@ -32,7 +33,11 @@ def _redis_check(redis_url: str) -> dict[str, Any]:
         client.ping()
         return _check("redis", True)
     except RedisError as exc:
-        return _check("redis", False, error_type=type(exc).__name__, error=str(exc))
+        return _check(
+            "redis",
+            False,
+            **safe_error_fields(exc, dependency="redis"),
+        )
     finally:
         if client is not None:
             client.close()

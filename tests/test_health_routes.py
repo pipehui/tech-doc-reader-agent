@@ -93,4 +93,7 @@ def test_ready_endpoint_returns_503_when_redis_is_unavailable(monkeypatch):
     assert payload["status"] == "not_ready"
     redis_check = next(check for check in payload["checks"] if check["name"] == "redis")
     assert redis_check["ok"] is False
-    assert redis_check["error_type"] == "ConnectionError"
+    assert redis_check["cause_type"] == "ConnectionError"
+    assert redis_check["error_code"] == "dependency_unavailable"
+    assert redis_check["retryable"] is True
+    assert "redis down" not in str(redis_check)

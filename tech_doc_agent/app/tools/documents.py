@@ -101,16 +101,13 @@ def build_document_tools(dependencies: ToolDependencies) -> DocumentTools:
         文档库是共享知识库，不按当前用户隔离；可选传入 category、tags 或 source 来过滤结果。
         """
 
-        try:
-            filters = _build_filters(category=category, tags=tags, source=source)
-            results = dependencies.document_retriever.search(
-                query,
-                top_k=k,
-                mode="vector",
-                filters=filters,
-            )
-        except Exception:
-            results = []
+        filters = _build_filters(category=category, tags=tags, source=source)
+        results = dependencies.document_retriever.search(
+            query,
+            top_k=k,
+            mode="vector",
+            filters=filters,
+        )
         return json.dumps(results, ensure_ascii=False)
 
     return DocumentTools(

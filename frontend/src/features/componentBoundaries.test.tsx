@@ -127,7 +127,12 @@ describe("feature component boundaries", () => {
       agent: "parser",
       tool: "read_docs",
       args: { query: "StateGraph" },
-      result: "offline",
+      result: "safe result summary",
+      errorCode: "dependency_timeout",
+      safeMessage: "Document retrieval timed out.",
+      retryable: true,
+      dependency: "embedding",
+      causeType: "ProviderTimeout",
       status: "error",
       createdAt: NOW,
       updatedAt: NOW
@@ -161,6 +166,8 @@ describe("feature component boundaries", () => {
     expect(screen.getByText("hello").tagName).toBe("STRONG");
     expect(screen.getByText("read_docs")).toBeTruthy();
     expect(screen.getByText("错误")).toBeTruthy();
+    expect(container.textContent).toContain("dependency_timeout");
+    expect(container.textContent).toContain("Document retrieval timed out.");
   });
 
   it("toggles Inspector filters through the trace slice", () => {

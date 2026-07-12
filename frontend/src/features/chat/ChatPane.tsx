@@ -227,6 +227,18 @@ export function ToolCallCard({ tool }: { tool: ToolCall }) {
       </summary>
       <div className="tool-body">
         <ToolSection label="args" content={pretty(tool.args)} />
+        {tool.status === "error" && (
+          <ToolSection
+            label="error"
+            content={pretty({
+              code: tool.errorCode || "tool_execution_failed",
+              retryable: tool.retryable ?? false,
+              dependency: tool.dependency || null,
+              cause_type: tool.causeType || null,
+              message: tool.safeMessage || "Tool execution failed."
+            })}
+          />
+        )}
         <ToolSection
           label="result"
           content={tool.result ? pretty(tool.result) : "等待工具返回..."}

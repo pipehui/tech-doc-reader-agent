@@ -5,6 +5,7 @@ import logging
 import pytest
 from langchain_core.messages import AIMessage
 
+from tech_doc_agent.app.core.errors import Timeout
 from tech_doc_agent.app.core import observability
 from tech_doc_agent.app.services.assistants.assistant_base import (
     Assistant,
@@ -24,6 +25,14 @@ class FakeRunnable:
     async def ainvoke(self, state, config=None):
         self.states.append(state)
         return self.outputs.pop(0)
+
+
+class FailingRunnable:
+    def invoke(self, state, config=None):
+        raise TimeoutError("provider URL and bearer token are private")
+
+    async def ainvoke(self, state, config=None):
+        raise TimeoutError("provider URL and bearer token are private")
 
 
 class ListHandler(logging.Handler):
@@ -122,6 +131,17 @@ def test_assistant_does_not_retry_empty_tool_call_response():
 def test_assistant_rejects_negative_max_retries():
     with pytest.raises(ValueError, match="max_retries"):
         Assistant(FakeRunnable([]), max_retries=-1)
+
+
+def test_assistant_maps_llm_transport_failure_without_exposing_provider_text():
+    assistant = Assistant(FailingRunnable(), name="tester")
+
+    with pytest.raises(Timeout) as exc_info:
+        assistant({"messages": [("user", "hi")]})
+
+    assert exc_info.value.dependency == "llm"
+    assert exc_info.value.cause_type == "TimeoutError"
+    assert "bearer token" not in str(exc_info.value)
 
 
 def test_assistant_ainvoke_retries_empty_response_and_returns_next_result():

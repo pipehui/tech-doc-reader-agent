@@ -4,6 +4,7 @@ import uuid
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ.pop("LANGCHAIN_API_KEY", None)
 
+from tech_doc_agent.app.core.errors import classify_error
 from tech_doc_agent.app.core.logger import logger
 from tech_doc_agent.app.bootstrap import build_chat_runtime
 
@@ -68,8 +69,9 @@ def main():
                     resume_events = runtime.stream_approval(session_id, approved, feedback)
                     print_new_messages(resume_events)
         except Exception as e:
-            logger.error(f"An error occurred: {e}")
-            print(f"发生错误：{e}")
+            error = classify_error(e, dependency="cli_runtime")
+            logger.error(f"Operation failed: {error.to_json()}")
+            print(f"发生错误：{error.safe_message}（{error.code}）")
 
 if __name__ == "__main__":
     main()

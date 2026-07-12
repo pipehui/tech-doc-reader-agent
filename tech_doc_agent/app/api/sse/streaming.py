@@ -2,6 +2,7 @@ from collections.abc import AsyncIterable, Iterable
 
 from fastapi.sse import ServerSentEvent
 
+from tech_doc_agent.app.core.errors import ApplicationError, classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 
@@ -15,8 +16,25 @@ from .translators import (
 )
 
 
-def _error_message(exc: Exception) -> str:
-    return str(exc) or type(exc).__name__
+def _stream_error(exc: BaseException) -> ApplicationError:
+    mapped = classify_error(exc)
+    if mapped.dependency is None:
+        return mapped.with_context(dependency="agent_runtime")
+    return mapped
+
+
+def _stream_error_payload(exc: BaseException, session_id: str) -> dict:
+    error = _stream_error(exc)
+    return {
+        "status": "error",
+        "code": error.code,
+        "retryable": error.retryable,
+        "message": error.safe_message,
+        "safe_message": error.safe_message,
+        "dependency": error.dependency,
+        "cause_type": error.cause_type,
+        "session_id": session_id,
+    }
 
 
 def events_from_stream_part(part) -> Iterable[ServerSentEvent]:
@@ -75,19 +93,15 @@ def stream_parts_as_sse(
         )
 
     except Exception as exc:
-        message = _error_message(exc)
+        error = _stream_error(exc)
         log_event(
             "sse.stream.error",
             session_id=session_id,
-            error_type=type(exc).__name__,
-            error=message,
+            **safe_error_fields(error),
         )
         yield sse_event(
             "error",
-            {
-                "message": message,
-                "session_id": session_id,
-            },
+            _stream_error_payload(error, session_id),
         )
 
 
@@ -122,18 +136,14 @@ async def astream_parts_as_sse(
         )
 
     except Exception as exc:
-        message = _error_message(exc)
+        error = _stream_error(exc)
         log_event(
             "sse.stream.error",
             session_id=session_id,
-            error_type=type(exc).__name__,
-            error=message,
             async_runtime=True,
+            **safe_error_fields(error),
         )
         yield sse_event(
             "error",
-            {
-                "message": message,
-                "session_id": session_id,
-            },
+            _stream_error_payload(error, session_id),
         )

@@ -10,6 +10,8 @@ from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
+from tech_doc_agent.app.core.errors import safe_error_fields
+
 
 _LOGGER = logging.getLogger("tech_doc_agent.observability")
 _LOGGER.setLevel(logging.INFO)
@@ -77,8 +79,7 @@ def timed_node(name: str, **fields: Any) -> Iterator[None]:
             "node.error",
             **event_fields,
             elapsed_ms=_elapsed_ms(start),
-            error_type=type(exc).__name__,
-            error=str(exc),
+            **safe_error_fields(exc),
         )
         raise
 

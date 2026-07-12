@@ -8,6 +8,7 @@ from typing import Any
 
 from redis import Redis
 
+from tech_doc_agent.app.core.errors import classify_error
 from tech_doc_agent.app.runtime.approvals import GuardrailApprovalRequest
 
 
@@ -55,7 +56,10 @@ class RedisApprovalRepository:
         ttl_seconds: int,
         key_prefix: str = DEFAULT_KEY_PREFIX,
     ) -> RedisApprovalRepository:
-        client = Redis.from_url(redis_url, decode_responses=True)
+        try:
+            client = Redis.from_url(redis_url, decode_responses=True)
+        except Exception as exc:
+            raise classify_error(exc, dependency="redis") from exc
         return cls(
             client=client,
             ttl_seconds=ttl_seconds,
@@ -131,19 +135,32 @@ class RedisApprovalRepository:
         )
 
     def put(self, key: str, request: GuardrailApprovalRequest) -> None:
-        self.client.set(
-            self._key(key),
-            self._serialize(request),
-            ex=self.ttl_seconds,
-        )
+        payload = self._serialize(request)
+        try:
+            self.client.set(
+                self._key(key),
+                payload,
+                ex=self.ttl_seconds,
+            )
+        except Exception as exc:
+            raise classify_error(exc, dependency="redis") from exc
 
     def get(self, key: str) -> GuardrailApprovalRequest | None:
-        raw_value = self.client.get(self._key(key))
+        try:
+            raw_value = self.client.get(self._key(key))
+        except Exception as exc:
+            raise classify_error(exc, dependency="redis") from exc
         return None if raw_value is None else self._deserialize(raw_value)
 
     def pop(self, key: str) -> GuardrailApprovalRequest | None:
-        raw_value = self.client.getdel(self._key(key))
+        try:
+            raw_value = self.client.getdel(self._key(key))
+        except Exception as exc:
+            raise classify_error(exc, dependency="redis") from exc
         return None if raw_value is None else self._deserialize(raw_value)
 
     def close(self) -> None:
-        self.client.close()
+        try:
+            self.client.close()
+        except Exception as exc:
+            raise classify_error(exc, dependency="redis") from exc

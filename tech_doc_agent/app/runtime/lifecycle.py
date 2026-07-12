@@ -7,6 +7,7 @@ from typing import Any
 
 from redis.exceptions import BusyLoadingError
 
+from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings
 
@@ -68,14 +69,13 @@ class RuntimeLifecycle:
             except Exception as exc:
                 self._close_checkpointer()
                 if attempt >= max_attempts or not _is_retryable_redis_startup_error(exc):
-                    raise
+                    raise classify_error(exc, dependency="redis") from exc
                 self.event_logger(
                     "redis.checkpointer.setup.retry",
                     attempt=attempt,
                     max_attempts=max_attempts,
                     retry_seconds=retry_seconds,
-                    error_type=type(exc).__name__,
-                    error=str(exc),
+                    **safe_error_fields(exc, dependency="redis"),
                 )
                 self.sleeper(retry_seconds)
 

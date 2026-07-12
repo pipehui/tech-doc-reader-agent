@@ -2,28 +2,60 @@ from __future__ import annotations
 
 from time import perf_counter
 
+from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableLambda
 from langgraph.prebuilt import ToolNode
 
+from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event, timed_node
 
 from .state import State
 from .tool_policy import maybe_block_parser_tool_budget, maybe_block_repeated_tool_calls
 
 
+TOOL_DEPENDENCIES = {
+    "web_search": "web_search",
+    "read_docs": "document_repository",
+    "save_docs": "document_repository",
+    "search_related_docs": "semantic_search",
+    "read_learning_history": "learning_repository",
+    "read_all_learning_history": "learning_repository",
+    "upsert_learning_history": "learning_repository",
+    "read_user_memory": "memory_repository",
+    "upsert_learning_state": "memory_repository",
+}
+
+
+def _tool_dependency(tool_name: str | None) -> str | None:
+    return TOOL_DEPENDENCIES.get(tool_name or "")
+
+
 def handle_tool_error(state) -> dict:
-    error = state.get("error")
+    raw_error = state.get("error")
+    error = raw_error if isinstance(raw_error, BaseException) else RuntimeError("Tool execution failed.")
     tool_calls = getattr(state["messages"][-1], "tool_calls", [])
+
+    messages = []
+    for tool_call in tool_calls:
+        tool_name = tool_call.get("name")
+        mapped = classify_error(
+            error,
+            dependency=_tool_dependency(tool_name),
+            tool=tool_name,
+        )
+        payload = mapped.to_payload()
+        messages.append(
+            ToolMessage(
+                name=tool_name,
+                content=mapped.to_json(),
+                artifact={"error": payload},
+                tool_call_id=tool_call["id"],
+                status="error",
+            )
+        )
+
     return {
-        "messages": [
-            {
-                "type": "tool",
-                "content": f"Error: {repr(error)}\nPlease fix your mistakes.",
-                "tool_call_id": tool_call["id"],
-                "status": "error",
-            }
-            for tool_call in tool_calls
-        ]
+        "messages": messages,
     }
 
 
@@ -66,28 +98,60 @@ def _log_tool_calls(
         )
 
 
+def _log_tool_errors(
+    state: State,
+    tool_calls: list[dict],
+    exc: BaseException,
+    *,
+    elapsed_ms: float,
+    async_runtime: bool = False,
+) -> None:
+    for tool_call in tool_calls:
+        tool_name = tool_call.get("name")
+        error_fields = safe_error_fields(
+            exc,
+            dependency=_tool_dependency(tool_name),
+            tool=tool_name,
+        )
+        error_fields.pop("tool")
+        _log_tool_calls(
+            "tool_call.error",
+            state,
+            [tool_call],
+            elapsed_ms=elapsed_ms,
+            async_runtime=async_runtime,
+            **error_fields,
+        )
+
+
+def _maybe_block_tool_call(state: State) -> dict | None:
+    blocked = maybe_block_parser_tool_budget(state)
+    if blocked is not None:
+        _log_tool_calls(
+            "tool_call.blocked",
+            state,
+            _pending_tool_calls(state),
+            reason="parser_tool_budget",
+        )
+        return blocked
+
+    blocked = maybe_block_repeated_tool_calls(state)
+    if blocked is not None:
+        _log_tool_calls(
+            "tool_call.blocked",
+            state,
+            _pending_tool_calls(state),
+            reason="repeated_tool_call",
+        )
+    return blocked
+
+
 def create_tool_node_with_fallback(tools: list):
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, handle_tool_errors=False)
 
     def guarded_tool_node(state: State):
-        blocked = maybe_block_parser_tool_budget(state)
+        blocked = _maybe_block_tool_call(state)
         if blocked is not None:
-            _log_tool_calls(
-                "tool_call.blocked",
-                state,
-                _pending_tool_calls(state),
-                reason="parser_tool_budget",
-            )
-            return blocked
-
-        blocked = maybe_block_repeated_tool_calls(state)
-        if blocked is not None:
-            _log_tool_calls(
-                "tool_call.blocked",
-                state,
-                _pending_tool_calls(state),
-                reason="repeated_tool_call",
-            )
             return blocked
 
         tool_calls = _pending_tool_calls(state)
@@ -97,13 +161,11 @@ def create_tool_node_with_fallback(tools: list):
             with timed_node("tool_node", agent_node=_current_step(state), tool_count=len(tool_calls)):
                 result = tool_node.invoke(state)
         except Exception as exc:
-            _log_tool_calls(
-                "tool_call.error",
+            _log_tool_errors(
                 state,
                 tool_calls,
+                exc,
                 elapsed_ms=_elapsed_ms(start),
-                error_type=type(exc).__name__,
-                error=str(exc),
             )
             raise
 
@@ -117,24 +179,8 @@ def create_tool_node_with_fallback(tools: list):
         return result
 
     async def aguarded_tool_node(state: State):
-        blocked = maybe_block_parser_tool_budget(state)
+        blocked = _maybe_block_tool_call(state)
         if blocked is not None:
-            _log_tool_calls(
-                "tool_call.blocked",
-                state,
-                _pending_tool_calls(state),
-                reason="parser_tool_budget",
-            )
-            return blocked
-
-        blocked = maybe_block_repeated_tool_calls(state)
-        if blocked is not None:
-            _log_tool_calls(
-                "tool_call.blocked",
-                state,
-                _pending_tool_calls(state),
-                reason="repeated_tool_call",
-            )
             return blocked
 
         tool_calls = _pending_tool_calls(state)
@@ -149,13 +195,11 @@ def create_tool_node_with_fallback(tools: list):
             ):
                 result = await tool_node.ainvoke(state)
         except Exception as exc:
-            _log_tool_calls(
-                "tool_call.error",
+            _log_tool_errors(
                 state,
                 tool_calls,
+                exc,
                 elapsed_ms=_elapsed_ms(start),
-                error_type=type(exc).__name__,
-                error=str(exc),
                 async_runtime=True,
             )
             raise
