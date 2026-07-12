@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
@@ -22,7 +23,7 @@ class SemanticRanker:
     def rank(
         self,
         query: str,
-        documents: list[IndexedDocument],
+        documents: Sequence[IndexedDocument],
         *,
         top_k: int,
         filters: MetadataFilter,

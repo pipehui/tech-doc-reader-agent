@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
 from tech_doc_agent.app.core.observability import trace_context
+from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 
@@ -25,9 +26,20 @@ class FakeRetriever:
         self.calls = []
         self.refresh_calls = 0
 
-    def search(self, query, **kwargs):
-        self.calls.append((query, kwargs))
-        return [{"title": self.label, "content": query}]
+    def retrieve(self, request: SearchQuery) -> list[SearchResult]:
+        self.calls.append(request)
+        return [
+            SearchResult(
+                doc_id=self.label,
+                title=self.label,
+                content=request.query,
+                source="test",
+                metadata={},
+                match_types=("bm25",),
+                score=1.0,
+                signals={"bm25": {"rank": 1, "score": 1.0}},
+            )
+        ]
 
     def refresh(self):
         self.refresh_calls += 1
@@ -171,10 +183,35 @@ def test_tool_bundles_keep_resource_instances_isolated(tmp_path):
     assert result_a[0]["title"] == "tenant-a"
     assert result_b[0]["title"] == "tenant-b"
     assert dependencies_a.document_retriever.calls == [
-        ("StateGraph", {"filters": {}}),
+        SearchQuery(query="StateGraph"),
     ]
     assert dependencies_b.document_retriever.calls == [
-        ("StateGraph", {"filters": {}}),
+        SearchQuery(query="StateGraph"),
+    ]
+
+
+def test_related_document_tool_builds_typed_vector_query_at_boundary(tmp_path):
+    dependencies = _dependencies(tmp_path, "related")
+    tools = build_tool_bundle(dependencies)
+
+    result = json.loads(
+        tools.search_related_docs.invoke(
+            {
+                "query": "StateGraph",
+                "k": 3,
+                "category": "langgraph_core",
+            }
+        )
+    )
+
+    assert result[0]["title"] == "related"
+    assert dependencies.document_retriever.calls == [
+        SearchQuery(
+            query="StateGraph",
+            top_k=3,
+            mode="vector",
+            filters={"category": "langgraph_core"},
+        )
     ]
 
 

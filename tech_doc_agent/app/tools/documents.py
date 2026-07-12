@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from langchain_core.tools import BaseTool, tool
 
 from tech_doc_agent.app.services.retrieval.filters import normalize_filter
+from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 from tech_doc_agent.app.tools.dependencies import ToolDependencies
 
 
@@ -27,6 +28,13 @@ def _build_filters(
             "tags": tags,
             "source": source,
         }
+    )
+
+
+def _serialize_search_results(results: list[SearchResult]) -> str:
+    return json.dumps(
+        [result.to_dict() for result in results],
+        ensure_ascii=False,
     )
 
 
@@ -55,8 +63,10 @@ def build_document_tools(dependencies: ToolDependencies) -> DocumentTools:
         """
 
         filters = _build_filters(category=category, tags=tags, source=source)
-        documents = dependencies.document_retriever.search(query, filters=filters)
-        return json.dumps(documents, ensure_ascii=False)
+        documents = dependencies.document_retriever.retrieve(
+            SearchQuery(query=query, filters=filters)
+        )
+        return _serialize_search_results(documents)
 
     @tool
     def save_docs(
@@ -102,13 +112,15 @@ def build_document_tools(dependencies: ToolDependencies) -> DocumentTools:
         """
 
         filters = _build_filters(category=category, tags=tags, source=source)
-        results = dependencies.document_retriever.search(
-            query,
-            top_k=k,
-            mode="vector",
-            filters=filters,
+        results = dependencies.document_retriever.retrieve(
+            SearchQuery(
+                query=query,
+                top_k=k,
+                mode="vector",
+                filters=filters,
+            )
         )
-        return json.dumps(results, ensure_ascii=False)
+        return _serialize_search_results(results)
 
     return DocumentTools(
         web_search=web_search,

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from tech_doc_agent.app.core.observability import log_event
@@ -29,6 +32,8 @@ from tech_doc_agent.app.services.retrieval.models import (
     RankedCandidate,
     RetrievalStorePort,
     RetrievalMode,
+    SearchQuery,
+    SearchResult,
 )
 from tech_doc_agent.app.services.retrieval.semantic import (
     SemanticRanker,
@@ -41,6 +46,16 @@ from tech_doc_agent.app.services.retrieval.tokenization import (
     is_cjk,
     tokenize,
 )
+
+
+_IndexSignature = tuple[tuple[Any, str, str, str, str], ...]
+
+
+@dataclass(frozen=True)
+class _IndexSnapshot:
+    signature: _IndexSignature
+    documents: tuple[IndexedDocument, ...]
+    bm25_index: BM25Index
 
 
 class HybridRetriever:
@@ -56,13 +71,12 @@ class HybridRetriever:
     ) -> None:
         self.store = store
         self.settings = settings or get_settings()
-        self.top_k = top_k or self.settings.HYBRID_RAG_TOP_K
-        self.bm25_top_k = bm25_top_k or self.settings.HYBRID_RAG_BM25_TOP_K
-        self.vector_top_k = vector_top_k or self.settings.HYBRID_RAG_VECTOR_TOP_K
-        self.rrf_k = rrf_k or self.settings.HYBRID_RAG_RRF_K
-        self._signature: tuple[tuple[Any, str, str, str, str], ...] | None = None
-        self._documents: list[IndexedDocument] = []
-        self._bm25_index = BM25Index([])
+        self.top_k = self.settings.HYBRID_RAG_TOP_K if top_k is None else top_k
+        self.bm25_top_k = self.settings.HYBRID_RAG_BM25_TOP_K if bm25_top_k is None else bm25_top_k
+        self.vector_top_k = self.settings.HYBRID_RAG_VECTOR_TOP_K if vector_top_k is None else vector_top_k
+        self.rrf_k = self.settings.HYBRID_RAG_RRF_K if rrf_k is None else rrf_k
+        self._index_lock = threading.Lock()
+        self._index_snapshot: _IndexSnapshot | None = None
 
     def search(
         self,
@@ -72,16 +86,27 @@ class HybridRetriever:
         mode: RetrievalMode = "hybrid",
         filters: MetadataFilter | None = None,
     ) -> list[dict[str, Any]]:
-        top_k = top_k or self.top_k
+        results = self.retrieve(
+            SearchQuery(
+                query=query,
+                top_k=top_k,
+                mode=mode,
+                filters=filters or {},
+            )
+        )
+        return [result.to_dict() for result in results]
+
+    def retrieve(self, request: SearchQuery) -> list[SearchResult]:
+        top_k = self.top_k if request.top_k is None else request.top_k
         if top_k <= 0:
             return []
-        filters = normalize_filter(filters)
+        filters = normalize_filter(request.filters)
 
-        documents = self._ensure_bm25_index()
-        if not documents:
+        snapshot = self._ensure_index_snapshot()
+        if not snapshot.documents:
             log_event(
                 "retrieval.hybrid.finished",
-                mode=mode,
+                mode=request.mode,
                 filters=filters,
                 result_count=0,
                 exact_count=0,
@@ -90,18 +115,21 @@ class HybridRetriever:
             )
             return []
 
-        filtered_documents = filter_documents(documents, filters)
+        filtered_documents: Sequence[IndexedDocument] = snapshot.documents
+        if filters:
+            filtered_documents = filter_documents(snapshot.documents, filters)
         rankings = self._rankings_for_mode(
-            query,
+            request.query,
             filtered_documents,
-            mode=mode,
+            snapshot=snapshot,
+            mode=request.mode,
             filters=filters,
         )
         fused = reciprocal_rank_fusion(rankings, rrf_k=self.rrf_k)
         results = [format_result(item) for item in fused[:top_k]]
         log_event(
             "retrieval.hybrid.finished",
-            mode=mode,
+            mode=request.mode,
             filters=filters,
             result_count=len(results),
             candidate_documents=len(filtered_documents),
@@ -114,8 +142,9 @@ class HybridRetriever:
     def _rankings_for_mode(
         self,
         query: str,
-        documents: list[IndexedDocument],
+        documents: Sequence[IndexedDocument],
         *,
+        snapshot: _IndexSnapshot,
         mode: RetrievalMode,
         filters: MetadataFilter,
     ) -> dict[str, list[RankedCandidate]]:
@@ -124,6 +153,7 @@ class HybridRetriever:
                 "bm25": self._search_bm25(
                     query,
                     documents=documents,
+                    snapshot=snapshot,
                     filters=filters,
                 ),
             }
@@ -144,6 +174,7 @@ class HybridRetriever:
                 "bm25": self._search_bm25(
                     query,
                     documents=documents,
+                    snapshot=snapshot,
                     filters=filters,
                 ),
                 "semantic": self._rank_semantic(
@@ -157,47 +188,54 @@ class HybridRetriever:
         raise ValueError(f"Unsupported retrieval mode: {mode}")
 
     def refresh(self) -> None:
-        self._signature = None
-        self._ensure_bm25_index()
+        self._ensure_index_snapshot(force_rebuild=True)
 
-    def _ensure_bm25_index(self) -> list[IndexedDocument]:
-        raw_documents = list(getattr(self.store, "documents", []) or [])
-        signature = tuple(
-            (
-                doc.get("id"),
-                str(doc.get("title", "")),
-                str(doc.get("content", "")),
-                str(doc.get("source", "")),
-                metadata_signature(doc),
+    def _ensure_index_snapshot(self, *, force_rebuild: bool = False) -> _IndexSnapshot:
+        with self._index_lock:
+            raw_documents = list(getattr(self.store, "documents", []) or [])
+            signature = tuple(
+                (
+                    doc.get("id"),
+                    str(doc.get("title", "")),
+                    str(doc.get("content", "")),
+                    str(doc.get("source", "")),
+                    metadata_signature(doc),
+                )
+                for doc in raw_documents
             )
-            for doc in raw_documents
-        )
-        if signature == self._signature:
-            return self._documents
+            current = self._index_snapshot
+            if not force_rebuild and current is not None and signature == current.signature:
+                return current
 
-        self._signature = signature
-        self._documents = normalize_documents(raw_documents)
-        self._bm25_index = BM25Index(self._documents)
-        log_event("retrieval.bm25.rebuilt", documents=len(self._documents))
-        return self._documents
+            documents = tuple(normalize_documents(raw_documents))
+            snapshot = _IndexSnapshot(
+                signature=signature,
+                documents=documents,
+                bm25_index=BM25Index(documents),
+            )
+            self._index_snapshot = snapshot
+
+        log_event("retrieval.bm25.rebuilt", documents=len(snapshot.documents))
+        return snapshot
 
     def _search_bm25(
         self,
         query: str,
         *,
-        documents: list[IndexedDocument],
+        documents: Sequence[IndexedDocument],
+        snapshot: _IndexSnapshot,
         filters: MetadataFilter,
     ) -> list[RankedCandidate]:
         if not documents:
             return []
-        if not filters and documents is self._documents:
-            return self._bm25_index.search(query, top_k=self.bm25_top_k)
+        if not filters:
+            return snapshot.bm25_index.search(query, top_k=self.bm25_top_k)
         return BM25Index(documents).search(query, top_k=self.bm25_top_k)
 
     def _rank_semantic(
         self,
         query: str,
-        documents: list[IndexedDocument],
+        documents: Sequence[IndexedDocument],
         *,
         filters: MetadataFilter,
         degrade_on_failure: bool,
@@ -227,4 +265,10 @@ _filter_documents = filter_documents
 _metadata_signature = metadata_signature
 
 
-__all__ = ["HybridRetriever", "MetadataFilter", "RetrievalMode"]
+__all__ = [
+    "HybridRetriever",
+    "MetadataFilter",
+    "RetrievalMode",
+    "SearchQuery",
+    "SearchResult",
+]

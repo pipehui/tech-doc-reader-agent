@@ -1,9 +1,11 @@
+from collections.abc import Sequence
+
 from tech_doc_agent.app.services.retrieval.models import IndexedDocument, RankedCandidate
 
 
 def rank_exact(
     query: str,
-    documents: list[IndexedDocument],
+    documents: Sequence[IndexedDocument],
 ) -> list[RankedCandidate]:
     query_lower = query.strip().lower()
     if not query_lower:

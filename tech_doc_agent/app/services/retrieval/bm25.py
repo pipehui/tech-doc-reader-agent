@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
+from collections.abc import Sequence
 
 from tech_doc_agent.app.services.retrieval.models import IndexedDocument, RankedCandidate
 from tech_doc_agent.app.services.retrieval.tokenization import tokenize
@@ -10,12 +11,12 @@ from tech_doc_agent.app.services.retrieval.tokenization import tokenize
 class BM25Index:
     def __init__(
         self,
-        documents: list[IndexedDocument],
+        documents: Sequence[IndexedDocument],
         *,
         k1: float = 1.5,
         b: float = 0.75,
     ) -> None:
-        self.documents = documents
+        self.documents = tuple(documents)
         self.k1 = k1
         self.b = b
         self.doc_tokens = [tokenize(f"{doc.title}\n{doc.content}") for doc in documents]

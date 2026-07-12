@@ -1,12 +1,25 @@
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
+from typing import cast
+
+import pytest
 
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.retrieval import HybridRetriever
+from tech_doc_agent.app.services.retrieval import hybrid as hybrid_module
 from tech_doc_agent.app.services.retrieval.bm25 import BM25Index
 from tech_doc_agent.app.services.retrieval.exact import rank_exact
 from tech_doc_agent.app.services.retrieval.formatting import format_result
 from tech_doc_agent.app.services.retrieval.fusion import reciprocal_rank_fusion
-from tech_doc_agent.app.services.retrieval.models import IndexedDocument, RankedCandidate
+from tech_doc_agent.app.services.retrieval.models import (
+    IndexedDocument,
+    RankedCandidate,
+    RetrievalMode,
+    SearchQuery,
+    SearchResult,
+)
 from tech_doc_agent.app.services.retrieval.tokenization import tokenize
 
 
@@ -67,6 +80,24 @@ def _settings(**overrides):
     return Settings(**values)
 
 
+def _search(
+    retriever: HybridRetriever,
+    query: str,
+    *,
+    top_k: int | None = None,
+    mode: RetrievalMode = "hybrid",
+    filters: dict | None = None,
+) -> list[SearchResult]:
+    return retriever.retrieve(
+        SearchQuery(
+            query=query,
+            top_k=top_k,
+            mode=mode,
+            filters=filters or {},
+        )
+    )
+
+
 def test_hybrid_retriever_returns_bm25_results_without_vector_index():
     store = SimpleNamespace(
         documents=[
@@ -86,24 +117,34 @@ def test_hybrid_retriever_returns_bm25_results_without_vector_index():
     )
     retriever = HybridRetriever(store, settings=_settings(HYBRID_RAG_VECTOR_TOP_K=0))
 
-    results = retriever.search("状态驱动 StateGraph")
+    results = _search(retriever, "状态驱动 StateGraph")
 
     assert results
-    assert results[0]["title"] == "LangGraph StateGraph"
-    assert "bm25" in results[0]["match_type"]
-    assert results[0]["score"] > 0
-    assert results[0]["source"] == "seed"
+    assert results[0].title == "LangGraph StateGraph"
+    assert "bm25" in results[0].match_types
+    assert results[0].score > 0
+    assert results[0].source == "seed"
+
+
+def test_search_compatibility_facade_preserves_dict_contract():
+    retriever = HybridRetriever(FakeStore(), settings=_settings())
+
+    typed_results = _search(retriever, "stateful workflows", mode="bm25")
+    compatibility_results = retriever.search("stateful workflows", mode="bm25")
+
+    assert compatibility_results == [result.to_dict() for result in typed_results]
+    assert isinstance(compatibility_results[0], dict)
 
 
 def test_hybrid_retriever_fuses_semantic_and_bm25_candidates():
     store = FakeStore()
     retriever = HybridRetriever(store, settings=_settings())
 
-    results = retriever.search("graph state resume")
+    results = _search(retriever, "graph state resume")
 
-    assert [item["title"] for item in results[:2]] == ["Checkpoint", "LangGraph StateGraph"]
-    assert "semantic" in results[0]["match_type"]
-    assert "matched_chunks" in results[0]
+    assert [item.title for item in results[:2]] == ["Checkpoint", "LangGraph StateGraph"]
+    assert "semantic" in results[0].match_types
+    assert results[0].matched_chunks
     assert store.semantic_queries == [("graph state resume", 5)]
 
 
@@ -111,10 +152,10 @@ def test_hybrid_retriever_bm25_mode_does_not_call_semantic_search():
     store = FakeStore()
     retriever = HybridRetriever(store, settings=_settings())
 
-    results = retriever.search("stateful workflows", mode="bm25")
+    results = _search(retriever, "stateful workflows", mode="bm25")
 
     assert results
-    assert all(item["match_type"] == "bm25" for item in results)
+    assert all(item.match_type == "bm25" for item in results)
     assert store.semantic_queries == []
 
 
@@ -122,10 +163,10 @@ def test_hybrid_retriever_vector_mode_only_returns_semantic_matches():
     store = FakeStore()
     retriever = HybridRetriever(store, settings=_settings())
 
-    results = retriever.search("graph state resume", mode="vector")
+    results = _search(retriever, "graph state resume", mode="vector")
 
-    assert [item["title"] for item in results] == ["Checkpoint", "LangGraph StateGraph"]
-    assert all(item["match_type"] == "semantic" for item in results)
+    assert [item.title for item in results] == ["Checkpoint", "LangGraph StateGraph"]
+    assert all(item.match_type == "semantic" for item in results)
     assert store.semantic_queries == [("graph state resume", 5)]
 
 
@@ -151,10 +192,15 @@ def test_hybrid_retriever_filters_bm25_candidates_by_category():
     )
     retriever = HybridRetriever(store, settings=_settings(HYBRID_RAG_VECTOR_TOP_K=0))
 
-    results = retriever.search("checkpoint", mode="bm25", filters={"category": "langgraph_advanced"})
+    results = _search(
+        retriever,
+        "checkpoint",
+        mode="bm25",
+        filters={"category": "langgraph_advanced"},
+    )
 
-    assert [item["title"] for item in results] == ["LangGraph Checkpoint Namespace"]
-    assert results[0]["metadata"]["category"] == "langgraph_advanced"
+    assert [item.title for item in results] == ["LangGraph Checkpoint Namespace"]
+    assert results[0].metadata["category"] == "langgraph_advanced"
 
 
 def test_hybrid_retriever_filters_bm25_candidates_by_user_and_namespace():
@@ -179,15 +225,16 @@ def test_hybrid_retriever_filters_bm25_candidates_by_user_and_namespace():
     )
     retriever = HybridRetriever(store, settings=_settings(HYBRID_RAG_VECTOR_TOP_K=0))
 
-    results = retriever.search(
+    results = _search(
+        retriever,
         "StateGraph tenant",
         mode="bm25",
         filters={"user_id": "user-a", "namespace": "tenant-docs"},
     )
 
-    assert [item["title"] for item in results] == ["Tenant A StateGraph"]
-    assert results[0]["metadata"]["user_id"] == "user-a"
-    assert results[0]["metadata"]["namespace"] == "tenant-docs"
+    assert [item.title for item in results] == ["Tenant A StateGraph"]
+    assert results[0].metadata["user_id"] == "user-a"
+    assert results[0].metadata["namespace"] == "tenant-docs"
 
 
 def test_hybrid_retriever_filters_vector_candidates_after_semantic_search():
@@ -196,10 +243,15 @@ def test_hybrid_retriever_filters_vector_candidates_after_semantic_search():
     store.documents[2]["metadata"] = {"category": "langgraph_advanced", "tags": ["checkpoint"]}
     retriever = HybridRetriever(store, settings=_settings())
 
-    results = retriever.search("graph state resume", mode="vector", filters={"category": "langgraph_core"})
+    results = _search(
+        retriever,
+        "graph state resume",
+        mode="vector",
+        filters={"category": "langgraph_core"},
+    )
 
-    assert [item["title"] for item in results] == ["LangGraph StateGraph"]
-    assert all(item["metadata"]["category"] == "langgraph_core" for item in results)
+    assert [item.title for item in results] == ["LangGraph StateGraph"]
+    assert all(item.metadata["category"] == "langgraph_core" for item in results)
     assert store.semantic_queries == [("graph state resume", 25)]
 
 
@@ -217,7 +269,7 @@ def test_hybrid_retriever_rebuilds_bm25_when_documents_change():
     )
     retriever = HybridRetriever(store, settings=_settings(HYBRID_RAG_VECTOR_TOP_K=0))
 
-    first_results = retriever.search("StateGraph")
+    first_results = _search(retriever, "StateGraph")
     store.documents.append(
         {
             "id": 2,
@@ -226,10 +278,75 @@ def test_hybrid_retriever_rebuilds_bm25_when_documents_change():
             "source": "seed",
         }
     )
-    second_results = retriever.search("structured arguments")
+    second_results = _search(retriever, "structured arguments")
 
-    assert first_results[0]["title"] == "LangGraph StateGraph"
-    assert second_results[0]["title"] == "Function Calling"
+    assert first_results[0].title == "LangGraph StateGraph"
+    assert second_results[0].title == "Function Calling"
+
+
+def test_search_query_snapshots_filters_and_rejects_unknown_mode():
+    filters = {"category": "langgraph_core"}
+    request = SearchQuery(query="StateGraph", filters=filters)
+    filters["category"] = "fastapi"
+
+    assert request.filters == {"category": "langgraph_core"}
+    with pytest.raises(ValueError, match="Unsupported retrieval mode"):
+        SearchQuery(
+            query="StateGraph",
+            mode=cast(RetrievalMode, "unknown"),
+        )
+
+
+def test_explicit_zero_top_k_short_circuits_before_index_construction():
+    retriever = HybridRetriever(FakeStore(), settings=_settings())
+
+    assert _search(retriever, "StateGraph", top_k=0) == []
+    assert retriever._index_snapshot is None
+
+
+def test_parallel_refresh_serializes_bm25_snapshot_publication(monkeypatch):
+    retriever = HybridRetriever(FakeStore(), settings=_settings())
+    _search(retriever, "StateGraph", mode="bm25")
+    original_index = hybrid_module.BM25Index
+    guard = threading.Lock()
+    active_builds = 0
+    max_active_builds = 0
+
+    class CountingIndex(original_index):
+        def __init__(self, documents):
+            nonlocal active_builds, max_active_builds
+            with guard:
+                active_builds += 1
+                max_active_builds = max(max_active_builds, active_builds)
+            try:
+                time.sleep(0.01)
+                super().__init__(documents)
+            finally:
+                with guard:
+                    active_builds -= 1
+
+    monkeypatch.setattr(hybrid_module, "BM25Index", CountingIndex)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        list(executor.map(lambda _: retriever.refresh(), range(4)))
+
+    assert max_active_builds == 1
+
+
+def test_failed_refresh_keeps_last_published_snapshot(monkeypatch):
+    retriever = HybridRetriever(FakeStore(), settings=_settings())
+    _search(retriever, "StateGraph", mode="bm25")
+    published_snapshot = retriever._index_snapshot
+
+    class FailingIndex:
+        def __init__(self, documents):
+            raise RuntimeError("injected BM25 rebuild failure")
+
+    monkeypatch.setattr(hybrid_module, "BM25Index", FailingIndex)
+
+    with pytest.raises(RuntimeError, match="injected BM25 rebuild failure"):
+        retriever.refresh()
+
+    assert retriever._index_snapshot is published_snapshot
 
 
 def test_tokenize_splits_camel_case_and_emits_cjk_unigrams_and_bigrams():
@@ -297,14 +414,45 @@ def test_rrf_combines_signals_and_preserves_semantic_chunk_provenance():
     result = format_result(fused[0])
 
     assert [candidate.document.title for candidate in fused] == ["Alpha", "Beta"]
-    assert result["match_type"] == "exact+semantic"
-    assert result["retrieval"]["signals"] == {
+    assert isinstance(result, SearchResult)
+    assert result.match_type == "exact+semantic"
+    assert result.signals == {
         "exact": {"rank": 2, "score": 1.0},
         "semantic": {"rank": 1, "score": 0.8, "distance": 0.25, "chunk_index": 2},
     }
-    assert result["matched_chunks"] == [
-        {"text": "matched", "chunk_index": 2, "distance": 0.25}
-    ]
+    assert result.matched_chunks == (
+        {"text": "matched", "chunk_index": 2, "distance": 0.25},
+    )
+    assert result.to_dict() == {
+        "id": "alpha",
+        "title": "Alpha",
+        "content": "alpha",
+        "source": "test",
+        "metadata": {"category": "uncategorized", "tags": []},
+        "match_type": "exact+semantic",
+        "score": 0.032522,
+        "retrieval": {
+            "score_type": "rrf",
+            "signals": {
+                "exact": {"rank": 2, "score": 1.0},
+                "semantic": {
+                    "rank": 1,
+                    "score": 0.8,
+                    "distance": 0.25,
+                    "chunk_index": 2,
+                },
+            },
+        },
+        "matched_chunks": [
+            {"text": "matched", "chunk_index": 2, "distance": 0.25},
+        ],
+    }
+
+    fused[0].signals["exact"]["rank"] = 99
+    fused[0].matched_chunks[0]["text"] = "changed"
+
+    assert result.signals["exact"]["rank"] == 2
+    assert result.matched_chunks[0]["text"] == "matched"
 
 
 def test_rrf_equal_scores_and_ranks_use_title_as_final_tie_break():

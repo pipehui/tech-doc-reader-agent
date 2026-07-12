@@ -1,36 +1,33 @@
 from __future__ import annotations
 
-from typing import Any
+from tech_doc_agent.app.services.retrieval.models import (
+    FusedCandidate,
+    MatchType,
+    SearchResult,
+)
 
-from tech_doc_agent.app.services.retrieval.models import FusedCandidate
+
+MATCH_TYPE_ORDER: tuple[MatchType, ...] = ("exact", "bm25", "semantic")
 
 
-MATCH_TYPE_ORDER = ("exact", "bm25", "semantic")
-
-
-def format_result(candidate: FusedCandidate) -> dict[str, Any]:
+def format_result(candidate: FusedCandidate) -> SearchResult:
     document = candidate.document
-    match_types = [
+    match_types: tuple[MatchType, ...] = tuple(
         match_type
         for match_type in MATCH_TYPE_ORDER
         if match_type in candidate.match_types
-    ]
-    result = {
-        "id": document.doc_id,
-        "title": document.title,
-        "content": document.content,
-        "source": document.source,
-        "metadata": document.metadata,
-        "match_type": "+".join(match_types),
-        "score": round(candidate.score, 6),
-        "retrieval": {
-            "score_type": "rrf",
-            "signals": candidate.signals,
-        },
-    }
-    if candidate.matched_chunks:
-        result["matched_chunks"] = candidate.matched_chunks[:2]
-    return result
+    )
+    return SearchResult(
+        doc_id=document.doc_id,
+        title=document.title,
+        content=document.content,
+        source=document.source,
+        metadata=document.metadata,
+        match_types=match_types,
+        score=round(candidate.score, 6),
+        signals=candidate.signals,
+        matched_chunks=tuple(candidate.matched_chunks[:2]),
+    )
 
 
 __all__ = ["format_result"]

@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any
 
 from evals.artifacts import redact_artifact_rows, safe_artifact_text, write_jsonl
-from tech_doc_agent.app.services.retrieval import HybridRetriever, RetrievalMode
+from tech_doc_agent.app.services.retrieval import (
+    HybridRetriever,
+    RetrievalMode,
+    SearchQuery,
+    SearchResult,
+)
 from tech_doc_agent.app.services.resources import AppResources
 
 
@@ -43,7 +48,14 @@ def run_case(
     started_at = time.perf_counter()
 
     try:
-        results = retriever.search(case["query"], top_k=top_k, mode=mode, filters=filters)
+        results = retriever.retrieve(
+            SearchQuery(
+                query=case["query"],
+                top_k=top_k,
+                mode=mode,
+                filters=filters,
+            )
+        )
         elapsed = time.perf_counter() - started_at
         scores = score_case(case, results, top_k=top_k)
         return {
@@ -57,8 +69,8 @@ def run_case(
             "top_k": top_k,
             "expected_titles": case["expected_titles"],
             "expected_keywords": case.get("expected_keywords", []),
-            "retrieved": results,
-            "retrieved_titles": [str(item.get("title", "")) for item in results],
+            "retrieved": [result.to_dict() for result in results],
+            "retrieved_titles": [result.title for result in results],
             "match_types": _match_type_counts(results),
             "e2e_s": elapsed,
             "status": "done",
@@ -93,9 +105,9 @@ def run_case(
         }
 
 
-def score_case(case: dict[str, Any], results: list[dict[str, Any]], *, top_k: int) -> dict[str, float | None]:
+def score_case(case: dict[str, Any], results: list[SearchResult], *, top_k: int) -> dict[str, float | None]:
     top_results = results[:top_k]
-    retrieved_titles = [_normalize_title(item.get("title")) for item in top_results]
+    retrieved_titles = [_normalize_title(item.title) for item in top_results]
     expected_titles = [_normalize_title(title) for title in case["expected_titles"]]
     hits = [
         expected_title
@@ -329,23 +341,23 @@ def _validate_case(case: Any) -> None:
         raise ValueError("Retrieval eval case top_k must be positive.")
 
 
-def _keyword_coverage(case: dict[str, Any], results: list[dict[str, Any]]) -> float | None:
+def _keyword_coverage(case: dict[str, Any], results: list[SearchResult]) -> float | None:
     keywords = [str(keyword).strip().lower() for keyword in case.get("expected_keywords", []) if str(keyword).strip()]
     if not keywords:
         return None
 
     haystack = "\n".join(
-        f"{item.get('title', '')}\n{item.get('content', '')}\n"
-        f"{' '.join(str(chunk.get('text', '')) for chunk in item.get('matched_chunks', []))}"
+        f"{item.title}\n{item.content}\n"
+        f"{' '.join(str(chunk.get('text', '')) for chunk in item.matched_chunks)}"
         for item in results
     ).lower()
     return sum(1 for keyword in keywords if keyword in haystack) / len(keywords)
 
 
-def _match_type_counts(results: list[dict[str, Any]]) -> dict[str, int]:
+def _match_type_counts(results: list[SearchResult]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for item in results:
-        for match_type in str(item.get("match_type", "")).split("+"):
+        for match_type in item.match_types:
             if match_type:
                 counts[match_type] += 1
     return dict(counts)

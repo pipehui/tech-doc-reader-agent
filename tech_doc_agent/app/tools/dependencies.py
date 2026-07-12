@@ -7,6 +7,7 @@ from tech_doc_agent.app.application.learning_state import (
     UpdateLearningStateCommand,
     UpdateLearningStateResult,
 )
+from tech_doc_agent.app.services.retrieval.models import SearchQuery, SearchResult
 
 
 class DocumentStorePort(Protocol):
@@ -16,14 +17,7 @@ class DocumentStorePort(Protocol):
 
 
 class DocumentRetrieverPort(Protocol):
-    def search(
-        self,
-        query: str,
-        *,
-        top_k: int | None = None,
-        mode: str = "hybrid",
-        filters: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]: ...
+    def retrieve(self, request: SearchQuery) -> list[SearchResult]: ...
 
     def refresh(self) -> None: ...
 

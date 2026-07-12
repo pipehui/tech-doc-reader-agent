@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from tech_doc_agent.app.services.retrieval.filters import metadata_matches
@@ -43,11 +44,11 @@ def document_key(*, doc_id: Any, title: str, fallback_index: int) -> str:
 
 
 def filter_documents(
-    documents: list[IndexedDocument],
+    documents: Sequence[IndexedDocument],
     filters: MetadataFilter,
 ) -> list[IndexedDocument]:
     if not filters:
-        return documents
+        return list(documents)
     return [
         document
         for document in documents

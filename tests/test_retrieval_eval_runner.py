@@ -7,36 +7,57 @@ from evals.run_retrieval_eval import (
     score_case,
     summarize_results,
 )
+from tech_doc_agent.app.services.retrieval.models import (
+    MatchType,
+    SearchQuery,
+    SearchResult,
+)
 
 
 class FakeRetriever:
-    def search(self, query: str, top_k: int, mode: str = "hybrid", filters: dict | None = None):
-        if filters and filters.get("category") == "fastapi":
+    def retrieve(self, request: SearchQuery):
+        if request.filters.get("category") == "fastapi":
             return [
-                {
-                    "title": "FastAPI 依赖注入",
-                    "content": "FastAPI 通过 Depends 实现依赖注入。",
-                    "source": "seed",
-                    "match_type": "bm25",
-                    "score": 0.01,
-                }
-            ][:top_k]
+                _result(
+                    "FastAPI 依赖注入",
+                    "FastAPI 通过 Depends 实现依赖注入。",
+                    match_types=("bm25",),
+                    score=0.01,
+                )
+            ][: request.top_k]
         return [
-            {
-                "title": "LangGraph StateGraph",
-                "content": "StateGraph 是状态驱动工作流，支持条件分支。",
-                "source": "seed",
-                "match_type": "bm25+semantic",
-                "score": 0.03,
-            },
-            {
-                "title": "FastAPI 依赖注入",
-                "content": "FastAPI 通过 Depends 实现依赖注入。",
-                "source": "seed",
-                "match_type": "bm25",
-                "score": 0.01,
-            },
-        ][:top_k]
+            _result(
+                "LangGraph StateGraph",
+                "StateGraph 是状态驱动工作流，支持条件分支。",
+                match_types=("bm25", "semantic"),
+                score=0.03,
+            ),
+            _result(
+                "FastAPI 依赖注入",
+                "FastAPI 通过 Depends 实现依赖注入。",
+                match_types=("bm25",),
+                score=0.01,
+            ),
+        ][: request.top_k]
+
+
+def _result(
+    title: str,
+    content: str,
+    *,
+    match_types: tuple[MatchType, ...] = ("bm25",),
+    score: float = 1.0,
+) -> SearchResult:
+    return SearchResult(
+        doc_id=title,
+        title=title,
+        content=content,
+        source="seed",
+        metadata={},
+        match_types=match_types,
+        score=score,
+        signals={},
+    )
 
 
 def test_retrieval_cases_are_valid():
@@ -60,7 +81,7 @@ def test_score_case_computes_recall_mrr_and_keyword_coverage():
         "expected_titles": ["LangGraph StateGraph"],
         "expected_keywords": ["StateGraph", "条件分支", "missing"],
     }
-    results = FakeRetriever().search("StateGraph", top_k=2)
+    results = FakeRetriever().retrieve(SearchQuery(query="StateGraph", top_k=2))
 
     scores = score_case(case, results, top_k=2)
 
@@ -77,12 +98,7 @@ def test_score_case_treats_more_specific_titles_as_relevant():
         "query": "StateGraph",
         "expected_titles": ["LangGraph StateGraph"],
     }
-    results = [
-        {
-            "title": "LangGraph StateGraph 详细解析",
-            "content": "StateGraph details",
-        }
-    ]
+    results = [_result("LangGraph StateGraph 详细解析", "StateGraph details")]
 
     scores = score_case(case, results, top_k=1)
 
