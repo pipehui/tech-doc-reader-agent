@@ -55,6 +55,7 @@ RUNTIME_CONTRACT = DependencyContract(
         "tech_doc_agent.app.main",
         "tech_doc_agent.app.services",
         "tech_doc_agent.app.tools",
+        "langgraph.checkpoint.redis",
     ),
 )
 GRAPH_CONTRACT = DependencyContract(
@@ -91,8 +92,7 @@ API_DELIVERY_CONTRACT = DependencyContract(
     forbidden_prefixes=(
         "tech_doc_agent.app.graph",
         "tech_doc_agent.app.infrastructure",
-        "tech_doc_agent.app.services.retrieval",
-        "tech_doc_agent.app.services.vectordb",
+        "tech_doc_agent.app.services",
         "tech_doc_agent.app.tools",
     ),
 )
@@ -114,7 +114,7 @@ def test_infrastructure_adapters_do_not_depend_on_delivery_or_orchestration():
     assert INFRASTRUCTURE_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
-def test_api_delivery_does_not_import_graph_or_concrete_backends():
+def test_api_delivery_only_depends_on_runtime_facade_not_services_or_backends():
     assert API_DELIVERY_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 

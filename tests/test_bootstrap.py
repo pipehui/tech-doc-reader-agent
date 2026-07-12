@@ -1,3 +1,5 @@
+import pytest
+
 from tech_doc_agent.app import bootstrap
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
@@ -31,6 +33,39 @@ def test_build_chat_runtime_selects_redis_approval_repository(monkeypatch):
     )
 
     assert runtime.settings is settings
+    assert type(runtime).__module__ == "tech_doc_agent.app.runtime.chat_runtime"
     assert runtime._lifecycle.settings is settings
+    assert runtime.execution_identity.to_payload()["schema_version"] == 2
     assert calls == [("redis://runtime-test", {"ttl_seconds": 123})]
     assert repository.get("user-a:docs:session-1") == request
+
+
+def test_build_chat_runtime_closes_repository_when_facade_construction_fails(
+    monkeypatch,
+):
+    class ClosingRepository(InMemoryApprovalRepository):
+        def __init__(self):
+            super().__init__()
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    repository = ClosingRepository()
+    monkeypatch.setattr(
+        bootstrap.RedisApprovalRepository,
+        "from_url",
+        lambda redis_url, **kwargs: repository,
+    )
+    monkeypatch.setattr(
+        bootstrap,
+        "build_runtime_execution_identity",
+        lambda settings: (_ for _ in ()).throw(
+            ValueError("invalid prompt identity")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="invalid prompt identity"):
+        bootstrap.build_chat_runtime(Settings())
+
+    assert repository.closed is True

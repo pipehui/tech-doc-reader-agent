@@ -6,7 +6,8 @@ from tech_doc_agent.app.core.conversation_summary import (
     ConversationSummary,
     SummarySourceRange,
 )
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
+from tests.fakes.chat_runtime import build_test_chat_runtime
 
 
 class FakeStateGraph:
@@ -34,8 +35,7 @@ def _message(message_type: str, content, **attributes):
 
 
 def _runtime_with_snapshot(snapshot) -> ChatRuntime:
-    runtime = ChatRuntime()
-    runtime.settings = Settings()
+    runtime = build_test_chat_runtime(settings=Settings())
     runtime.graph = FakeStateGraph(snapshot)
     return runtime
 

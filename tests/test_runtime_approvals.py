@@ -7,7 +7,7 @@ from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository
 )
 from tech_doc_agent.app.runtime.approvals import ApprovalService
 from tech_doc_agent.app.runtime.telemetry import RuntimeOperationTelemetry
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tests.fakes.chat_runtime import build_test_chat_runtime
 
 
 def test_approval_service_isolates_tenants_and_resolves_once():
@@ -71,7 +71,7 @@ def test_approval_service_isolates_tenants_and_resolves_once():
 
 def test_chat_runtime_accepts_an_injected_approval_repository():
     repository = InMemoryApprovalRepository()
-    runtime = ChatRuntime(approval_repository=repository)
+    runtime = build_test_chat_runtime(approval_repository=repository)
 
     request = runtime.request_guardrail_approval(
         "session-1",
@@ -96,7 +96,7 @@ def test_chat_runtime_closes_the_injected_approval_repository():
             self.closed = True
 
     repository = ClosingRepository()
-    runtime = ChatRuntime(
+    runtime = build_test_chat_runtime(
         approval_repository=repository,
         settings=Settings(LANGFUSE_ENABLED=False),
     )

@@ -71,6 +71,7 @@
 | 2026-07-12 | Phase 4：Context-compaction tracked baseline、双阈值 regression comparator 与 PR CI gate | deterministic gate 完成，retrieval/live gate 继续 | [2026-07-12-context-compaction-pr-regression-gate.md](2026-07-12-context-compaction-pr-regression-gate.md) |
 | 2026-07-12 | Phase 4：Embedding/Web provider retry request ledger、SSE/REST/Inspector 与 online eval | provider attempt 明细完成，LLM 继续使用既有 budget usage | [2026-07-12-provider-retry-usage.md](2026-07-12-provider-retry-usage.md) |
 | 2026-07-12 | Phase 4：递归 Python import graph、分层 architecture contracts 与 message_scope 归位 | 六组稳定边界已阻断，ChatRuntime/services 收口继续 | [2026-07-12-recursive-architecture-contracts.md](2026-07-12-recursive-architecture-contracts.md) |
+| 2026-07-12 | Phase 4：ChatRuntime 纯注入 facade 归位、runtime identity port 与 API -> runtime | facade 边界完成，services 其他混合职责继续 | [2026-07-12-chat-runtime-facade-boundary.md](2026-07-12-chat-runtime-facade-boundary.md) |
 
 ## 本地任务单策略
 

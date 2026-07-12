@@ -8,7 +8,8 @@ from langchain_core.messages import AIMessage
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.execution_budget import REQUEST_BUDGET_METADATA_KEY
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
+from tests.fakes.chat_runtime import build_test_chat_runtime
 
 
 class FakeExecutionGraph:
@@ -50,8 +51,9 @@ class FakeExecutionGraph:
 
 
 def _runtime(graph: FakeExecutionGraph) -> ChatRuntime:
-    runtime = ChatRuntime()
-    runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
+    runtime = build_test_chat_runtime(
+        settings=Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
+    )
     runtime.graph = graph
     return runtime
 

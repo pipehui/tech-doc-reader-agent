@@ -4,7 +4,7 @@ from fastapi.sse import ServerSentEvent
 
 from tech_doc_agent.app.core.errors import ApplicationError, classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 
 from .events import sse_event
 from .translators import (

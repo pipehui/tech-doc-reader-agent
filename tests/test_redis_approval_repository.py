@@ -12,7 +12,7 @@ from tech_doc_agent.app.infrastructure.persistence.approval_repository import (
     RedisApprovalRepository,
 )
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tests.fakes.chat_runtime import build_test_chat_runtime
 from tests.fakes.redis import (
     FailingRedisClient,
     FakeRedisBackend,
@@ -84,14 +84,14 @@ def test_redis_repository_shares_pending_request_and_resolves_atomically():
 
 def test_separate_runtimes_can_reject_the_same_redis_backed_guardrail_request():
     backend = FakeRedisBackend()
-    runtime_a = ChatRuntime(
+    runtime_a = build_test_chat_runtime(
         approval_repository=RedisApprovalRepository(
             client=FakeRedisClient(backend),
             ttl_seconds=900,
         ),
         settings=Settings(LANGFUSE_FLUSH_ON_REQUEST=False),
     )
-    runtime_b = ChatRuntime(
+    runtime_b = build_test_chat_runtime(
         approval_repository=RedisApprovalRepository(
             client=FakeRedisClient(backend),
             ttl_seconds=900,

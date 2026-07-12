@@ -28,7 +28,7 @@ from tech_doc_agent.app.core.observability import (
     new_trace_id,
     trace_context,
 )
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 
 
 router = APIRouter()

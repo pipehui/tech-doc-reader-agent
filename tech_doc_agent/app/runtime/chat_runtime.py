@@ -1,63 +1,46 @@
 from typing import Any
 
-from langgraph.checkpoint.redis import RedisSaver
 from langgraph.types import StateSnapshot
 
 from tech_doc_agent.app.application.approval_models import (
     ApprovalRepository,
     GuardrailApprovalRequest,
 )
-from tech_doc_agent.app.composition import build_application_graph
 from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
-from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
-    InMemoryApprovalRepository,
-)
+from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.runtime.approvals import (
     ApprovalService,
 )
 from tech_doc_agent.app.runtime.config import SessionConfigFactory
 from tech_doc_agent.app.runtime.execution import GraphExecutionService
+from tech_doc_agent.app.runtime.identity import (
+    RuntimeExecutionIdentityFactory,
+    RuntimeExecutionIdentityPort,
+)
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
 from tech_doc_agent.app.runtime.sessions import SessionQueryService
-from tech_doc_agent.app.services.resources import AppResources
-from tech_doc_agent.app.services.assistants.identity import (
-    RuntimeExecutionIdentity,
-    build_runtime_execution_identity,
-)
 
 
 class ChatRuntime:
     def __init__(
         self,
-        approval_repository: ApprovalRepository | None = None,
         *,
-        settings: Settings | None = None,
-        lifecycle: RuntimeLifecycle | None = None,
-        execution_identity: RuntimeExecutionIdentity | None = None,
+        settings: Settings,
+        lifecycle: RuntimeLifecycle,
+        approval_repository: ApprovalRepository,
+        execution_identity_factory: RuntimeExecutionIdentityFactory,
+        execution_identity: RuntimeExecutionIdentityPort | None = None,
     ) -> None:
-        self._settings = settings if settings is not None else get_settings()
-        self._execution_identity_override = execution_identity
-        self._execution_identity = execution_identity or build_runtime_execution_identity(
-            self._settings
+        self._settings = settings
+        self._execution_identity_factory = execution_identity_factory
+        self._execution_identity_override = execution_identity is not None
+        self._execution_identity = (
+            execution_identity or execution_identity_factory(settings)
         )
-        self._lifecycle = (
-            lifecycle
-            if lifecycle is not None
-            else RuntimeLifecycle(
-                settings=self._settings,
-                resource_factory=AppResources.create,
-                checkpointer_context_factory=RedisSaver.from_conn_string,
-                graph_factory=build_application_graph,
-            )
-        )
-        self._approval_repository = (
-            approval_repository
-            if approval_repository is not None
-            else InMemoryApprovalRepository()
-        )
+        self._lifecycle = lifecycle
+        self._approval_repository = approval_repository
         self._approval_service = ApprovalService(self._approval_repository)
         self._session_queries = SessionQueryService(
             graph_provider=self._require_graph,
@@ -79,11 +62,11 @@ class ChatRuntime:
     @settings.setter
     def settings(self, value: Settings) -> None:
         self._settings = value
-        if self._execution_identity_override is None:
-            self._execution_identity = build_runtime_execution_identity(value)
+        if not self._execution_identity_override:
+            self._execution_identity = self._execution_identity_factory(value)
 
     @property
-    def execution_identity(self) -> RuntimeExecutionIdentity:
+    def execution_identity(self) -> RuntimeExecutionIdentityPort:
         return self._execution_identity
 
     @property

@@ -8,13 +8,14 @@ from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.execution_budget import REQUEST_BUDGET_METADATA_KEY
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.runtime import config as runtime_config
-from tech_doc_agent.app.runtime import lifecycle as runtime_lifecycle
-from tech_doc_agent.app.services import chat_runtime
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tech_doc_agent.app.runtime import chat_runtime
+from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
+from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
+from tests.fakes.chat_runtime import build_test_chat_runtime
 
 
 def test_build_config_adds_langfuse_callback_when_enabled(monkeypatch):
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings(
         LANGGRAPH_RECURSION_LIMIT=42,
         LANGFUSE_ENABLED=True,
@@ -49,7 +50,7 @@ def test_build_config_adds_langfuse_callback_when_enabled(monkeypatch):
 
 
 def test_build_config_omits_callbacks_for_state_reads():
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings()
 
     config = runtime.build_config("session-1")
@@ -69,7 +70,7 @@ def test_build_config_omits_callbacks_for_state_reads():
 
 
 def test_runtime_identity_tracks_compatibility_settings_reassignment():
-    runtime = ChatRuntime(settings=Settings(PRIMARY_MODEL="model-a"))
+    runtime = build_test_chat_runtime(settings=Settings(PRIMARY_MODEL="model-a"))
     first_fingerprint = runtime.execution_identity.fingerprint
 
     runtime.settings = Settings(PRIMARY_MODEL="model-b")
@@ -82,9 +83,11 @@ def test_runtime_identity_tracks_compatibility_settings_reassignment():
 
 
 def test_explicit_runtime_identity_is_not_replaced_by_settings_reassignment():
-    identity_runtime = ChatRuntime(settings=Settings(PRIMARY_MODEL="model-a"))
+    identity_runtime = build_test_chat_runtime(
+        settings=Settings(PRIMARY_MODEL="model-a")
+    )
     injected_identity = identity_runtime.execution_identity
-    runtime = ChatRuntime(
+    runtime = build_test_chat_runtime(
         settings=Settings(PRIMARY_MODEL="model-b"),
         execution_identity=injected_identity,
     )
@@ -118,7 +121,7 @@ def test_session_config_uses_injected_request_start_without_persisting_deadline(
 
 
 def test_build_config_namespaces_thread_by_tenant():
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings()
 
     config = runtime.build_config(
@@ -151,7 +154,7 @@ def test_guardrail_approval_reuses_pending_interrupt_and_replays_message_when_ap
             )
             yield ("updates", {"primary_assistant": {}})
 
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
     runtime.graph = FakeGraph()
     runtime.request_guardrail_approval(
@@ -200,22 +203,22 @@ def test_enter_retries_redis_busy_loading_during_checkpointer_setup(monkeypatch)
             assert redis_url == "redis://test"
             return FakeCheckpointer()
 
-    monkeypatch.setattr(chat_runtime.AppResources, "create", lambda settings: SimpleNamespace())
     monkeypatch.setattr(chat_runtime, "shutdown_langfuse", lambda settings: None)
-    monkeypatch.setattr(
-        chat_runtime,
-        "build_application_graph",
-        lambda checkpointer, resources: {"checkpointer": checkpointer},
-    )
-    monkeypatch.setattr(chat_runtime, "RedisSaver", FakeRedisSaver)
-    monkeypatch.setattr(runtime_lifecycle, "sleep", lambda seconds: None)
-
-    runtime = ChatRuntime()
-    runtime.settings = Settings(
+    settings = Settings(
         REDIS_URL="redis://test",
         REDIS_SETUP_MAX_ATTEMPTS=2,
         REDIS_SETUP_RETRY_SECONDS=0,
     )
+    lifecycle = RuntimeLifecycle(
+        settings=settings,
+        resource_factory=lambda settings: SimpleNamespace(),
+        checkpointer_context_factory=FakeRedisSaver.from_conn_string,
+        graph_factory=lambda checkpointer, resources: {
+            "checkpointer": checkpointer
+        },
+        sleeper=lambda seconds: None,
+    )
+    runtime = build_test_chat_runtime(settings=settings, lifecycle=lifecycle)
 
     with runtime as active:
         assert active.graph == {"checkpointer": active.checkpointer}
@@ -247,7 +250,7 @@ def test_astream_user_message_bridges_sync_graph_stream_with_trace_context():
         with trace_context(trace_id="trace-async"):
             return [part async for part in runtime.astream_user_message("session-async", "你好")]
 
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
     runtime.graph = FakeGraph()
 
@@ -309,7 +312,7 @@ def test_stream_approval_rejection_updates_interrupted_tool_node_before_resuming
             self.next = ()
             yield ("updates", {"parser": {}})
 
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
     runtime.graph = FakeGraph()
 
@@ -377,7 +380,7 @@ def test_astream_approval_rejection_uses_sync_update_state_bridge():
             )
         ]
 
-    runtime = ChatRuntime()
+    runtime = build_test_chat_runtime()
     runtime.settings = Settings(LANGFUSE_FLUSH_ON_REQUEST=False)
     runtime.graph = FakeGraph()
 

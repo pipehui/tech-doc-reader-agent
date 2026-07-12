@@ -4,9 +4,9 @@ from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
     InMemoryApprovalRepository,
 )
+from tech_doc_agent.app.runtime import chat_runtime
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
-from tech_doc_agent.app.services import chat_runtime
-from tech_doc_agent.app.services.chat_runtime import ChatRuntime
+from tests.fakes.chat_runtime import build_test_chat_runtime
 
 
 class ClosingRepository(InMemoryApprovalRepository):
@@ -62,7 +62,7 @@ def test_lifecycle_start_and_close_are_explicit_and_close_is_idempotent():
     assert lifecycle.graph is None
 
 
-def test_runtime_start_failure_closes_checkpointer_resources_and_approval_repository(monkeypatch):
+def test_runtime_start_failure_closes_checkpointer_resources_and_approval_repository():
     events = []
     repository = ClosingRepository()
     checkpointer = RecordingCheckpointer(events)
@@ -73,21 +73,19 @@ def test_runtime_start_failure_closes_checkpointer_resources_and_approval_reposi
             events.append(("checkpointer.create", redis_url))
             return checkpointer
 
-    monkeypatch.setattr(
-        chat_runtime.AppResources,
-        "create",
-        lambda settings: events.append("resources.create") or object(),
+    settings = Settings(REDIS_URL="redis://lifecycle-test")
+    lifecycle = RuntimeLifecycle(
+        settings=settings,
+        resource_factory=lambda settings: events.append("resources.create") or object(),
+        checkpointer_context_factory=FakeRedisSaver.from_conn_string,
+        graph_factory=lambda checkpointer, resources: (_ for _ in ()).throw(
+            RuntimeError("graph build failed")
+        ),
     )
-    monkeypatch.setattr(chat_runtime, "RedisSaver", FakeRedisSaver)
-    monkeypatch.setattr(
-        chat_runtime,
-        "build_application_graph",
-        lambda checkpointer, resources: (_ for _ in ()).throw(RuntimeError("graph build failed")),
-    )
-
-    runtime = ChatRuntime(
+    runtime = build_test_chat_runtime(
         approval_repository=repository,
-        settings=Settings(REDIS_URL="redis://lifecycle-test"),
+        settings=settings,
+        lifecycle=lifecycle,
     )
 
     with pytest.raises(RuntimeError, match="graph build failed"):
@@ -107,7 +105,7 @@ def test_langfuse_shutdown_failure_does_not_skip_other_runtime_cleanup(monkeypat
     events = []
     repository = ClosingRepository()
     checkpointer = RecordingCheckpointer(events)
-    runtime = ChatRuntime(
+    runtime = build_test_chat_runtime(
         approval_repository=repository,
         settings=Settings(LANGFUSE_ENABLED=False),
     )

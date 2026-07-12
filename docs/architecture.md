@@ -110,9 +110,11 @@ replace-in-place 状态外，不启用自动数据 pruning。
 | `runtime` | API、graph、services、tools、infrastructure、组装入口 | `application`、`core` |
 | `graph` | API、runtime、services、tools、infrastructure、组装入口 | `graph`、`core` |
 | `infrastructure` | API、graph、runtime、services、tools、组装入口 | `application`、`core` |
-| `api` | graph、persistence/retrieval backend、tools | runtime facade/当前兼容 facade、core、API contract |
+| `api` | graph、services、persistence/retrieval backend、tools | runtime facade、core、API contract |
 
-`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool 和 graph 只能在这些边界完成组装。`services` 仍包含 assistant/provider 与部分兼容 facade，尚未强行声明虚假的单一层级；后续会先迁出具体职责，再收紧 contract。
+`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool 和 graph 只能在这些边界完成组装。`services` 仍包含 assistant/provider 与 resource container，尚未强行声明虚假的单一层级；后续会先迁出具体职责，再收紧 contract。
+
+`runtime/chat_runtime.py` 是 API/CLI 共用 facade，只依赖 application/core/runtime ports。生产所需的 Redis approval repository、RedisSaver、resource factory、graph builder 与 prompt/model identity builder 由 `bootstrap.py` 显式注入；runtime 模块本身没有具体 adapter fallback。
 
 Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph state 并决定 Agent prompt 可见消息，属于 graph orchestration policy，不再由 `services` 反向提供给 graph。
 
