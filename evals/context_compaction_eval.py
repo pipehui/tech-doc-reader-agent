@@ -19,7 +19,7 @@ from tech_doc_agent.app.graph.context_compaction import ContextCompactor
 from tech_doc_agent.app.services.conversation_summarizer import (
     ExtractiveConversationSummarizer,
 )
-from tech_doc_agent.app.services.message_scope import build_assistant_state
+from tech_doc_agent.app.graph.message_scope import build_assistant_state
 
 
 MarkerRole = Literal["human", "assistant", "tool"]

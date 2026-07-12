@@ -15,7 +15,7 @@ from tech_doc_agent.app.graph.commands import (
     ToRelationAssistant,
     ToSummaryAssistant,
 )
-from tech_doc_agent.app.services.message_scope import should_route_to_examination
+from tech_doc_agent.app.graph.message_scope import should_route_to_examination
 
 from .specs import AgentSpec
 from .state import State

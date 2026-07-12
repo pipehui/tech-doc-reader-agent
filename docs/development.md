@@ -12,6 +12,8 @@ cd frontend && npm run check && npm run test && npm run build
 python -m pytest tests/test_frontend_static.py -q
 ```
 
+全量 pytest 同时执行递归 architecture dependency contracts。门禁基于 AST，不会启动模型、Redis 或应用资源；新增 app package/import 时无需维护手写文件清单，但若跨越稳定层级会报告具体相对路径、行号和目标 module。`bootstrap.py`/`composition.py` 是唯一明确的具体组装豁免点，不应通过在普通模块增加 allowlist 绕过依赖方向。
+
 ## Local Setup
 
 复制环境变量模板：

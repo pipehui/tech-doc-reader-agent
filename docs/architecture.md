@@ -99,6 +99,23 @@ LangGraph state 保存：
 各存储的保留、generation、备份恢复与删除前置条件见 [data-lifecycle.md](data-lifecycle.md)。当前除 approval TTL 和
 replace-in-place 状态外，不启用自动数据 pruning。
 
+## Dependency Direction Gates
+
+后端依赖边界由 `tests/architecture/import_graph.py` 静态构建真实 Python import graph，再由 `tests/test_architecture_dependencies.py` 声明 contract。分析器递归扫描所有子包，解析 absolute/relative import 和 `from package import module`，不会 import 或执行应用模块。
+
+| Source | 禁止反向依赖 | 当前允许方向 |
+|---|---|---|
+| `core` | 其他全部 app layer | `core` 内部与第三方基础库 |
+| `application` | API、graph、runtime、services、tools、infrastructure、组装入口 | `core` |
+| `runtime` | API、graph、services、tools、infrastructure、组装入口 | `application`、`core` |
+| `graph` | API、runtime、services、tools、infrastructure、组装入口 | `graph`、`core` |
+| `infrastructure` | API、graph、runtime、services、tools、组装入口 | `application`、`core` |
+| `api` | graph、persistence/retrieval backend、tools | runtime facade/当前兼容 facade、core、API contract |
+
+`bootstrap.py` 与 `composition.py` 是明确的 composition roots，因此不套用向内层 contract；具体 repository、Redis、model、tool 和 graph 只能在这些边界完成组装。`services` 仍包含 assistant/provider 与部分兼容 facade，尚未强行声明虚假的单一层级；后续会先迁出具体职责，再收紧 contract。
+
+Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph state 并决定 Agent prompt 可见消息，属于 graph orchestration policy，不再由 `services` 反向提供给 graph。
+
 ## Frontend Views
 
 - Studio：日常对话、计划推进、agent 切换、tool 调用和 HITL 审批。

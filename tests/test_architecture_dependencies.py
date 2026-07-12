@@ -1,10 +1,11 @@
 import ast
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+from tests.architecture.import_graph import DependencyContract, PythonImportGraph
 
 
 APP_DIR = Path(__file__).resolve().parents[1] / "tech_doc_agent" / "app"
 APPLICATION_DIR = APP_DIR / "application"
-CORE_DIR = APP_DIR / "core"
 RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
 ASSISTANTS_DIR = APP_DIR / "services" / "assistants"
@@ -17,26 +18,104 @@ FORBIDDEN_CORE_DEPENDENCIES = (
     "tech_doc_agent.app.services",
     "tech_doc_agent.app.tools",
 )
-FORBIDDEN_RUNTIME_DEPENDENCIES = (
-    "tech_doc_agent.app.api",
-    "tech_doc_agent.app.services",
+APP_IMPORT_GRAPH = PythonImportGraph.build(
+    APP_DIR,
+    package="tech_doc_agent.app",
+)
+CORE_CONTRACT = DependencyContract(
+    name="core isolation",
+    source_prefixes=("tech_doc_agent.app.core",),
+    forbidden_prefixes=FORBIDDEN_CORE_DEPENDENCIES
+    + ("tech_doc_agent.app.application",),
+)
+APPLICATION_CONTRACT = DependencyContract(
+    name="application isolation",
+    source_prefixes=("tech_doc_agent.app.application",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
+        "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.infrastructure",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.runtime",
+        "tech_doc_agent.app.services",
+        "tech_doc_agent.app.tools",
+    ),
+)
+RUNTIME_CONTRACT = DependencyContract(
+    name="runtime isolation",
+    source_prefixes=("tech_doc_agent.app.runtime",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
+        "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.infrastructure",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.services",
+        "tech_doc_agent.app.tools",
+    ),
+)
+GRAPH_CONTRACT = DependencyContract(
+    name="graph orchestration isolation",
+    source_prefixes=("tech_doc_agent.app.graph",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
+        "tech_doc_agent.app.infrastructure",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.runtime",
+        "tech_doc_agent.app.services",
+        "tech_doc_agent.app.tools",
+    ),
+)
+INFRASTRUCTURE_CONTRACT = DependencyContract(
+    name="infrastructure adapter isolation",
+    source_prefixes=("tech_doc_agent.app.infrastructure",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.api",
+        "tech_doc_agent.app.bootstrap",
+        "tech_doc_agent.app.composition",
+        "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.main",
+        "tech_doc_agent.app.runtime",
+        "tech_doc_agent.app.services",
+        "tech_doc_agent.app.tools",
+    ),
+)
+API_DELIVERY_CONTRACT = DependencyContract(
+    name="API delivery avoids concrete backends",
+    source_prefixes=("tech_doc_agent.app.api",),
+    forbidden_prefixes=(
+        "tech_doc_agent.app.graph",
+        "tech_doc_agent.app.infrastructure",
+        "tech_doc_agent.app.services.retrieval",
+        "tech_doc_agent.app.services.vectordb",
+        "tech_doc_agent.app.tools",
+    ),
 )
 
 
 def test_core_does_not_depend_on_api_or_services():
-    assert _dependency_violations(CORE_DIR, FORBIDDEN_CORE_DEPENDENCIES) == []
+    assert CORE_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
 def test_application_use_cases_do_not_depend_on_adapters_or_delivery_layers():
-    assert _dependency_violations(
-        APPLICATION_DIR,
-        (
-            "tech_doc_agent.app.api",
-            "tech_doc_agent.app.infrastructure",
-            "tech_doc_agent.app.services",
-            "tech_doc_agent.app.tools",
-        ),
-    ) == []
+    assert APPLICATION_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_graph_orchestration_does_not_depend_on_services_or_delivery_adapters():
+    assert GRAPH_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_infrastructure_adapters_do_not_depend_on_delivery_or_orchestration():
+    assert INFRASTRUCTURE_CONTRACT.violations(APP_IMPORT_GRAPH) == []
+
+
+def test_api_delivery_does_not_import_graph_or_concrete_backends():
+    assert API_DELIVERY_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
 def test_learning_tools_delegate_writes_to_application_service():
@@ -129,7 +208,7 @@ def test_persistence_adapters_do_not_expose_unapproved_retention_deletion():
 
 
 def test_runtime_does_not_depend_on_api_or_legacy_services():
-    assert _dependency_violations(RUNTIME_DIR, FORBIDDEN_RUNTIME_DEPENDENCIES) == []
+    assert RUNTIME_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
 def test_fastapi_chat_routes_only_use_async_runtime_surface():
@@ -364,22 +443,27 @@ def _dependency_violations(
     *,
     filenames: tuple[str, ...] | None = None,
 ) -> list[str]:
-    violations: list[str] = []
-
-    paths = (
-        (directory / filename for filename in filenames)
-        if filenames is not None
-        else directory.glob("*.py")
+    relative_directory = PurePosixPath(
+        directory.relative_to(APP_DIR).as_posix()
     )
-    for path in sorted(paths):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            imported_modules = _imported_modules(node)
-            for imported_module in imported_modules:
-                if imported_module.startswith(forbidden_prefixes):
-                    violations.append(f"{path.name}:{node.lineno} imports {imported_module}")
-
-    return violations
+    paths = (
+        tuple(relative_directory / filename for filename in filenames)
+        if filenames is not None
+        else (relative_directory,)
+    )
+    edges = APP_IMPORT_GRAPH.dependencies_for_paths(
+        paths,
+        recursive=filenames is None,
+    )
+    return [
+        edge.describe()
+        for edge in edges
+        if any(
+            edge.imported == prefix
+            or edge.imported.startswith(f"{prefix}.")
+            for prefix in forbidden_prefixes
+        )
+    ]
 
 
 def _imported_modules(node: ast.AST) -> list[str]:

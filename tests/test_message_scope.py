@@ -2,7 +2,7 @@ import json
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from tech_doc_agent.app.services.message_scope import (
+from tech_doc_agent.app.graph.message_scope import (
     build_scoped_messages,
     build_scoped_state,
     should_route_to_examination,

@@ -8,7 +8,7 @@ from tech_doc_agent.app.core.execution_budget import ExecutionBudgetExceeded
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.structured_outputs import parse_structured_result
 from tech_doc_agent.app.core.tenant import parse_tenant
-from tech_doc_agent.app.services.message_scope import build_assistant_state
+from tech_doc_agent.app.graph.message_scope import build_assistant_state
 
 from .state import State
 from .budgeting import WorkflowBudgetTracker
