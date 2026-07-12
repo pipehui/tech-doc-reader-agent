@@ -48,6 +48,7 @@
 | 2026-07-12 | Phase 4：LearningRecord/MemoryFragment 领域模型与 JSON 交付边界 | learning/memory 完成，profile/approval 继续 | [2026-07-12-learning-domain-models.md](2026-07-12-learning-domain-models.md) |
 | 2026-07-12 | Phase 4：UserProfile 领域模型、application service 与 versioned repository | profile 完成，approval 分层归位继续 | [2026-07-12-user-profile-domain.md](2026-07-12-user-profile-domain.md) |
 | 2026-07-12 | Phase 4：Approval request/port 归位与 Redis adapter 解耦 | domain model 子项完成，migration/retention 继续 | [2026-07-12-approval-domain-boundary.md](2026-07-12-approval-domain-boundary.md) |
+| 2026-07-12 | Phase 4：显式 legacy persistence dry-run/backup/migration/report | 完成，repository contract/retention 继续 | [2026-07-12-explicit-legacy-migration.md](2026-07-12-explicit-legacy-migration.md) |
 
 ## 本地任务单策略
 

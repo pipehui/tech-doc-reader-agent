@@ -40,7 +40,7 @@ class JsonUserProfileRepository:
         payload = profile.to_payload()
         payload.pop("namespace", None)
         write_json_atomic(
-            self._path(profile.tenant),
+            self.path_for(profile.tenant),
             {
                 "schema_version": USER_PROFILE_SCHEMA_VERSION,
                 "profile": payload,
@@ -62,7 +62,7 @@ class JsonUserProfileRepository:
             raise _corrupt_user_profile("InvalidProfileEnvelope")
         return payload
 
-    def _path(self, tenant: TenantContext) -> Path:
+    def path_for(self, tenant: TenantContext) -> Path:
         return (
             self.data_path
             / "user_profiles"
@@ -71,16 +71,16 @@ class JsonUserProfileRepository:
         )
 
     def _read_path(self, tenant: TenantContext) -> Path:
-        path = self._path(tenant)
+        path = self.path_for(tenant)
         if path.exists():
             return path
 
-        legacy_path = self._legacy_path(tenant)
+        legacy_path = self.legacy_path_for(tenant)
         if tenant.namespace == DEFAULT_NAMESPACE and legacy_path.exists():
             return legacy_path
         return path
 
-    def _legacy_path(self, tenant: TenantContext) -> Path:
+    def legacy_path_for(self, tenant: TenantContext) -> Path:
         return self.data_path / "user_profiles" / f"{tenant.user_id}.json"
 
 
