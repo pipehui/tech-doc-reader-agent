@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from tech_doc_agent.app.application.learning_state import (
+from tech_doc_agent.app.application.learning_ports import (
     LearningRecordReaderPort,
     LearningStateCommandPort,
     MemoryReaderPort,

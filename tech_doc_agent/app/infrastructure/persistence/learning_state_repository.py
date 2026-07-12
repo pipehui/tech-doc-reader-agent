@@ -6,11 +6,9 @@ from pathlib import Path
 import re
 from typing import Any
 
-from tech_doc_agent.app.application.learning_state import (
-    LearningStateSnapshot,
-    UpdateLearningStateResult,
-)
+from tech_doc_agent.app.application.learning_commands import UpdateLearningStateResult
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
+from tech_doc_agent.app.application.learning_unit_of_work import LearningStateSnapshot
 from tech_doc_agent.app.core.errors import ApplicationError, ValidationError, classify_error
 from tech_doc_agent.app.infrastructure.persistence.atomic_json import read_json, write_json_atomic
 from tech_doc_agent.app.infrastructure.persistence.generations import (

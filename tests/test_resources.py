@@ -1,6 +1,6 @@
 import json
 
-from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
+from tech_doc_agent.app.application.learning_commands import UpdateLearningStateResult
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings

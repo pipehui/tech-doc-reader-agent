@@ -7,11 +7,9 @@ from uuid import uuid4
 import pytest
 
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
-from tech_doc_agent.app.application.learning_state import (
-    LearningStateService,
-    LearningStateUnitOfWork,
-    UpdateLearningStateCommand,
-)
+from tech_doc_agent.app.application.learning_commands import UpdateLearningStateCommand
+from tech_doc_agent.app.application.learning_state import LearningStateService
+from tech_doc_agent.app.application.learning_unit_of_work import LearningStateUnitOfWork
 from tech_doc_agent.app.core.errors import ApplicationError, Conflict, ValidationError
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import TenantContext

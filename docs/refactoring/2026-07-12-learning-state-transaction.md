@@ -155,3 +155,5 @@ FAISS 和 learning state 都需要“新代草稿 -> 校验 -> manifest 发布 -
 - generation/history 与 processed command 的 retention/GC；
 - 真实数据库事务。若进入 multi-worker 生产部署，应将同一 repository port 切换为 SQLite/Postgres，而不是继续叠加本地文件锁；
 - 历史 legacy 文件的自动删除。删除必须由显式、可回滚 migration 命令完成。
+
+后续同日批次保持本批事务行为不变，将 `UpdateLearningStateCommand/Result`、capability ports、snapshot/UoW 与 mutation service 分配到独立 application 模块；详见 [2026-07-12-learning-application-boundaries.md](2026-07-12-learning-application-boundaries.md)。

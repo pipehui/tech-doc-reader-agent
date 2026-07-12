@@ -7,7 +7,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, InjectedToolCallId, tool
 
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
-from tech_doc_agent.app.application.learning_state import UpdateLearningStateCommand
+from tech_doc_agent.app.application.learning_commands import UpdateLearningStateCommand
 from tech_doc_agent.app.core.tenant import session_id_from_config, tenant_from_config
 from tech_doc_agent.app.tools.dependencies import ToolDependencies
 

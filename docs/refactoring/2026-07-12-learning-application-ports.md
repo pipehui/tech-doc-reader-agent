@@ -133,3 +133,5 @@ ChatRuntime/RuntimeLifecycle 需要容纳测试 fake 与不同 resource factorie
 - DocumentStorePort 与 WebSearchPort 仍在 tools，因为目前只有 tool adapter consumer；出现 API/其他 use case 后再下沉；
 - ProfileMemoryReaderPort alias 暂时保留，删除需先确认仓外 type imports；
 - Learning API response 仍在 delivery 边界将 domain models 投影为 Pydantic schemas，application ports 不依赖 API models。
+
+后续同日批次把本日志中暂时共置于 `learning_state.py` 的 command/result、capability ports 和 UoW 拆到独立 application 模块；本日志仍准确描述 ports 首次归位时的阶段状态。当前所有权见 [2026-07-12-learning-application-boundaries.md](2026-07-12-learning-application-boundaries.md)。

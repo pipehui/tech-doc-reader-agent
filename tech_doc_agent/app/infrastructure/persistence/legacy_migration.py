@@ -10,7 +10,7 @@ import shutil
 from typing import Any, Literal
 from urllib.parse import unquote
 
-from tech_doc_agent.app.application.learning_state import LearningStateSnapshot
+from tech_doc_agent.app.application.learning_unit_of_work import LearningStateSnapshot
 from tech_doc_agent.app.application.profile_models import UserProfile
 from tech_doc_agent.app.core.errors import (
     ApplicationError,

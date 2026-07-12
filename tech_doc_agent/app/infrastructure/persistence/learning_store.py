@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from tech_doc_agent.app.application.learning_models import LearningRecord
-from tech_doc_agent.app.application.learning_state import LearningStateUnitOfWork
+from tech_doc_agent.app.application.learning_unit_of_work import LearningStateUnitOfWork
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (

@@ -139,9 +139,9 @@ WebSearchBackend 位于 `infrastructure/retrieval/web_search.py`：Tavily、Duck
 
 Agent role 的执行装配位于 `agents/`：prompt 作为同包资源由 `PromptRegistry` 校验，`AssistantExecutionIdentity` 和 model route identity 与 role 定义共同维护。该包可消费 graph command 和已绑定的 `ToolBundle`，但不能反向读取 services、runtime、API、infrastructure 或 composition root。
 
-LearningStore 与 MemoryStore 位于 `infrastructure/persistence`，共享 application `LearningStateUnitOfWork` 和 versioned snapshot repository。它们提供持久化查询/legacy JSON view，不再与 FAISS、chunking、embedding 或 web provider 一起归入 `services/vectordb`。
+LearningStore 与 MemoryStore 位于 `infrastructure/persistence`，共享 `application/learning_unit_of_work.py` 的 `LearningStateUnitOfWork` 和 versioned snapshot repository。Snapshot、repository port 与 commit boundary 同属 UoW 模块，避免 capability ports 与 UoW 形成循环。两个 store 提供持久化查询/legacy JSON view，不再与 FAISS、chunking、embedding 或 web provider 一起归入 `services/vectordb`。
 
-Learning/Memory/Profile 的跨 consumer capability 也由 application 拥有：`LearningRecordReaderPort`、`MemoryReaderPort`、`LearningStateCommandPort`、`UserProfileServicePort`。Tools 删除本地重复 Protocol 并直接引用这些 ports；Learning API 定义只读 `LearningApiResources` view，在动态 runtime state 的单一边界校验非空后 cast，记录/记忆/画像访问随后全程类型化。Readiness health 保留动态 `getattr`，因为其职责正是诊断部分初始化或缺失组件。
+Learning/Memory/Profile 的跨 consumer capability 也由 application 拥有：前三个 learning ports 位于 `application/learning_ports.py`，`UserProfileServicePort` 位于 profile service。Update command/result 位于 `learning_commands.py`，mutation service 独占 `learning_state.py`。Tools 删除本地重复 Protocol 并直接引用这些 ports；Learning API 定义只读 `LearningApiResources` view，在动态 runtime state 的单一边界校验非空后 cast，记录/记忆/画像访问随后全程类型化。Readiness health 保留动态 `getattr`，因为其职责正是诊断部分初始化或缺失组件。
 
 ## Frontend Views
 

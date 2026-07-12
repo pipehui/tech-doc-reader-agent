@@ -228,7 +228,9 @@ def test_learning_tools_delegate_writes_to_application_service():
 
 
 def test_learning_state_uses_domain_models_until_delivery_serialization():
-    state_source = (APPLICATION_DIR / "learning_state.py").read_text(encoding="utf-8")
+    state_source = (APPLICATION_DIR / "learning_unit_of_work.py").read_text(
+        encoding="utf-8"
+    )
     tool_source = (TOOLS_DIR / "learning.py").read_text(encoding="utf-8")
     api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
 
@@ -245,20 +247,61 @@ def test_learning_state_uses_domain_models_until_delivery_serialization():
 
 
 def test_learning_and_profile_capability_ports_live_in_application_not_tools():
-    state_source = (APPLICATION_DIR / "learning_state.py").read_text(encoding="utf-8")
+    ports_source = (APPLICATION_DIR / "learning_ports.py").read_text(encoding="utf-8")
     profile_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")
     dependency_source = (TOOLS_DIR / "dependencies.py").read_text(encoding="utf-8")
     api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
 
-    assert "class LearningRecordReaderPort(Protocol):" in state_source
-    assert "class MemoryReaderPort(Protocol):" in state_source
-    assert "class LearningStateCommandPort(Protocol):" in state_source
+    assert "class LearningRecordReaderPort(Protocol):" in ports_source
+    assert "class MemoryReaderPort(Protocol):" in ports_source
+    assert "class LearningStateCommandPort(Protocol):" in ports_source
     assert "class UserProfileServicePort(Protocol):" in profile_source
-    assert "from tech_doc_agent.app.application.learning_state import (" in dependency_source
+    assert "from tech_doc_agent.app.application.learning_ports import (" in dependency_source
     assert "class LearningStorePort(Protocol):" not in dependency_source
     assert "class MemoryStorePort(Protocol):" not in dependency_source
     assert "class LearningApiResources(Protocol):" in api_source
     assert "def _runtime_resources(request: Request) -> LearningApiResources:" in api_source
+
+
+def test_learning_state_command_ports_uow_and_service_have_distinct_owners():
+    commands_source = (APPLICATION_DIR / "learning_commands.py").read_text(
+        encoding="utf-8"
+    )
+    ports_source = (APPLICATION_DIR / "learning_ports.py").read_text(encoding="utf-8")
+    uow_source = (APPLICATION_DIR / "learning_unit_of_work.py").read_text(
+        encoding="utf-8"
+    )
+    service_source = (APPLICATION_DIR / "learning_state.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "class UpdateLearningStateCommand:" in commands_source
+    assert "class UpdateLearningStateResult:" in commands_source
+    assert "class LearningStateCommandPort(Protocol):" in ports_source
+    assert "class LearningStateSnapshot:" in uow_source
+    assert "class LearningStateRepositoryPort(Protocol):" in uow_source
+    assert "class LearningStateUnitOfWork:" in uow_source
+    assert "class LearningStateService:" in service_source
+    assert "class LearningStateCommandPort(Protocol):" not in service_source
+    assert "class LearningStateUnitOfWork:" not in service_source
+
+    violations = []
+    for path in APP_DIR.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "tech_doc_agent.app.application.learning_state"
+            ):
+                unexpected = sorted(
+                    alias.name
+                    for alias in node.names
+                    if alias.name != "LearningStateService"
+                )
+                if unexpected:
+                    violations.append(f"{path.relative_to(APP_DIR)}: {unexpected}")
+
+    assert violations == []
 
 
 def test_profile_domain_and_service_stay_typed_until_delivery_serialization():

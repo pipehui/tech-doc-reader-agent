@@ -11,7 +11,7 @@ from tech_doc_agent.app.application.approval_models import (
     GuardrailApprovalRequest,
 )
 from tech_doc_agent.app.application.learning_models import LearningRecord, MemoryFragment
-from tech_doc_agent.app.application.learning_state import (
+from tech_doc_agent.app.application.learning_unit_of_work import (
     LearningStateRepositoryPort,
     LearningStateSnapshot,
 )

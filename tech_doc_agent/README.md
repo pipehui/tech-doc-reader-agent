@@ -32,7 +32,10 @@ tech_doc_agent
 │   ├── application
 │   │   ├── conversation_summarizer.py
 │   │   ├── input_guardrails.py
+│   │   ├── learning_commands.py
+│   │   ├── learning_ports.py
 │   │   ├── learning_state.py
+│   │   ├── learning_unit_of_work.py
 │   │   ├── profile_service.py
 │   │   └── retrieval.py
 │   ├── bootstrap.py
@@ -101,7 +104,9 @@ tech_doc_agent
 
 ### `app/application`
 
-保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract、输入 guardrail decision，以及确定性的 `ExtractiveConversationSummarizer`。`input_guardrails.py` 只评估一次输入风险并记录 application-level warning/blocked disposition，不构造 HTTP/SSE response。`LearningRecordReaderPort`、`MemoryReaderPort`、`LearningStateCommandPort` 与 `UserProfileServicePort` 是 tools/API 共用的 capability 事实源；Learning API 只在 runtime 边界 cast 成窄 `LearningApiResources`，后续不裸读 `Any`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
+保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract、输入 guardrail decision，以及确定性的 `ExtractiveConversationSummarizer`。`input_guardrails.py` 只评估一次输入风险并记录 application-level warning/blocked disposition，不构造 HTTP/SSE response。
+
+Learning application slice 按变化轴拆分：`learning_commands.py` 拥有 update command/result 与幂等 identity，`learning_ports.py` 拥有 reader/command/updater capability，`learning_unit_of_work.py` 拥有 snapshot、repository port 和原子 commit boundary，`learning_state.py` 只保留 mutation service。Tools/API/persistence 分别 import 所需事实源，不再通过一个厚模块取得无关类型。`LearningRecordReaderPort`、`MemoryReaderPort`、`LearningStateCommandPort` 与 `UserProfileServicePort` 是 tools/API 共用的 capability 事实源；Learning API 只在 runtime 边界 cast 成窄 `LearningApiResources`，后续不裸读 `Any`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 

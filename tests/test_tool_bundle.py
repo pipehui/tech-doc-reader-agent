@@ -6,7 +6,7 @@ from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdate,
 )
-from tech_doc_agent.app.application.learning_state import UpdateLearningStateResult
+from tech_doc_agent.app.application.learning_commands import UpdateLearningStateResult
 from tech_doc_agent.app.application.retrieval import SearchQuery, SearchResult
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.tenant import TenantContext

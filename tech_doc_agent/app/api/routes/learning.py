@@ -11,7 +11,7 @@ from tech_doc_agent.app.api.schemas import (
     UserProfileResponse,
 )
 from tech_doc_agent.app.api.tenant import resolve_request_tenant
-from tech_doc_agent.app.application.learning_state import (
+from tech_doc_agent.app.application.learning_ports import (
     LearningRecordReaderPort,
     MemoryReaderPort,
 )

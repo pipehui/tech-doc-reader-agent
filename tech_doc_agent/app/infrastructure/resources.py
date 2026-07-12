@@ -4,10 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tech_doc_agent.app.application.learning_models import LearningRecord
-from tech_doc_agent.app.application.learning_state import (
-    LearningStateService,
-    LearningStateUnitOfWork,
-)
+from tech_doc_agent.app.application.learning_state import LearningStateService
+from tech_doc_agent.app.application.learning_unit_of_work import LearningStateUnitOfWork
 from tech_doc_agent.app.application.profile_service import UserProfileService
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.model_pricing import ModelPriceTable

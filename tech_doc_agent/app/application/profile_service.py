@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from tech_doc_agent.app.application.learning_models import MemoryFragment
-from tech_doc_agent.app.application.learning_state import MemoryReaderPort
+from tech_doc_agent.app.application.learning_ports import MemoryReaderPort
 from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdate,
