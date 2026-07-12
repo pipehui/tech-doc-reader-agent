@@ -2,7 +2,10 @@ from contextlib import nullcontext
 
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import TenantContext
-from tech_doc_agent.app.runtime.approvals import ApprovalService, InMemoryApprovalRepository
+from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
+    InMemoryApprovalRepository,
+)
+from tech_doc_agent.app.runtime.approvals import ApprovalService
 from tech_doc_agent.app.runtime.telemetry import RuntimeOperationTelemetry
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
 

@@ -49,6 +49,7 @@
 | 2026-07-12 | Phase 4：UserProfile 领域模型、application service 与 versioned repository | profile 完成，approval 分层归位继续 | [2026-07-12-user-profile-domain.md](2026-07-12-user-profile-domain.md) |
 | 2026-07-12 | Phase 4：Approval request/port 归位与 Redis adapter 解耦 | domain model 子项完成，migration/retention 继续 | [2026-07-12-approval-domain-boundary.md](2026-07-12-approval-domain-boundary.md) |
 | 2026-07-12 | Phase 4：显式 legacy persistence dry-run/backup/migration/report | 完成，repository contract/retention 继续 | [2026-07-12-explicit-legacy-migration.md](2026-07-12-explicit-legacy-migration.md) |
+| 2026-07-12 | Phase 4：Learning/Profile/Approval 可复用 repository contract suites | 完成，retention 策略继续 | [2026-07-12-repository-contract-suites.md](2026-07-12-repository-contract-suites.md) |
 
 ## 本地任务单策略
 

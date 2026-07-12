@@ -1,10 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import json
-from threading import Lock
 
 import pytest
-from redis.exceptions import ConnectionError
 
 from tech_doc_agent.app.application.approval_models import GuardrailApprovalRequest
 from tech_doc_agent.app.core.errors import DependencyUnavailable
@@ -15,42 +13,11 @@ from tech_doc_agent.app.infrastructure.persistence.approval_repository import (
 )
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime
-
-
-class FakeRedisBackend:
-    def __init__(self):
-        self.values = {}
-        self.expirations = {}
-        self.lock = Lock()
-
-
-class FakeRedisClient:
-    def __init__(self, backend=None):
-        self.backend = backend or FakeRedisBackend()
-        self.closed = False
-
-    def set(self, key, value, ex):
-        with self.backend.lock:
-            self.backend.values[key] = value
-            self.backend.expirations[key] = ex
-        return True
-
-    def get(self, key):
-        with self.backend.lock:
-            return self.backend.values.get(key)
-
-    def getdel(self, key):
-        with self.backend.lock:
-            self.backend.expirations.pop(key, None)
-            return self.backend.values.pop(key, None)
-
-    def close(self):
-        self.closed = True
-
-
-class FailingRedisClient(FakeRedisClient):
-    def get(self, key):
-        raise ConnectionError("redis://admin:private-password@internal-host")
+from tests.fakes.redis import (
+    FailingRedisClient,
+    FakeRedisBackend,
+    FakeRedisClient,
+)
 
 
 def _request() -> GuardrailApprovalRequest:

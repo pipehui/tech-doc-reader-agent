@@ -12,9 +12,11 @@ from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
+from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
+    InMemoryApprovalRepository,
+)
 from tech_doc_agent.app.runtime.approvals import (
     ApprovalService,
-    InMemoryApprovalRepository,
 )
 from tech_doc_agent.app.runtime.config import SessionConfigFactory
 from tech_doc_agent.app.runtime.execution import GraphExecutionService

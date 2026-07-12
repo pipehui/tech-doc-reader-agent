@@ -1,6 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from threading import RLock
+from dataclasses import dataclass
 
 from langchain_core.messages import AIMessage
 
@@ -10,29 +9,6 @@ from tech_doc_agent.app.application.approval_models import (
 )
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant, tenant_thread_id
-
-
-@dataclass(slots=True)
-class InMemoryApprovalRepository:
-    """Process-local adapter retained until a durable repository is configured."""
-
-    _items: dict[str, GuardrailApprovalRequest] = field(default_factory=dict, init=False)
-    _lock: RLock = field(default_factory=RLock, init=False, repr=False)
-
-    def put(self, key: str, request: GuardrailApprovalRequest) -> None:
-        with self._lock:
-            self._items[key] = request
-
-    def get(self, key: str) -> GuardrailApprovalRequest | None:
-        with self._lock:
-            return self._items.get(key)
-
-    def pop(self, key: str) -> GuardrailApprovalRequest | None:
-        with self._lock:
-            return self._items.pop(key, None)
-
-    def close(self) -> None:
-        return None
 
 
 @dataclass(slots=True)
@@ -155,5 +131,4 @@ __all__ = [
     "ApprovalRepository",
     "ApprovalService",
     "GuardrailApprovalRequest",
-    "InMemoryApprovalRepository",
 ]

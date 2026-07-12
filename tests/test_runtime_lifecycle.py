@@ -1,7 +1,9 @@
 import pytest
 
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.runtime.approvals import InMemoryApprovalRepository
+from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
+    InMemoryApprovalRepository,
+)
 from tech_doc_agent.app.runtime.lifecycle import RuntimeLifecycle
 from tech_doc_agent.app.services import chat_runtime
 from tech_doc_agent.app.services.chat_runtime import ChatRuntime

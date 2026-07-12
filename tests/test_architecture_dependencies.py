@@ -82,11 +82,20 @@ def test_approval_domain_does_not_live_under_runtime_or_leak_into_redis_adapter(
     repository_source = (
         APP_DIR / "infrastructure" / "persistence" / "approval_repository.py"
     ).read_text(encoding="utf-8")
+    in_memory_source = (
+        APP_DIR
+        / "infrastructure"
+        / "persistence"
+        / "in_memory_approval_repository.py"
+    ).read_text(encoding="utf-8")
 
     assert "class GuardrailApprovalRequest" not in runtime_source
     assert "class ApprovalRepository(Protocol)" not in runtime_source
+    assert "class InMemoryApprovalRepository" not in runtime_source
     assert "tech_doc_agent.app.application.approval_models" in repository_source
     assert "tech_doc_agent.app.runtime" not in repository_source
+    assert "tech_doc_agent.app.application.approval_models" in in_memory_source
+    assert "tech_doc_agent.app.runtime" not in in_memory_source
 
 
 def test_runtime_does_not_depend_on_api_or_legacy_services():
