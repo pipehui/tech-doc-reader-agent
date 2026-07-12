@@ -12,8 +12,8 @@ from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdateResult,
 )
+from tech_doc_agent.app.application.profile_ports import ProfileMemoryReaderPort
 from tech_doc_agent.app.application.profile_service import (
-    ProfileMemoryReaderPort,
     UserProfileService as ApplicationUserProfileService,
     format_user_profile_summary,
 )

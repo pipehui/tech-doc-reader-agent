@@ -87,6 +87,7 @@
 | 2026-07-12 | Phase 4：删除 Chat Route 的 SSE 临时兼容出口 | route 保留私有消费依赖，helper 事实源唯一归属 api/sse | [2026-07-12-chat-sse-facade-removal.md](2026-07-12-chat-sse-facade-removal.md) |
 | 2026-07-12 | Phase 4：Chat request、guardrail decision 与 delivery 边界 | route 收敛为 80 行 facade，布尔 guardrail 旁路删除 | [2026-07-12-chat-delivery-boundary.md](2026-07-12-chat-delivery-boundary.md) |
 | 2026-07-12 | Phase 4：Learning command、ports、UoW 与 service 边界 | 厚 application module 拆为四个事实源，仓内调用方窄依赖 | [2026-07-12-learning-application-boundaries.md](2026-07-12-learning-application-boundaries.md) |
+| 2026-07-12 | Phase 4：Profile ports 与 service 边界 | ports 唯一定义迁出 service，旧 type import 受控兼容 | [2026-07-12-profile-application-ports.md](2026-07-12-profile-application-ports.md) |
 
 ## 本地任务单策略
 

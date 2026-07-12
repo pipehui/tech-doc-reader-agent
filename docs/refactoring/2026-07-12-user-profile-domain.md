@@ -168,3 +168,5 @@ legacy 只对 default namespace 可见、tool JSON 与 HTTP response schema。�
 D7 的 domain-model 子项还剩 approval 的分层归位：`GuardrailApprovalRequest` 已是不可变模型，但仍定义在 runtime，导致
 Redis infrastructure 反向 import runtime。后续应移到 application/domain 并把 repository port 一并归位。migration CLI
 的 dry-run/backup/summary、跨 JSON/未来 SQLite 的 repository contract suite、retention/备份策略仍未完成。
+
+后续同日批次把 repository/service/memory capability ports 的唯一定义移到 `application/profile_ports.py`，service 文件只保留 use case 与 context formatter；既有 type import 以 re-export 形式暂时兼容。详见 [2026-07-12-profile-application-ports.md](2026-07-12-profile-application-ports.md)。

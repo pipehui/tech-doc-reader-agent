@@ -19,7 +19,7 @@ from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdate,
 )
-from tech_doc_agent.app.application.profile_service import UserProfileRepositoryPort
+from tech_doc_agent.app.application.profile_ports import UserProfileRepositoryPort
 from tech_doc_agent.app.core.tenant import TenantContext
 
 

@@ -8,7 +8,7 @@ from tech_doc_agent.app.application.approval_models import ApprovalRepository
 from tech_doc_agent.app.application.learning_unit_of_work import (
     LearningStateRepositoryPort,
 )
-from tech_doc_agent.app.application.profile_service import UserProfileRepositoryPort
+from tech_doc_agent.app.application.profile_ports import UserProfileRepositoryPort
 from tech_doc_agent.app.infrastructure.persistence.approval_repository import (
     RedisApprovalRepository,
 )

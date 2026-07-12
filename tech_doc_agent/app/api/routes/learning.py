@@ -15,7 +15,7 @@ from tech_doc_agent.app.application.learning_ports import (
     LearningRecordReaderPort,
     MemoryReaderPort,
 )
-from tech_doc_agent.app.application.profile_service import UserProfileServicePort
+from tech_doc_agent.app.application.profile_ports import UserProfileServicePort
 from tech_doc_agent.app.core.tenant import TenantContext
 
 

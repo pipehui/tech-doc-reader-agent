@@ -248,15 +248,18 @@ def test_learning_state_uses_domain_models_until_delivery_serialization():
 
 def test_learning_and_profile_capability_ports_live_in_application_not_tools():
     ports_source = (APPLICATION_DIR / "learning_ports.py").read_text(encoding="utf-8")
-    profile_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")
+    profile_ports_source = (APPLICATION_DIR / "profile_ports.py").read_text(
+        encoding="utf-8"
+    )
     dependency_source = (TOOLS_DIR / "dependencies.py").read_text(encoding="utf-8")
     api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
 
     assert "class LearningRecordReaderPort(Protocol):" in ports_source
     assert "class MemoryReaderPort(Protocol):" in ports_source
     assert "class LearningStateCommandPort(Protocol):" in ports_source
-    assert "class UserProfileServicePort(Protocol):" in profile_source
+    assert "class UserProfileServicePort(Protocol):" in profile_ports_source
     assert "from tech_doc_agent.app.application.learning_ports import (" in dependency_source
+    assert "from tech_doc_agent.app.application.profile_ports import" in dependency_source
     assert "class LearningStorePort(Protocol):" not in dependency_source
     assert "class MemoryStorePort(Protocol):" not in dependency_source
     assert "class LearningApiResources(Protocol):" in api_source
@@ -306,6 +309,7 @@ def test_learning_state_command_ports_uow_and_service_have_distinct_owners():
 
 def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
     model_source = (APPLICATION_DIR / "profile_models.py").read_text(encoding="utf-8")
+    ports_source = (APPLICATION_DIR / "profile_ports.py").read_text(encoding="utf-8")
     service_source = (APPLICATION_DIR / "profile_service.py").read_text(encoding="utf-8")
     tool_source = (TOOLS_DIR / "profiles.py").read_text(encoding="utf-8")
     api_source = (APP_DIR / "api" / "routes" / "learning.py").read_text(encoding="utf-8")
@@ -313,11 +317,37 @@ def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
 
     assert "class UserProfile:" in model_source
     assert "class UserProfileUpdate:" in model_source
+    assert "class UserProfileRepositoryPort(Protocol):" in ports_source
+    assert "class UserProfileServicePort(Protocol):" in ports_source
     assert "-> UserProfile" in service_source
     assert "-> UserProfileUpdateResult" in service_source
+    assert "class UserProfileRepositoryPort(Protocol):" not in service_source
+    assert "class UserProfileServicePort(Protocol):" not in service_source
     assert "json.dumps(profile.to_payload()" in tool_source
     assert "**profile.to_payload()" in api_source
     assert "services.user_profile" not in resource_source
+
+    allowed_service_symbols = {
+        "UserProfileService",
+        "format_user_profile_summary",
+    }
+    violations = []
+    for path in APP_DIR.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "tech_doc_agent.app.application.profile_service"
+            ):
+                unexpected = sorted(
+                    alias.name
+                    for alias in node.names
+                    if alias.name not in allowed_service_symbols
+                )
+                if unexpected:
+                    violations.append(f"{path.relative_to(APP_DIR)}: {unexpected}")
+
+    assert violations == []
 
 
 def test_approval_domain_does_not_live_under_runtime_or_leak_into_redis_adapter():

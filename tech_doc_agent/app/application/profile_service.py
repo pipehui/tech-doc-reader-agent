@@ -3,59 +3,19 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
 
 from tech_doc_agent.app.application.learning_models import MemoryFragment
-from tech_doc_agent.app.application.learning_ports import MemoryReaderPort
 from tech_doc_agent.app.application.profile_models import (
     UserProfile,
     UserProfileUpdate,
     UserProfileUpdateResult,
 )
+from tech_doc_agent.app.application.profile_ports import (
+    ProfileMemoryReaderPort,
+    UserProfileRepositoryPort,
+    UserProfileServicePort,
+)
 from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
-
-
-class UserProfileRepositoryPort(Protocol):
-    def get(self, tenant: TenantContext) -> UserProfile: ...
-
-    def save(self, profile: UserProfile) -> None: ...
-
-
-ProfileMemoryReaderPort = MemoryReaderPort
-
-
-class UserProfileServicePort(Protocol):
-    def get_profile(
-        self,
-        *,
-        user_id: str,
-        namespace: str,
-    ) -> UserProfile: ...
-
-    def update_profile(
-        self,
-        *,
-        user_id: str,
-        namespace: str,
-        experience_level: str | None = None,
-        explanation_style: str | None = None,
-        depth: str | None = None,
-        language: str | None = None,
-        known_topics: Sequence[str] | None = None,
-        weak_topics: Sequence[str] | None = None,
-        resolved_weak_topics: Sequence[str] | None = None,
-        notes: str | None = None,
-        evidence: str | None = None,
-    ) -> UserProfileUpdateResult: ...
-
-    def context_summary(
-        self,
-        *,
-        user_id: str,
-        namespace: str,
-        memory_query: str = "",
-        memory_limit: int = 5,
-    ) -> str: ...
 
 
 def _utc_now() -> datetime:
