@@ -12,6 +12,7 @@ from tech_doc_agent.app.graph.commands import (
     ToSummaryAssistant,
 )
 from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
+from tech_doc_agent.app.services.assistants.prompt_registry import build_prompt_registry
 from tech_doc_agent.app.services.assistants.registry import build_assistant_registry
 from tech_doc_agent.app.tools import ToolBundle
 
@@ -60,7 +61,11 @@ def _tool_bundle() -> ToolBundle:
 
 def test_assistant_registry_binds_each_role_to_declared_tools():
     model = RecordingBindableModel()
-    registry = build_assistant_registry(AssistantModelProvider(primary=model), _tool_bundle())
+    registry = build_assistant_registry(
+        AssistantModelProvider(primary=model),
+        _tool_bundle(),
+        build_prompt_registry(),
+    )
 
     assert [tool.name for tool in registry.parser.safe_tools] == ["read_docs", "web_search"]
     assert [tool.name for tool in registry.parser.sensitive_tools] == ["save_docs"]
@@ -122,6 +127,15 @@ def test_assistant_registry_binds_each_role_to_declared_tools():
         ],
     ]
     assert all(call["parallel_tool_calls"] is False for call in model.calls)
+    assert registry.primary.prompt_id == "tech-doc-reader.primary.v1"
+    assert registry.primary.prompt_sha256 == (
+        "034f2970a0d7fead2f8efdca693dbb6c59585c2400b839a0dc3dc9e9609ba9a3"
+    )
+    assert registry.primary.assistant.runnable.config["metadata"] == {
+        "assistant_role": "primary",
+        "prompt_id": "tech-doc-reader.primary.v1",
+        "prompt_sha256": "034f2970a0d7fead2f8efdca693dbb6c59585c2400b839a0dc3dc9e9609ba9a3",
+    }
 
 
 def test_model_provider_binds_primary_and_backup_before_adding_fallback():

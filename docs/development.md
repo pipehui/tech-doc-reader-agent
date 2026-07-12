@@ -48,6 +48,14 @@ TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
 
 LangGraph checkpoint 和 medium-risk input guardrail approval 共用 Redis。approval 使用带 TTL 的独立 key，并通过原子 `GETDEL` 保证同一请求只被一个 worker 消费；部署的 Redis 版本需不低于 6.2。
 
+## Prompt Resources
+
+Assistant system prompts 位于 `tech_doc_agent/app/services/assistants/prompts/`，由 `manifest.json` 固定 role、稳定 ID、
+资源顺序、SHA-256 和 required placeholders。role Python 模块只声明工具组合，不应重新内联 prompt。
+
+有意修改 prompt 时应单独提交：同步升级 prompt ID/hash，运行 `tests/test_prompt_registry.py`，并将模型、数据集或
+prompt 变化与纯代码重构分开记录。primary 由 `primary/` 下的有序 section 组合，不要重新合并成单个长文件。
+
 启动 Redis：
 
 ```bash

@@ -74,6 +74,30 @@ def test_assistants_package_init_does_not_eagerly_load_role_definitions():
     assert imports == []
 
 
+def test_role_modules_do_not_define_or_load_prompt_templates():
+    forbidden_fragments = (
+        "ChatPromptTemplate",
+        "_assistant_prompt",
+        "datetime.now",
+        "build_prompt_registry",
+    )
+    violations = []
+    for filename in (
+        "primary_assistant.py",
+        "parser_assistant.py",
+        "relation_assistant.py",
+        "explanation_assistant.py",
+        "examination_assistant.py",
+        "summary_assistant.py",
+    ):
+        source = (ASSISTANTS_DIR / filename).read_text(encoding="utf-8")
+        for fragment in forbidden_fragments:
+            if fragment in source:
+                violations.append(f"{filename} contains {fragment}")
+
+    assert violations == []
+
+
 def test_chat_model_construction_is_isolated_to_model_factory():
     violations = []
     for path in sorted(ASSISTANTS_DIR.glob("*.py")):

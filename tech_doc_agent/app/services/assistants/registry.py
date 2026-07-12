@@ -6,6 +6,7 @@ from tech_doc_agent.app.services.assistants.explanation_assistant import build_e
 from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
 from tech_doc_agent.app.services.assistants.parser_assistant import build_parser_assistant
 from tech_doc_agent.app.services.assistants.primary_assistant import build_primary_assistant
+from tech_doc_agent.app.services.assistants.prompt_registry import PromptRegistry
 from tech_doc_agent.app.services.assistants.relation_assistant import build_relation_assistant
 from tech_doc_agent.app.services.assistants.summary_assistant import build_summary_assistant
 from tech_doc_agent.app.tools import ToolBundle
@@ -24,12 +25,21 @@ class AssistantRegistry:
 def build_assistant_registry(
     models: AssistantModelProvider,
     tools: ToolBundle,
+    prompts: PromptRegistry,
 ) -> AssistantRegistry:
     return AssistantRegistry(
-        primary=build_primary_assistant(models, tools),
-        parser=build_parser_assistant(models, tools),
-        relation=build_relation_assistant(models, tools),
-        explanation=build_explanation_assistant(models, tools),
-        examination=build_examination_assistant(models, tools),
-        summary=build_summary_assistant(models, tools),
+        primary=build_primary_assistant(models, tools, prompts.require("primary")),
+        parser=build_parser_assistant(models, tools, prompts.require("parser")),
+        relation=build_relation_assistant(models, tools, prompts.require("relation")),
+        explanation=build_explanation_assistant(
+            models,
+            tools,
+            prompts.require("explanation"),
+        ),
+        examination=build_examination_assistant(
+            models,
+            tools,
+            prompts.require("examination"),
+        ),
+        summary=build_summary_assistant(models, tools, prompts.require("summary")),
     )

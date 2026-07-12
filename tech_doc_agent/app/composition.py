@@ -13,6 +13,7 @@ from tech_doc_agent.app.graph.specs import (
     ToolPolicy,
 )
 from tech_doc_agent.app.services.assistants.model_factory import build_assistant_model_provider
+from tech_doc_agent.app.services.assistants.prompt_registry import build_prompt_registry
 from tech_doc_agent.app.services.assistants.registry import AssistantRegistry, build_assistant_registry
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
@@ -21,7 +22,8 @@ def build_graph_spec(resources: Any) -> GraphSpec:
     dependencies = ToolDependencies.from_container(resources)
     tools = build_tool_bundle(dependencies)
     models = build_assistant_model_provider(resources.settings)
-    assistants = build_assistant_registry(models, tools)
+    prompts = build_prompt_registry()
+    assistants = build_assistant_registry(models, tools, prompts)
     return _graph_spec_from_registry(assistants, resources)
 
 
