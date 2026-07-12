@@ -74,6 +74,7 @@
 | 2026-07-12 | Phase 4：ChatRuntime 纯注入 facade 归位、runtime identity port 与 API -> runtime | facade 边界完成，services 其他混合职责继续 | [2026-07-12-chat-runtime-facade-boundary.md](2026-07-12-chat-runtime-facade-boundary.md) |
 | 2026-07-12 | Phase 4：Retrieval application contract、内部 ranker DTO 分离与 tools -> services 清零 | 查询/结果 port 下沉完成，真实 corpus 基线继续 | [2026-07-12-retrieval-application-contract.md](2026-07-12-retrieval-application-contract.md) |
 | 2026-07-12 | Phase 4：Agents 顶层 package、prompt 资源无损迁移与双向依赖门禁 | role/prompt/model/identity 已迁出 services，旧路径不保留 | [2026-07-12-agents-package-boundary.md](2026-07-12-agents-package-boundary.md) |
+| 2026-07-12 | Phase 4：Learning/Memory persistence adapters 归位与 vectordb 职责收窄 | store/UoW/query helper 已进入 infrastructure，行为保持 | [2026-07-12-learning-memory-persistence-adapters.md](2026-07-12-learning-memory-persistence-adapters.md) |
 
 ## 本地任务单策略
 

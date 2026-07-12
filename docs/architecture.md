@@ -124,6 +124,8 @@ Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`Searc
 
 Agent role 的执行装配位于 `agents/`：prompt 作为同包资源由 `PromptRegistry` 校验，`AssistantExecutionIdentity` 和 model route identity 与 role 定义共同维护。该包可消费 graph command 和已绑定的 `ToolBundle`，但不能反向读取 services、runtime、API、infrastructure 或 composition root。
 
+LearningStore 与 MemoryStore 位于 `infrastructure/persistence`，共享 application `LearningStateUnitOfWork` 和 versioned snapshot repository。它们提供持久化查询/legacy JSON view，不再与 FAISS、chunking、embedding 或 web provider 一起归入 `services/vectordb`。
+
 ## Frontend Views
 
 - Studio：日常对话、计划推进、agent 切换、tool 调用和 HITL 审批。

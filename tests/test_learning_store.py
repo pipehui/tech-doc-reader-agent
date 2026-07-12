@@ -2,7 +2,7 @@ import pytest
 
 from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
+from tech_doc_agent.app.infrastructure.persistence.learning_store import LearningStore
 
 
 def test_learning_store_isolates_records_by_tenant(tmp_path):

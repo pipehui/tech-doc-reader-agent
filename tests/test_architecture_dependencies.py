@@ -430,6 +430,15 @@ def test_global_app_resource_locator_symbols_are_removed():
     assert violations == []
 
 
+def test_learning_state_stores_are_persistence_adapters_not_vectordb_backends():
+    source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+
+    assert "infrastructure.persistence.learning_store import LearningStore" in source
+    assert "infrastructure.persistence.memory_store import MemoryStore" in source
+    assert "services.vectordb.learning_store" not in source
+    assert "services.vectordb.memory_store" not in source
+
+
 def test_ambiguous_tenant_fallback_api_is_removed():
     violations = []
     for path in sorted(APP_DIR.rglob("*.py")):

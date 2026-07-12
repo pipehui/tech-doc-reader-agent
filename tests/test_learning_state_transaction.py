@@ -19,8 +19,8 @@ from tech_doc_agent.app.infrastructure.persistence.learning_state_repository imp
     LearningStateSnapshotRepository,
 )
 from tech_doc_agent.app.services.resources import AppResources
-from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
-from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
+from tech_doc_agent.app.infrastructure.persistence.learning_store import LearningStore
+from tech_doc_agent.app.infrastructure.persistence.memory_store import MemoryStore
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 

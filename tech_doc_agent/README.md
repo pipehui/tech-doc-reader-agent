@@ -38,7 +38,9 @@ tech_doc_agent
 │   ├── infrastructure
 │   │   └── persistence
 │   │       ├── approval_repository.py
-│   │       └── atomic_json.py
+│   │       ├── atomic_json.py
+│   │       ├── learning_store.py
+│   │       └── memory_store.py
 │   ├── runtime
 │   │   ├── chat_runtime.py
 │   │   ├── approvals.py
@@ -80,7 +82,7 @@ tech_doc_agent
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 
-`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式组装 settings、Redis approval repository 与 `ChatRuntime`。`composition.py` 再把 runtime resources 组合为 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；runtime domain 不依赖该具体实现。
+`bootstrap.py` 是 production 入口，FastAPI lifespan 和 CLI 从这里显式组装 settings、Redis approval repository 与 `ChatRuntime`。`composition.py` 再把 runtime resources 组合为 `ToolBundle`、`AssistantRegistry`、`GraphSpec` 和最终 graph。`infrastructure/persistence/approval_repository.py` 实现带 TTL、schema envelope 和原子 `GETDEL` 的 Redis adapter；`learning_store.py` 与 `memory_store.py` 是共享 snapshot UoW 的查询/兼容 adapter。runtime domain 不依赖这些具体实现。
 
 ### `app/runtime`
 
@@ -131,10 +133,9 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 
 ### `app/services/vectordb`
 
-包含当前仍在使用的数据后端：
+包含当前仍在使用的文档向量索引与网页搜索 provider：
 
 - `faiss_store.py`
-- `learning_store_backend.py`
 - `web_search_backend.py`
 
 ### `app/services/retrieval`

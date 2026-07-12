@@ -16,14 +16,14 @@ from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
     LearningStateSnapshotRepository,
 )
+from tech_doc_agent.app.infrastructure.persistence.learning_store import LearningStore
+from tech_doc_agent.app.infrastructure.persistence.memory_store import MemoryStore
 from tech_doc_agent.app.infrastructure.persistence.user_profile_repository import (
     JsonUserProfileRepository,
 )
 from tech_doc_agent.app.infrastructure.model_price_table import load_model_price_table
 from tech_doc_agent.app.services.retrieval import HybridRetriever
 from tech_doc_agent.app.services.vectordb.faiss_store import FaissStore
-from tech_doc_agent.app.services.vectordb.learning_store_backend import LearningStore
-from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
 
 

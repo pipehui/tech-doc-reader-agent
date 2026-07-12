@@ -1,5 +1,5 @@
 """
-LearningStore backend:
+LearningStore persistence adapter:
 - 负责学习记录的查询和 domain model 归一化
 - 通过共享 LearningStateUnitOfWork 持久化，不暴露 @tool
 - tool schema 与写入用例位于 application/tools 层
@@ -18,7 +18,8 @@ from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
 from tech_doc_agent.app.infrastructure.persistence.learning_state_repository import (
     LearningStateSnapshotRepository,
 )
-from tech_doc_agent.app.services.vectordb.text_match import query_matches
+
+from .text_match import query_matches
 
 
 class LearningStore:

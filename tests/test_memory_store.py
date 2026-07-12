@@ -2,7 +2,7 @@ import pytest
 
 from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.vectordb.memory_store_backend import MemoryStore
+from tech_doc_agent.app.infrastructure.persistence.memory_store import MemoryStore
 
 
 def test_memory_store_isolates_memories_by_tenant(tmp_path):
