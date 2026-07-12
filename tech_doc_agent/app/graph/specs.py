@@ -6,6 +6,7 @@ from typing import Any
 from tech_doc_agent.app.core.structured_outputs import ResultKind
 from tech_doc_agent.app.core.execution_budget import ExecutionBudget
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
+from tech_doc_agent.app.graph.context_metrics import ContextMetricsTracker
 
 from .state import WorkflowStep
 
@@ -101,6 +102,7 @@ class GraphSpec:
     user_info_node: Any
     execution_policy: ExecutionPolicy
     budget_tracker: WorkflowBudgetTracker
+    context_tracker: ContextMetricsTracker
 
     def __post_init__(self) -> None:
         if self.budget_tracker.execution_budget != self.execution_policy.budget:

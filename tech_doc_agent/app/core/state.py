@@ -39,3 +39,5 @@ class State(TypedDict):
     budget_usage_delta: NotRequired[dict[str, Any]]
     budget_status: NotRequired[Literal["active", "terminating", "terminated"]]
     budget_termination: NotRequired[dict[str, Any]]
+    context_metrics: NotRequired[dict[str, Any]]
+    context_metrics_delta: NotRequired[dict[str, Any]]

@@ -153,6 +153,12 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
                             "llm_calls": 0,
                             "tool_calls": 0,
                         },
+                        "context_metrics": {
+                            "schema_version": 1,
+                            "measurements": 0,
+                            "agents": {},
+                        },
+                        "context_metrics_delta": {"kind": "reset"},
                     },
                     "store_plan": {
                         "workflow_plan": ["parser", "relation", "explanation"],
@@ -244,6 +250,7 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert "usage_update" in event_names
     assert "budget_started" in event_names
     assert "budget_terminated" in event_names
+    assert "context_metrics_update" in event_names
 
     structured_event = next(event for event in events if event.event == "structured_result")
     assert structured_event.data["result_key"] == "parser_result"
@@ -266,6 +273,13 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert started_event.data["node"] == "fetch_user_info"
     assert started_event.data["status"] == "active"
     assert started_event.data["usage"]["llm_calls"] == 0
+
+    context_event = next(
+        event for event in events if event.event == "context_metrics_update"
+    )
+    assert context_event.data["node"] == "fetch_user_info"
+    assert context_event.data["delta"]["kind"] == "reset"
+    assert context_event.data["metrics"]["measurements"] == 0
 
     tool_result_event = next(event for event in events if event.event == "tool_result")
     assert tool_result_event.data["status"] == "success"

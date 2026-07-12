@@ -74,6 +74,7 @@ class SessionStateResponse(BaseModel):
     budget_usage: dict[str, Any] | None = None
     budget_status: Literal["active", "terminating", "terminated"] | None = None
     budget_termination: dict[str, Any] | None = None
+    context_metrics: dict[str, Any] | None = None
 
 class LearningRecord(BaseModel):
     knowledge: str

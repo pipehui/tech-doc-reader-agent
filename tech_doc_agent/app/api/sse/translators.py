@@ -251,6 +251,28 @@ def _budget_started_event(
     )
 
 
+def _context_metrics_update_event(
+    node_name: str,
+    node_update: dict,
+) -> ServerSentEvent | None:
+    delta = node_update.get("context_metrics_delta")
+    metrics = node_update.get("context_metrics")
+    if (
+        not isinstance(delta, dict)
+        or delta.get("kind") not in {"reset", "assistant"}
+        or not isinstance(metrics, dict)
+    ):
+        return None
+    return sse_event(
+        "context_metrics_update",
+        {
+            "node": node_name,
+            "delta": delta,
+            "metrics": metrics,
+        },
+    )
+
+
 def stream_part_type_and_data(part) -> tuple[str | None, object]:
     if isinstance(part, dict):
         return part.get("type"), part.get("data")
@@ -308,6 +330,10 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
         budget_started = _budget_started_event(node_name, node_update)
         if budget_started is not None:
             yield budget_started
+
+        context_event = _context_metrics_update_event(node_name, node_update)
+        if context_event is not None:
+            yield context_event
 
         messages = node_update.get("messages", [])
         for message in messages:

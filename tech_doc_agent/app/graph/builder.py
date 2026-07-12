@@ -17,6 +17,7 @@ from .budgeting import (
     budgeted_request_start_node,
 )
 from .budget_termination import create_budget_termination_node
+from .context_metrics import ContextMetricsTracker, context_metrics_request_start_node
 from .reflection import route_after_tool_result
 from .routing import (
     NEXT_STEP_ROUTE_MAP,
@@ -65,6 +66,7 @@ def register_subagent(
     spec: AgentSpec,
     execution_policy: ExecutionPolicy,
     budget_tracker: WorkflowBudgetTracker,
+    context_tracker: ContextMetricsTracker,
 ) -> None:
     builder.add_node(spec.entry_node, create_entry_node(spec.display_name, spec.key))
     builder.add_node(
@@ -73,6 +75,7 @@ def register_subagent(
             spec.assistant,
             scoped_messages=spec.scoped_messages,
             budget_tracker=budget_tracker,
+            context_tracker=context_tracker,
         ),
     )
     builder.add_edge(spec.entry_node, spec.key)
@@ -131,7 +134,13 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
     builder.add_edge("budget_terminated", END)
     builder.add_node(
         "fetch_user_info",
-        budgeted_request_start_node(spec.user_info_node, spec.budget_tracker),
+        budgeted_request_start_node(
+            context_metrics_request_start_node(
+                spec.user_info_node,
+                spec.context_tracker,
+            ),
+            spec.budget_tracker,
+        ),
     )
     builder.add_edge(START, "fetch_user_info")
 
@@ -141,11 +150,16 @@ def create_graph_builder(spec: GraphSpec) -> StateGraph:
             subagent,
             spec.execution_policy,
             spec.budget_tracker,
+            spec.context_tracker,
         )
 
     builder.add_node(
         "primary_assistant",
-        assistant_node(spec.primary.assistant, budget_tracker=spec.budget_tracker),
+        assistant_node(
+            spec.primary.assistant,
+            budget_tracker=spec.budget_tracker,
+            context_tracker=spec.context_tracker,
+        ),
     )
     _register_tool_node(
         builder,

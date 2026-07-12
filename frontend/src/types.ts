@@ -28,6 +28,7 @@ export interface SessionState {
   budget_usage?: Record<string, unknown>;
   budget_status?: BudgetStatus;
   budget_termination?: Record<string, unknown>;
+  context_metrics?: Record<string, unknown>;
 }
 
 export interface ChatMessage {

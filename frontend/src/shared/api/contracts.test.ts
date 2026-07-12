@@ -21,14 +21,24 @@ describe("REST response contracts", () => {
       plan_index: 1,
       budget_usage: { llm_calls: 2, total_tokens: 120 },
       budget_status: "terminated",
-      budget_termination: { dimension: "llm_calls", limit: 2 }
+      budget_termination: { dimension: "llm_calls", limit: 2 },
+      context_metrics: {
+        schema_version: 1,
+        measurements: 2,
+        agents: { primary: { invocations: 2 } }
+      }
     })).toMatchObject({
       session_id: "session-1",
       current_agent: "parser",
       workflow_plan: ["parser", "summary"],
       budget_usage: { llm_calls: 2, total_tokens: 120 },
       budget_status: "terminated",
-      budget_termination: { dimension: "llm_calls", limit: 2 }
+      budget_termination: { dimension: "llm_calls", limit: 2 },
+      context_metrics: {
+        schema_version: 1,
+        measurements: 2,
+        agents: { primary: { invocations: 2 } }
+      }
     });
 
     expect(decodeHistoryResponse({

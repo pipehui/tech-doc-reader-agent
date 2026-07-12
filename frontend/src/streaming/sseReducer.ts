@@ -162,6 +162,17 @@ export function reduceSseEvent(
         }
       ]);
 
+    case "context_metrics_update":
+      return actionsOnly(state, [
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node || state.activeAgent)),
+        ...(isObject(data.metrics)
+          ? [{
+              type: "set_session_state",
+              state: { context_metrics: data.metrics }
+            } as StreamAction]
+          : [])
+      ]);
+
     case "token": {
       const agent = normalizeAgent(data.agent || state.activeAgent);
       const text = typeof data.text === "string" ? data.text : "";

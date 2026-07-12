@@ -126,6 +126,14 @@ export function decodeSessionState(payload: unknown): SessionState {
             state.budget_termination,
             "budget_termination"
           )
+        }),
+    ...(state.context_metrics === undefined || state.context_metrics === null
+      ? {}
+      : {
+          context_metrics: objectValue(
+            state.context_metrics,
+            "context_metrics"
+          )
         })
   };
 }

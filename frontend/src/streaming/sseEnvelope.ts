@@ -14,6 +14,7 @@ export interface SsePayloadMap {
   usage_update: SsePayload & { node?: unknown; delta?: unknown; usage?: unknown };
   budget_started: SsePayload & { node?: unknown; status?: unknown; usage?: unknown };
   budget_terminated: SsePayload & { node?: unknown; termination?: unknown; usage?: unknown };
+  context_metrics_update: SsePayload & { node?: unknown; delta?: unknown; metrics?: unknown };
   tool_call: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; args?: unknown; tool_call_id?: unknown };
   tool_result: SsePayload & { agent?: unknown; node?: unknown; tool?: unknown; content?: unknown; tool_call_id?: unknown; status?: unknown; error?: unknown; safe_message?: unknown; code?: unknown; retryable?: unknown; dependency?: unknown; cause_type?: unknown };
   guardrail_blocked: SsePayload & { message?: unknown; findings?: unknown };

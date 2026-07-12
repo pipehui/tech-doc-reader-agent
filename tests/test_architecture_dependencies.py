@@ -227,6 +227,7 @@ def test_graph_execution_policy_does_not_read_settings_at_runtime():
             "builder.py",
             "budget_termination.py",
             "budgeting.py",
+            "context_metrics.py",
             "reflection.py",
             "specs.py",
             "tool_nodes.py",

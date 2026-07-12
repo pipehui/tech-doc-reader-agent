@@ -4,6 +4,7 @@ from typing import Any
 
 from tech_doc_agent.app.graph.builder import build_multi_agentic_graph
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
+from tech_doc_agent.app.graph.context_metrics import ContextMetricsTracker
 from tech_doc_agent.app.core.execution_budget import build_execution_budget
 from tech_doc_agent.app.graph.nodes import create_user_info_node
 from tech_doc_agent.app.graph.specs import (
@@ -101,6 +102,7 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
             resources.model_price_table,
             execution_budget=execution_budget,
         ),
+        context_tracker=ContextMetricsTracker(),
     )
 
 

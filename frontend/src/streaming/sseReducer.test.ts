@@ -212,6 +212,40 @@ describe("pure SSE reducer", () => {
         budget_usage: { llm_calls: 0, tool_calls: 0 }
       }
     });
+
+    const contextMetrics = {
+      schema_version: 1,
+      measurements: 1,
+      agents: {
+        parser: {
+          invocations: 1,
+          scope: "scoped",
+          last_prompt_message_count: 2
+        }
+      }
+    };
+    const context = reduce(plan.state, "context_metrics_update", {
+      node: "parser",
+      delta: {
+        kind: "assistant",
+        agent: "parser",
+        prompt_message_count: 2
+      },
+      metrics: contextMetrics
+    });
+    expect(context.actions).toEqual([
+      expect.objectContaining({
+        type: "record_event",
+        event: expect.objectContaining({
+          type: "context_metrics_update",
+          agent: "parser"
+        })
+      }),
+      {
+        type: "set_session_state",
+        state: { context_metrics: contextMetrics }
+      }
+    ]);
   });
 
   it("tracks duplicate token metadata and finalizes the agent message", () => {
