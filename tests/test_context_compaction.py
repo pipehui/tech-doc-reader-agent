@@ -16,7 +16,7 @@ from tech_doc_agent.app.core.conversation_summary import (
 from tech_doc_agent.app.core.errors import ValidationError
 from tech_doc_agent.app.graph import build_multi_agentic_graph
 from tech_doc_agent.app.graph.context_compaction import ContextCompactor
-from tech_doc_agent.app.services.conversation_summarizer import (
+from tech_doc_agent.app.application.conversation_summarizer import (
     ExtractiveConversationSummarizer,
 )
 from tech_doc_agent.app.graph.message_scope import build_assistant_state

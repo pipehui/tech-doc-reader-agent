@@ -25,6 +25,11 @@ tech_doc_agent
 │   │   ├── prompt_registry.py
 │   │   ├── prompts
 │   │   └── registry.py
+│   ├── application
+│   │   ├── conversation_summarizer.py
+│   │   ├── learning_state.py
+│   │   ├── profile_service.py
+│   │   └── retrieval.py
 │   ├── bootstrap.py
 │   ├── composition.py
 │   ├── core
@@ -79,6 +84,10 @@ tech_doc_agent
 - interrupt 节点
 
 `builder.py` 只消费注入的 `GraphSpec` 并负责图组装，`routing.py` 负责条件路由，`nodes.py` 负责 graph lifecycle node，`tool_policy.py` 负责重复调用和 parser 检索预算。它们不创建真实模型、工具或存储。
+
+### `app/application`
+
+保存不依赖 delivery 和具体 adapter 的用例、port 与纯策略：learning/profile 状态编排、retrieval 跨层 contract，以及确定性的 `ExtractiveConversationSummarizer`。摘要策略只消费 core `ConversationSummary`，由 composition 注入 graph compactor，不读取 settings、provider 或 persistence。
 
 ### `app/bootstrap.py` 与 `app/infrastructure`
 

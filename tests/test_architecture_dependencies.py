@@ -160,6 +160,13 @@ def test_agent_definitions_do_not_depend_on_services_or_delivery_adapters():
     assert AGENTS_CONTRACT.violations(APP_IMPORT_GRAPH) == []
 
 
+def test_context_summarizer_is_an_application_policy_not_a_service():
+    source = (APP_DIR / "composition.py").read_text(encoding="utf-8")
+
+    assert "application.conversation_summarizer import" in source
+    assert "services.conversation_summarizer" not in source
+
+
 def test_learning_tools_delegate_writes_to_application_service():
     source = (TOOLS_DIR / "learning.py").read_text(encoding="utf-8")
     assert "learning_state_service.update(" in source

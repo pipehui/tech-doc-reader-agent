@@ -16,7 +16,7 @@ from tech_doc_agent.app.core.context_serialization import estimate_serialized_by
 from tech_doc_agent.app.core.conversation_summary import read_conversation_summary
 from tech_doc_agent.app.core.state import State
 from tech_doc_agent.app.graph.context_compaction import ContextCompactor
-from tech_doc_agent.app.services.conversation_summarizer import (
+from tech_doc_agent.app.application.conversation_summarizer import (
     ExtractiveConversationSummarizer,
 )
 from tech_doc_agent.app.graph.message_scope import build_assistant_state

@@ -120,6 +120,8 @@ replace-in-place 状态外，不启用自动数据 pruning。
 
 Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph state 并决定 Agent prompt 可见消息，属于 graph orchestration policy，不再由 `services` 反向提供给 graph。
 
+确定性 `ExtractiveConversationSummarizer` 位于 `application/conversation_summarizer.py`。core 只定义 summary model 与 `ConversationSummarizer` port，graph compactor 消费该 port，composition root 注入具体策略；application implementation 不依赖 graph、provider、settings 或 persistence。
+
 Retrieval 的跨层查询/结果协议位于 `application/retrieval.py`：`SearchQuery`、`SearchResult` 与 `DocumentRetrieverPort`。`services/retrieval/models.py` 只承载 ranker/store 实现所需的内部 candidate/port；tools 只构造 application query，不 import taxonomy、filter 或 HybridRetriever 实现。
 
 Agent role 的执行装配位于 `agents/`：prompt 作为同包资源由 `PromptRegistry` 校验，`AssistantExecutionIdentity` 和 model route identity 与 role 定义共同维护。该包可消费 graph command 和已绑定的 `ToolBundle`，但不能反向读取 services、runtime、API、infrastructure 或 composition root。

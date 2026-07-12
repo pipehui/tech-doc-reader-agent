@@ -16,7 +16,7 @@ from tech_doc_agent.app.core.context_compaction import ContextCompactionPolicy
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.context_compaction import ContextCompactor
 from tech_doc_agent.app.graph.context_metrics import ContextMetricsTracker
-from tech_doc_agent.app.services.conversation_summarizer import ExtractiveConversationSummarizer
+from tech_doc_agent.app.application.conversation_summarizer import ExtractiveConversationSummarizer
 from tech_doc_agent.app.graph.specs import (
     AgentSpec,
     CompletionPolicy,
