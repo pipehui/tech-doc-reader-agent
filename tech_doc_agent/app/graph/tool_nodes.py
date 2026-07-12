@@ -8,9 +8,11 @@ from langgraph.prebuilt import ToolNode
 
 from tech_doc_agent.app.core.errors import classify_error, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event, timed_node
+from tech_doc_agent.app.core.retry_usage import capture_retry_usage
 
 from .budgeting import WorkflowBudgetTracker
 from .reflection import apply_reflection_policy, safe_validation_repair_context
+from .provider_retries import ProviderRetryUsageTracker
 from .specs import ReflectionPolicy, ToolExecutionPolicy
 from .state import State
 from .tool_policy import evaluate_tool_policy
@@ -153,6 +155,7 @@ def create_tool_node_with_fallback(
     policy: ToolExecutionPolicy,
     reflection_policy: ReflectionPolicy | None = None,
     budget_tracker: WorkflowBudgetTracker | None = None,
+    provider_retry_tracker: ProviderRetryUsageTracker | None = None,
 ):
     reflection_policy = reflection_policy or ReflectionPolicy()
     tool_node = ToolNode(tools, handle_tool_errors=False)
@@ -282,6 +285,37 @@ def create_tool_node_with_fallback(
             reflection_policy,
         )
 
-    return RunnableLambda(guarded_tool_node, afunc=aguarded_tool_node).with_fallbacks(
+    node_with_fallback = RunnableLambda(
+        guarded_tool_node,
+        afunc=aguarded_tool_node,
+    ).with_fallbacks(
         [RunnableLambda(reflected_tool_error)], exception_key="error"
     )
+    if provider_retry_tracker is None:
+        return node_with_fallback
+
+    def observed_tool_node(
+        state: State,
+        config: RunnableConfig | None = None,
+    ):
+        with capture_retry_usage() as collector:
+            result = node_with_fallback.invoke(state, config)
+        return provider_retry_tracker.record_tool_operations(
+            state,
+            result,
+            collector.snapshot(),
+        )
+
+    async def aobserved_tool_node(
+        state: State,
+        config: RunnableConfig | None = None,
+    ):
+        with capture_retry_usage() as collector:
+            result = await node_with_fallback.ainvoke(state, config)
+        return provider_retry_tracker.record_tool_operations(
+            state,
+            result,
+            collector.snapshot(),
+        )
+
+    return RunnableLambda(observed_tool_node, afunc=aobserved_tool_node)

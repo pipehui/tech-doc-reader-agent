@@ -6,6 +6,7 @@ from tech_doc_agent.app.graph.builder import build_multi_agentic_graph
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.context_metrics import ContextMetricsTracker
 from tech_doc_agent.app.graph.context_compaction import ContextCompactor
+from tech_doc_agent.app.graph.provider_retries import ProviderRetryUsageTracker
 from tech_doc_agent.app.core.context_compaction import build_context_compaction_policy
 from tech_doc_agent.app.core.execution_budget import build_execution_budget
 from tech_doc_agent.app.graph.nodes import create_user_info_node
@@ -106,6 +107,7 @@ def _graph_spec_from_registry(assistants: AssistantRegistry, resources: Any) -> 
             execution_budget=execution_budget,
         ),
         context_tracker=ContextMetricsTracker(),
+        provider_retry_tracker=ProviderRetryUsageTracker(),
         context_compactor=ContextCompactor(
             policy=build_context_compaction_policy(resources.settings),
             summarizer=ExtractiveConversationSummarizer(),

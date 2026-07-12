@@ -39,6 +39,7 @@ class SessionSnapshotPayload(SsePayload):
     budget_status: Literal["active", "terminating", "terminated"] | None = None
     budget_termination: dict[str, Any] | None = None
     context_metrics: dict[str, Any] | None = None
+    provider_retry_usage: dict[str, Any] | None = None
 
 
 class AgentMessagePayload(SsePayload):
@@ -96,6 +97,12 @@ class ContextMetricsUpdatePayload(SsePayload):
     node: str
     delta: dict[str, Any]
     metrics: dict[str, Any]
+
+
+class ProviderRetryUpdatePayload(SsePayload):
+    node: str
+    delta: dict[str, Any]
+    usage: dict[str, Any]
 
 
 class ToolCallPayload(SsePayload):
@@ -163,6 +170,7 @@ SSE_PAYLOAD_MODELS: dict[SseEventName, type[SsePayload]] = {
     "budget_started": BudgetStartedPayload,
     "budget_terminated": BudgetTerminatedPayload,
     "context_metrics_update": ContextMetricsUpdatePayload,
+    "provider_retry_update": ProviderRetryUpdatePayload,
     "tool_call": ToolCallPayload,
     "tool_result": ToolResultPayload,
     "guardrail_blocked": GuardrailBlockedPayload,

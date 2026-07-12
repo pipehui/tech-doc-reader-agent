@@ -27,6 +27,8 @@ Agent eval 会在执行 case 前从目标服务读取 `/runtime/identity`，验�
 
 runner 不会用本地 `.env`、本地 Git 或 prompt 文件替代远端 identity。目标服务需显式设置 `RUNTIME_IDENTITY_ENDPOINT_ENABLED=true`，并通过 `DEPLOYMENT_COMMIT_SHA` 或镜像 build metadata 提供完整 commit；在受信 CI/baseline 中建议再加 `--require-runtime-identity`，runtime identity 或 deployment commit 不可验证时会在跑 case 前以退出码 2 停止，但仍保留诊断 manifest。endpoint host、feedback 与可能的 URL 凭据只以 hash/安全结构进入 artifact。
 
+Online runner 会累计 SSE `provider_retry_update` 的 `operations` delta，并把 version 1 `provider_retry_usage` 写入每条 JSONL。Markdown summary/case 表分别报告 provider operations、attempts、retries、wait、recovered、exhausted 和 failed；`reset` 只表示新 request 边界，不重复计数。当前该明细覆盖 ToolNode 内的 embedding 与 web provider transport，LLM attempt 继续由 `budget_usage` 计量，二者不能相加冒充同一维度。
+
 `evals/cases_full.json` 当前包含 25 条：
 
 | Category | Cases | Purpose |

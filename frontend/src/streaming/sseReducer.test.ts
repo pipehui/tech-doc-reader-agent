@@ -174,6 +174,33 @@ describe("pure SSE reducer", () => {
       }
     ]);
 
+    const providerUsage = {
+      schema_version: 1,
+      operations: [{ operation: "embedding.create", attempts: 2, retries: 1 }],
+      summary: { operations: 1, attempts: 2, retries: 1 }
+    };
+    const providerRetry = reduce(plan.state, "provider_retry_update", {
+      node: "parser_assistant_safe_tools",
+      delta: {
+        kind: "operations",
+        operations: providerUsage.operations
+      },
+      usage: providerUsage
+    });
+    expect(providerRetry.actions).toEqual([
+      expect.objectContaining({
+        type: "record_event",
+        event: expect.objectContaining({
+          type: "provider_retry_update",
+          agent: "parser"
+        })
+      }),
+      {
+        type: "set_session_state",
+        state: { provider_retry_usage: providerUsage }
+      }
+    ]);
+
     const termination = {
       schema_version: 1,
       scope: "workflow",

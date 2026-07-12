@@ -236,6 +236,12 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
                             "agents": {},
                         },
                         "context_metrics_delta": {"kind": "reset"},
+                        "provider_retry_usage": {
+                            "schema_version": 1,
+                            "operations": [],
+                            "summary": {"operations": 0},
+                        },
+                        "provider_retry_usage_delta": {"kind": "reset"},
                     },
                     "store_plan": {
                         "workflow_plan": ["parser", "relation", "explanation"],
@@ -286,6 +292,27 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
                         ]
                     },
                     "parser_assistant_safe_tools": {
+                        "provider_retry_usage": {
+                            "schema_version": 1,
+                            "operations": [
+                                {
+                                    "operation": "embedding.create",
+                                    "attempts": 2,
+                                    "retries": 1,
+                                }
+                            ],
+                            "summary": {"operations": 1, "attempts": 2},
+                        },
+                        "provider_retry_usage_delta": {
+                            "kind": "operations",
+                            "operations": [
+                                {
+                                    "operation": "embedding.create",
+                                    "attempts": 2,
+                                    "retries": 1,
+                                }
+                            ],
+                        },
                         "messages": [
                             ToolMessage(
                                 content="[]",
@@ -328,6 +355,7 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert "budget_started" in event_names
     assert "budget_terminated" in event_names
     assert "context_metrics_update" in event_names
+    assert "provider_retry_update" in event_names
 
     structured_event = next(event for event in events if event.event == "structured_result")
     assert structured_event.data["result_key"] == "parser_result"
@@ -357,6 +385,16 @@ def test_iter_update_events_emits_plan_transition_and_tool_events():
     assert context_event.data["node"] == "fetch_user_info"
     assert context_event.data["delta"]["kind"] == "reset"
     assert context_event.data["metrics"]["measurements"] == 0
+
+    provider_retry_event = next(
+        event
+        for event in events
+        if event.event == "provider_retry_update"
+        and event.data["delta"]["kind"] == "operations"
+    )
+    assert provider_retry_event.data["node"] == "parser_assistant_safe_tools"
+    assert provider_retry_event.data["delta"]["operations"][0]["retries"] == 1
+    assert provider_retry_event.data["usage"]["summary"]["attempts"] == 2
 
     tool_result_event = next(event for event in events if event.event == "tool_result")
     assert tool_result_event.data["status"] == "success"

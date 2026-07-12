@@ -26,6 +26,10 @@ describe("REST response contracts", () => {
         schema_version: 1,
         measurements: 2,
         agents: { primary: { invocations: 2 } }
+      },
+      provider_retry_usage: {
+        schema_version: 1,
+        summary: { operations: 1, attempts: 2, retries: 1 }
       }
     })).toMatchObject({
       session_id: "session-1",
@@ -38,6 +42,10 @@ describe("REST response contracts", () => {
         schema_version: 1,
         measurements: 2,
         agents: { primary: { invocations: 2 } }
+      },
+      provider_retry_usage: {
+        schema_version: 1,
+        summary: { operations: 1, attempts: 2, retries: 1 }
       }
     });
 

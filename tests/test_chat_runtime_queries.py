@@ -179,6 +179,11 @@ def test_sync_and_async_session_state_views_are_equivalent():
                 "measurements": 2,
                 "agents": {"primary": {"invocations": 2}},
             },
+            "provider_retry_usage": {
+                "schema_version": 1,
+                "operations": [],
+                "summary": {"operations": 0},
+            },
         },
     )
     runtime = _runtime_with_snapshot(snapshot)
@@ -214,6 +219,11 @@ def test_sync_and_async_session_state_views_are_equivalent():
             "schema_version": 1,
             "measurements": 2,
             "agents": {"primary": {"invocations": 2}},
+        },
+        "provider_retry_usage": {
+            "schema_version": 1,
+            "operations": [],
+            "summary": {"operations": 0},
         },
     }
 

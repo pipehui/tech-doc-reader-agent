@@ -81,6 +81,12 @@ describe("inspector model", () => {
       status: "error",
       error: "failure without diagnostic keywords"
     }))).toBe("tool_result tool_result_error");
+    expect(eventSummary(event("provider_retry_update", "2026-07-12", {
+      delta: {
+        kind: "operations",
+        operations: [{ retries: 1 }, { retries: 2 }]
+      }
+    }))).toBe("2 provider operations · 3 retries");
     expect(eventSummary(event("tool_result", "2026-07-12", {
       tool: "search",
       status: "error"

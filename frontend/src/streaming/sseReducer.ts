@@ -204,6 +204,17 @@ export function reduceSseEvent(
       ]);
     }
 
+    case "provider_retry_update": {
+      const data = envelope.data;
+      return actionsOnly(state, [
+        recordEvent(state, envelope.type, data, normalizeAgent(data.node)),
+        {
+          type: "set_session_state",
+          state: { provider_retry_usage: data.usage }
+        }
+      ]);
+    }
+
     case "token": {
       const data = envelope.data;
       const agent = normalizeAgent(data.agent || state.activeAgent);

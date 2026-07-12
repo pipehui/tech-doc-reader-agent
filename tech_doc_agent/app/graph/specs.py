@@ -8,6 +8,7 @@ from tech_doc_agent.app.core.execution_budget import ExecutionBudget
 from tech_doc_agent.app.graph.budgeting import WorkflowBudgetTracker
 from tech_doc_agent.app.graph.context_metrics import ContextMetricsTracker
 from tech_doc_agent.app.graph.context_compaction import ContextCompactor
+from tech_doc_agent.app.graph.provider_retries import ProviderRetryUsageTracker
 
 from .state import WorkflowStep
 
@@ -125,6 +126,9 @@ class GraphSpec:
     budget_tracker: WorkflowBudgetTracker
     context_tracker: ContextMetricsTracker
     context_compactor: ContextCompactor
+    provider_retry_tracker: ProviderRetryUsageTracker = field(
+        default_factory=ProviderRetryUsageTracker
+    )
 
     def __post_init__(self) -> None:
         if self.budget_tracker.execution_budget != self.execution_policy.budget:

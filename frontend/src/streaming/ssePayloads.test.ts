@@ -25,7 +25,8 @@ describe("SSE payload runtime contract", () => {
       budget_usage: undefined,
       budget_status: undefined,
       budget_termination: undefined,
-      context_metrics: undefined
+      context_metrics: undefined,
+      provider_retry_usage: undefined
     });
   });
 

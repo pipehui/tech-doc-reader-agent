@@ -275,6 +275,28 @@ def _context_metrics_update_event(
     )
 
 
+def _provider_retry_update_event(
+    node_name: str,
+    node_update: dict,
+) -> ServerSentEvent | None:
+    delta = node_update.get("provider_retry_usage_delta")
+    usage = node_update.get("provider_retry_usage")
+    if (
+        not isinstance(delta, dict)
+        or delta.get("kind") not in {"reset", "operations"}
+        or not isinstance(usage, dict)
+    ):
+        return None
+    return sse_event(
+        "provider_retry_update",
+        {
+            "node": node_name,
+            "delta": delta,
+            "usage": usage,
+        },
+    )
+
+
 def stream_part_type_and_data(part) -> tuple[str | None, object]:
     if isinstance(part, dict):
         return part.get("type"), part.get("data")
@@ -349,6 +371,10 @@ def iter_update_events(part) -> Iterable[ServerSentEvent]:
         context_event = _context_metrics_update_event(node_name, node_update)
         if context_event is not None:
             yield context_event
+
+        provider_retry_event = _provider_retry_update_event(node_name, node_update)
+        if provider_retry_event is not None:
+            yield provider_retry_event
 
         messages = node_update.get("messages", [])
         for message in messages:

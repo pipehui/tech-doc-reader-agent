@@ -29,6 +29,7 @@ from evals.manifests import (
     online_eval_settings,
     runtime_identity_is_verified,
 )
+from tech_doc_agent.app.core.retry_usage import RetryUsage, RetryUsageLedger
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8000/chat"
@@ -110,6 +111,7 @@ async def run_case(
     error: str | None = None
     interrupt_count = 0
     approval_decisions: list[dict[str, Any]] = []
+    provider_retry_ledger = RetryUsageLedger()
 
     async def consume_stream(url: str, stream_payload: dict[str, Any]) -> str:
         nonlocal t_first_token
@@ -123,6 +125,7 @@ async def run_case(
         nonlocal final_status
         nonlocal error
         nonlocal interrupt_count
+        nonlocal provider_retry_ledger
 
         async with client.stream("POST", url, json=stream_payload, timeout=timeout_s) as response:
             if response.status_code != 200:
@@ -161,6 +164,12 @@ async def run_case(
 
                 elif event_name == "structured_result":
                     structured_results.append(event)
+
+                elif event_name == "provider_retry_update":
+                    provider_retry_ledger = _record_provider_retry_delta(
+                        provider_retry_ledger,
+                        event,
+                    )
 
                 elif event_name == "agent_message":
                     content = event.get("content")
@@ -219,9 +228,21 @@ async def run_case(
                 )
 
     except TimeoutError:
-        return _error_result(case, session_id, t_start, f"TimeoutError: exceeded {timeout_s:.0f}s")
+        return _error_result(
+            case,
+            session_id,
+            t_start,
+            f"TimeoutError: exceeded {timeout_s:.0f}s",
+            provider_retry_usage=provider_retry_ledger.to_state(),
+        )
     except Exception as exc:
-        return _error_result(case, session_id, t_start, f"{type(exc).__name__}: {exc}")
+        return _error_result(
+            case,
+            session_id,
+            t_start,
+            f"{type(exc).__name__}: {exc}",
+            provider_retry_usage=provider_retry_ledger.to_state(),
+        )
 
     elapsed = (t_done or time.perf_counter()) - t_start
     ttft = (t_first_token - t_start) if t_first_token else None
@@ -249,6 +270,7 @@ async def run_case(
         "interrupt_count": interrupt_count,
         "approval_decisions": approval_decisions,
         "event_count": events_seen,
+        "provider_retry_usage": provider_retry_ledger.to_state(),
         "status": final_status,
         "error": error,
     }
@@ -354,11 +376,18 @@ def render_markdown_report(
         f"| Tool results avg | {format_number(summary['tool_results_avg'])} |",
         f"| Structured results avg | {format_number(summary['structured_results_avg'])} |",
         f"| Interrupts total | {summary['interrupts_total']} |",
+        f"| Provider operations total | {summary['provider_operations_total']} |",
+        f"| Provider attempts total | {summary['provider_attempts_total']} |",
+        f"| Provider retries total | {summary['provider_retries_total']} |",
+        f"| Provider retry wait total | {format_seconds(summary['provider_waited_seconds_total'])} |",
+        f"| Provider recovered operations | {summary['provider_recovered_operations_total']} |",
+        f"| Provider exhausted operations | {summary['provider_exhausted_operations_total']} |",
+        f"| Provider failed operations | {summary['provider_failed_operations_total']} |",
         "",
         "## By Category",
         "",
-        "| Category | Cases | Plan Match | Keyword | Behavior | E2E p50 | Tool Results Avg | Structured Results Avg |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Category | Cases | Plan Match | Keyword | Behavior | E2E p50 | Tool Results Avg | Structured Results Avg | Provider Retries |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
 
     for category, stats in summarize_by_category(rows).items():
@@ -368,7 +397,8 @@ def render_markdown_report(
             f"{format_score(stats['keyword_avg'])} | {format_score(stats['behavior_avg'])} | "
             f"{format_seconds(stats['e2e_p50'])} | "
             f"{format_number(stats['tool_results_avg'])} | "
-            f"{format_number(stats['structured_results_avg'])} |"
+            f"{format_number(stats['structured_results_avg'])} | "
+            f"{stats['provider_retries_total']} |"
         )
 
     lines.extend(
@@ -376,8 +406,8 @@ def render_markdown_report(
             "",
             "## Cases",
             "",
-            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | Behavior | E2E | Interrupts | Tool Results | Structured Results |",
-            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|",
+            "| ID | Category | Status | Expected Plan | Predicted Plan | Plan | Keyword | Behavior | E2E | Interrupts | Tool Results | Structured Results | Provider Ops | Provider Retries | Exhausted |",
+            "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         ]
     )
 
@@ -385,13 +415,16 @@ def render_markdown_report(
         expected = ",".join(row.get("expected_plan", [])) or "direct"
         predicted = ",".join(row.get("predicted_plan", [])) or "direct"
         scores = row.get("scores", {})
+        retry_summary = _provider_retry_summary(row)
         lines.append(
             "| "
             f"{row['id']} | {row['category']} | {row['status']} | {expected} | {predicted} | "
             f"{format_score(scores.get('plan_match'))} | {format_score(scores.get('keyword'))} | "
             f"{format_score(scores.get('behavior'))} | {format_seconds(row.get('e2e_s'))} | "
             f"{row.get('interrupt_count', 0)} | {row.get('tool_results', 0)} | "
-            f"{row.get('structured_result_count', 0)} |"
+            f"{row.get('structured_result_count', 0)} | "
+            f"{retry_summary['operations']} | {retry_summary['retries']} | "
+            f"{retry_summary['exhausted_operations']} |"
         )
 
     lines.append("")
@@ -402,6 +435,7 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
     done = [row for row in rows if row.get("status") == "done"]
     interrupted = [row for row in rows if row.get("status") == "interrupted"]
     errored = [row for row in rows if row.get("status") == "error" or row.get("error")]
+    retry_summaries = [_provider_retry_summary(row) for row in rows]
     return {
         "total": len(rows),
         "done": len(done),
@@ -415,6 +449,28 @@ def summarize_results(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "tool_results_avg": statistics.mean([row.get("tool_results", 0) for row in done]) if done else None,
         "structured_results_avg": statistics.mean([row.get("structured_result_count", 0) for row in done]) if done else None,
         "interrupts_total": sum(row.get("interrupt_count", 0) for row in rows),
+        "provider_operations_total": sum(
+            summary["operations"] for summary in retry_summaries
+        ),
+        "provider_attempts_total": sum(
+            summary["attempts"] for summary in retry_summaries
+        ),
+        "provider_retries_total": sum(
+            summary["retries"] for summary in retry_summaries
+        ),
+        "provider_waited_seconds_total": round(
+            sum(summary["waited_seconds"] for summary in retry_summaries),
+            6,
+        ),
+        "provider_recovered_operations_total": sum(
+            summary["recovered_operations"] for summary in retry_summaries
+        ),
+        "provider_exhausted_operations_total": sum(
+            summary["exhausted_operations"] for summary in retry_summaries
+        ),
+        "provider_failed_operations_total": sum(
+            summary["failed_operations"] for summary in retry_summaries
+        ),
     }
 
 
@@ -506,7 +562,14 @@ def _validate_case(case: Any) -> None:
     normalize_plan(case["expected_plan"])
 
 
-def _error_result(case: dict[str, Any], session_id: str, started_at: float, error: str) -> dict[str, Any]:
+def _error_result(
+    case: dict[str, Any],
+    session_id: str,
+    started_at: float,
+    error: str,
+    *,
+    provider_retry_usage: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     result = {
         "id": case["id"],
         "category": case["category"],
@@ -528,6 +591,9 @@ def _error_result(case: dict[str, Any], session_id: str, started_at: float, erro
         "interrupt_count": 0,
         "approval_decisions": [],
         "event_count": 0,
+        "provider_retry_usage": (
+            provider_retry_usage or RetryUsageLedger().to_state()
+        ),
         "status": "error",
         "error": error,
     }
@@ -539,6 +605,32 @@ def _error_result(case: dict[str, Any], session_id: str, started_at: float, erro
         "latency": scores.latency,
     }
     return result
+
+
+def _record_provider_retry_delta(
+    ledger: RetryUsageLedger,
+    event: dict[str, Any],
+) -> RetryUsageLedger:
+    delta = event.get("delta")
+    if not isinstance(delta, dict):
+        raise ValueError("provider_retry_update.delta must be an object")
+    kind = delta.get("kind")
+    if kind == "reset":
+        return ledger
+    if kind != "operations":
+        raise ValueError("provider_retry_update.delta.kind is invalid")
+    operations = delta.get("operations")
+    if not isinstance(operations, list):
+        raise ValueError("provider_retry_update.delta.operations must be an array")
+    return ledger.record(
+        tuple(RetryUsage.from_payload(operation) for operation in operations)
+    )
+
+
+def _provider_retry_summary(row: dict[str, Any]) -> dict[str, Any]:
+    payload = row.get("provider_retry_usage")
+    ledger = RetryUsageLedger() if payload is None else RetryUsageLedger.from_state(payload)
+    return ledger.summary_payload()
 
 
 def _mean_score(rows: list[dict[str, Any]], key: str) -> float | None:

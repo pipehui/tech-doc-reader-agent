@@ -8,23 +8,24 @@ from email.utils import parsedate_to_datetime
 import math
 import random
 import time
-from typing import Any, Literal, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from tech_doc_agent.app.core.errors import ApplicationError, classify_error
 from tech_doc_agent.app.core.observability import log_event
+from tech_doc_agent.app.core.retry_usage import (
+    RetryOutcome,
+    RetryUsage,
+    RetryUsageObserver,
+    observe_retry_usage,
+)
 from tech_doc_agent.app.core.settings import Settings
 
 
 T = TypeVar("T")
-RetryOutcome = Literal["succeeded", "failed", "exhausted"]
 
 
 class EventLogger(Protocol):
     def __call__(self, event: str, **fields: Any) -> None: ...
-
-
-class RetryUsageObserver(Protocol):
-    def __call__(self, usage: RetryUsage) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,20 +52,6 @@ class RetryPolicy:
             raise ValueError("jitter_ratio must be between 0 and 1")
         if self.max_retry_after_seconds < 0:
             raise ValueError("max_retry_after_seconds must be greater than or equal to 0")
-
-
-@dataclass(frozen=True, slots=True)
-class RetryUsage:
-    operation: str
-    dependency: str
-    tool: str | None
-    idempotent: bool
-    attempts: int
-    retries: int
-    waited_seconds: float
-    outcome: RetryOutcome
-    reason: str
-    error_code: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,7 +380,11 @@ def build_retry_executor(
             jitter_ratio=settings.TRANSPORT_RETRY_JITTER_RATIO,
             max_retry_after_seconds=settings.TRANSPORT_RETRY_MAX_RETRY_AFTER_SECONDS,
         ),
-        usage_observer=usage_observer,
+        usage_observer=(
+            usage_observer
+            if usage_observer is not None
+            else observe_retry_usage
+        ),
     )
 
 

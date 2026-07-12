@@ -194,6 +194,7 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | `current_agent` | `string \| null` | 是 | 当前 agent，默认 `primary` |
 | `workflow_plan` | `string[]` | 是 | 当前工作流计划 |
 | `plan_index` | `number` | 是 | 当前执行到的计划下标 |
+| `provider_retry_usage` | `object \| null` | 否 | 当前 request/workflow 内 embedding、web provider transport operation 的版本化累计账本 |
 
 ### GET /learning/overview
 
@@ -316,6 +317,7 @@ RUNTIME_IDENTITY_ENDPOINT_ENABLED=true
 | `plan_index` | `number` | 是 | 当前计划下标 |
 | `pending_interrupt` | `boolean` | 是 | 是否等待批准 |
 | `message_count` | `number` | 是 | 状态中的消息数量 |
+| `provider_retry_usage` | `object \| null` | 否 | 上一个已持久化 request/workflow 的 provider retry 累计账本 |
 
 ### token
 
@@ -367,6 +369,18 @@ parser 或 relation 的结构化结果写入 graph state 时发送。前端 Insp
 | `result_key` | `"parser_result" \| "relation_result"` | 是 | state 字段名 |
 | `result` | `object` | 是 | 结构化结果 |
 | `parsed` | `boolean` | 是 | 当前结果是否通过结构化解析 |
+
+### provider_retry_update
+
+Embedding 或 web search 的一次逻辑 provider operation 完成后发送；request 真正从 graph `START` 开始时也发送一次 `reset`。该事件只做精确观测，不占用或修改 `ExecutionBudget`。
+
+| 字段 | 类型 | 必有 | 说明 |
+|---|---|---|---|
+| `node` | `string` | 是 | 捕获 provider operation 的 ToolNode |
+| `delta` | `object` | 是 | `kind` 为 `reset` 或 `operations`；后者只含本节点新完成的 operation |
+| `usage` | `object` | 是 | schema version 1 的累计账本，包含 operation 明细和重算后的 summary |
+
+每条 operation 仅包含受控字段：`operation`、`dependency`、`tool`、`idempotent`、`attempts`、`retries`、`waited_seconds`、`outcome`、`reason` 和安全 `error_code`。原始异常文本、URL、请求内容和凭据不会进入 payload。
 
 ### tool_call
 

@@ -7,7 +7,10 @@ from langchain_core.tools import tool
 
 import tech_doc_agent.app.graph.tool_nodes as tool_nodes
 from tech_doc_agent.app.graph.specs import ToolExecutionPolicy
+from tech_doc_agent.app.graph.provider_retries import ProviderRetryUsageTracker
 from tech_doc_agent.app.graph.tool_nodes import create_tool_node_with_fallback, handle_tool_error
+from tech_doc_agent.app.core.retry import build_retry_executor
+from tech_doc_agent.app.core.settings import Settings
 
 
 DEFAULT_TOOL_EXECUTION_POLICY = ToolExecutionPolicy(
@@ -120,6 +123,98 @@ def test_async_tool_node_uses_the_same_structured_fallback_contract():
     assert result["reflection_status"] == "finalizing"
 
 
+def test_tool_node_records_provider_retry_usage_in_workflow_state():
+    calls = 0
+    executor = build_retry_executor(_retry_settings(max_attempts=2))
+
+    @tool
+    def retrying_provider_tool(query: str) -> str:
+        """Call a fake provider that succeeds after one transport retry."""
+
+        def request():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise TimeoutError("private provider endpoint")
+            return f"result:{query}"
+
+        return executor.run(
+            request,
+            operation_name="embedding.create",
+            dependency="embedding",
+            tool="read_docs",
+            idempotent=True,
+        )
+
+    tracker = ProviderRetryUsageTracker(event_logger=lambda event, **fields: None)
+    node = create_tool_node_with_fallback(
+        [retrying_provider_tool],
+        DEFAULT_TOOL_EXECUTION_POLICY,
+        provider_retry_tracker=tracker,
+    )
+    state = _tool_call_state("retrying_provider_tool", "call-retry")
+
+    result = node.invoke(state)
+
+    assert result["messages"][0].status == "success"
+    assert result["provider_retry_usage"]["summary"] == {
+        "operations": 1,
+        "attempts": 2,
+        "retries": 1,
+        "waited_seconds": 0.0,
+        "recovered_operations": 1,
+        "exhausted_operations": 0,
+        "failed_operations": 0,
+        "dependencies": {
+            "embedding": {
+                "operations": 1,
+                "attempts": 2,
+                "retries": 1,
+                "waited_seconds": 0.0,
+            }
+        },
+    }
+    assert result["provider_retry_usage_delta"]["kind"] == "operations"
+    assert result["provider_retry_usage_delta"]["operations"][0]["operation"] == (
+        "embedding.create"
+    )
+
+
+def test_async_tool_fallback_preserves_exhausted_provider_usage():
+    executor = build_retry_executor(_retry_settings(max_attempts=1))
+
+    @tool
+    def exhausted_provider_tool(query: str) -> str:
+        """Call a fake provider that exhausts its transport policy."""
+
+        return executor.run(
+            lambda: (_ for _ in ()).throw(TimeoutError(f"private:{query}")),
+            operation_name="web_search.duckduckgo",
+            dependency="duckduckgo",
+            tool="web_search",
+            idempotent=True,
+        )
+
+    tracker = ProviderRetryUsageTracker(event_logger=lambda event, **fields: None)
+    node = create_tool_node_with_fallback(
+        [exhausted_provider_tool],
+        DEFAULT_TOOL_EXECUTION_POLICY,
+        provider_retry_tracker=tracker,
+    )
+
+    result = asyncio.run(
+        node.ainvoke(_tool_call_state("exhausted_provider_tool", "call-exhausted"))
+    )
+
+    assert result["messages"][0].status == "error"
+    assert result["provider_retry_usage"]["summary"]["attempts"] == 1
+    assert result["provider_retry_usage"]["summary"]["exhausted_operations"] == 1
+    operation = result["provider_retry_usage_delta"]["operations"][0]
+    assert operation["outcome"] == "exhausted"
+    assert operation["error_code"] == "dependency_timeout"
+    assert "private" not in str(operation)
+
+
 def test_tool_node_logs_explicit_block_decision_with_configured_limit(monkeypatch):
     events = []
     monkeypatch.setattr(
@@ -186,3 +281,31 @@ def test_tool_node_logs_explicit_block_decision_with_configured_limit(monkeypatc
     assert blocked_event["reason"] == "repeated_tool_call"
     assert blocked_event["observed_calls"] == 3
     assert blocked_event["configured_limit"] == 2
+
+
+def _retry_settings(*, max_attempts: int) -> Settings:
+    return Settings(
+        TRANSPORT_RETRY_MAX_ATTEMPTS=max_attempts,
+        TRANSPORT_RETRY_INITIAL_DELAY_SECONDS=0,
+        TRANSPORT_RETRY_MAX_DELAY_SECONDS=0,
+        TRANSPORT_RETRY_JITTER_RATIO=0,
+    )
+
+
+def _tool_call_state(tool_name: str, call_id: str) -> dict:
+    return {
+        "messages": [
+            AIMessage(
+                content="",
+                name="parser",
+                tool_calls=[
+                    {
+                        "name": tool_name,
+                        "args": {"query": "StateGraph"},
+                        "id": call_id,
+                    }
+                ],
+            )
+        ],
+        "dialog_state": ["parser"],
+    }

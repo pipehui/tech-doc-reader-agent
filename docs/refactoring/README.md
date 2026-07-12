@@ -69,6 +69,7 @@
 | 2026-07-12 | Phase 4：Eval baseline compatibility、retrieval corpus 内容指纹与 retrieval-only composition | 基础门禁完成，真实 corpus/metrics threshold 继续 | [2026-07-12-eval-baseline-compatibility.md](2026-07-12-eval-baseline-compatibility.md) |
 | 2026-07-12 | Phase 4：Runtime schema v2 deployment commit identity 与 Docker build metadata | 代码/契约完成，实际部署需注入 commit | [2026-07-12-runtime-deployment-identity.md](2026-07-12-runtime-deployment-identity.md) |
 | 2026-07-12 | Phase 4：Context-compaction tracked baseline、双阈值 regression comparator 与 PR CI gate | deterministic gate 完成，retrieval/live gate 继续 | [2026-07-12-context-compaction-pr-regression-gate.md](2026-07-12-context-compaction-pr-regression-gate.md) |
+| 2026-07-12 | Phase 4：Embedding/Web provider retry request ledger、SSE/REST/Inspector 与 online eval | provider attempt 明细完成，LLM 继续使用既有 budget usage | [2026-07-12-provider-retry-usage.md](2026-07-12-provider-retry-usage.md) |
 
 ## 本地任务单策略
 

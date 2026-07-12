@@ -17,7 +17,8 @@
     "budget_usage": null,
     "budget_status": null,
     "budget_termination": null,
-    "context_metrics": null
+    "context_metrics": null,
+    "provider_retry_usage": null
   },
   "agent_message": {
     "agent": "primary",
@@ -59,6 +60,60 @@
     "node": "primary_assistant",
     "delta": {"kind": "assistant", "agent": "primary"},
     "metrics": {"schema_version": 1, "measurements": 1, "agents": {}}
+  },
+  "provider_retry_update": {
+    "node": "parser_assistant_safe_tools",
+    "delta": {
+      "kind": "operations",
+      "operations": [
+        {
+          "operation": "embedding.create",
+          "dependency": "embedding",
+          "tool": "read_docs",
+          "idempotent": true,
+          "attempts": 2,
+          "retries": 1,
+          "waited_seconds": 0.1,
+          "outcome": "succeeded",
+          "reason": "completed",
+          "error_code": null
+        }
+      ]
+    },
+    "usage": {
+      "schema_version": 1,
+      "operations": [
+        {
+          "operation": "embedding.create",
+          "dependency": "embedding",
+          "tool": "read_docs",
+          "idempotent": true,
+          "attempts": 2,
+          "retries": 1,
+          "waited_seconds": 0.1,
+          "outcome": "succeeded",
+          "reason": "completed",
+          "error_code": null
+        }
+      ],
+      "summary": {
+        "operations": 1,
+        "attempts": 2,
+        "retries": 1,
+        "waited_seconds": 0.1,
+        "recovered_operations": 1,
+        "exhausted_operations": 0,
+        "failed_operations": 0,
+        "dependencies": {
+          "embedding": {
+            "operations": 1,
+            "attempts": 2,
+            "retries": 1,
+            "waited_seconds": 0.1
+          }
+        }
+      }
+    }
   },
   "tool_call": {
     "agent": "parser",

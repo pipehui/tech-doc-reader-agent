@@ -73,6 +73,19 @@ export function eventSummary(event: TraceEvent) {
   if (event.type === "plan_update") {
     return `plan_index ${String(data.plan_index ?? "-")}`;
   }
+  if (event.type === "provider_retry_update") {
+    const delta = data.delta as {
+      kind?: string;
+      operations?: Array<{ retries?: number }>;
+    } | undefined;
+    if (delta?.kind === "reset") return "provider retries reset";
+    const operations = delta?.operations || [];
+    const retries = operations.reduce(
+      (total, operation) => total + Number(operation.retries || 0),
+      0
+    );
+    return `${operations.length} provider operation${operations.length === 1 ? "" : "s"} · ${retries} retries`;
+  }
   if (event.type === "agent_message") {
     const meta = data.meta as {
       streamed_token_count?: number;

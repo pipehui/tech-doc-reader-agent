@@ -134,6 +134,15 @@ export function decodeSessionState(payload: unknown): SessionState {
             state.context_metrics,
             "context_metrics"
           )
+        }),
+    ...(state.provider_retry_usage === undefined
+      || state.provider_retry_usage === null
+      ? {}
+      : {
+          provider_retry_usage: objectValue(
+            state.provider_retry_usage,
+            "provider_retry_usage"
+          )
         })
   };
 }

@@ -29,6 +29,7 @@ export interface SessionState {
   budget_status?: BudgetStatus;
   budget_termination?: Record<string, unknown>;
   context_metrics?: Record<string, unknown>;
+  provider_retry_usage?: Record<string, unknown>;
 }
 
 export interface ChatMessage {

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from tech_doc_agent.app.core.errors import RateLimited, ValidationError
-from tech_doc_agent.app.core.retry import RetryExecutor, RetryPolicy
+from tech_doc_agent.app.core.retry_usage import capture_retry_usage
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services import embedding
 
@@ -95,25 +95,29 @@ def test_embedding_retries_transient_provider_failure_before_parsing_response(mo
         "_build_embedding_client",
         lambda settings: SimpleNamespace(embeddings=embeddings),
     )
-    retry_executor = RetryExecutor(
-        RetryPolicy(
-            max_attempts=2,
-            initial_delay_seconds=0,
-            max_delay_seconds=0,
-            jitter_ratio=0,
-        ),
-        sleeper=lambda delay: None,
-        event_logger=lambda event, **fields: None,
-    )
-
-    result = embedding.generate_embedding(
-        "StateGraph",
-        settings=Settings(EMBEDDING_API_KEY="test", EMBEDDING_MODEL="embedding-model"),
-        retry_executor=retry_executor,
-    )
+    with capture_retry_usage() as collector:
+        result = embedding.generate_embedding(
+            "StateGraph",
+            settings=Settings(
+                EMBEDDING_API_KEY="test",
+                EMBEDDING_MODEL="embedding-model",
+                TRANSPORT_RETRY_MAX_ATTEMPTS=2,
+                TRANSPORT_RETRY_INITIAL_DELAY_SECONDS=0,
+                TRANSPORT_RETRY_MAX_DELAY_SECONDS=0,
+                TRANSPORT_RETRY_JITTER_RATIO=0,
+            ),
+        )
 
     assert result == [1.0, 2.0]
     assert embeddings.calls == 2
+    usage = collector.snapshot()
+    assert len(usage) == 1
+    assert usage[0].operation == "embedding.create"
+    assert usage[0].dependency == "embedding"
+    assert usage[0].attempts == 2
+    assert usage[0].retries == 1
+    assert usage[0].outcome == "succeeded"
+    assert "private embedding endpoint" not in str(usage[0].to_payload())
 
 
 def test_embedding_client_disables_sdk_level_retries(monkeypatch):

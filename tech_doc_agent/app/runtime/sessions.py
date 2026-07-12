@@ -214,6 +214,7 @@ class SessionQueryService:
             "budget_status": read.values.get("budget_status"),
             "budget_termination": read.values.get("budget_termination") or None,
             "context_metrics": read.values.get("context_metrics"),
+            "provider_retry_usage": read.values.get("provider_retry_usage"),
         }
 
     async def aget_session_state(

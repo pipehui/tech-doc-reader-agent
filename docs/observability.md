@@ -40,6 +40,7 @@ TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
 - `token`
 - `agent_message`
 - `structured_result`
+- `provider_retry_update`
 - `tool_call`
 - `tool_result`
 - `interrupt_required`
@@ -48,6 +49,8 @@ TELEMETRY_PSEUDONYM_KEY=replace_with_a_random_secret_of_at_least_16_bytes
 - `error`
 
 SSE 事件既用于 UI 展示，也用于 eval runner 和 concurrency benchmark。
+
+`provider_retry_update` 把 embedding/web transport retry 从瞬时 `retry.final` 日志提升为 checkpoint、REST、SSE 和 online eval 共用的版本化事实。一次逻辑 operation 与真实 provider attempts 分开统计；成功但经过 retry 的 operation 计入 `recovered_operations`，重试耗尽计入 `exhausted_operations`。该账本不保存原始异常文本，也不与 LLM/tool 执行预算混算。
 
 ## Langfuse
 

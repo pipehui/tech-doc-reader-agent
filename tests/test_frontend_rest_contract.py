@@ -25,6 +25,7 @@ EXPECTED_FIELDS = {
         "budget_status",
         "budget_termination",
         "context_metrics",
+        "provider_retry_usage",
     },
     HistoryViewResponse: {
         "session_id",

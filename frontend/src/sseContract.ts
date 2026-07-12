@@ -9,6 +9,7 @@ export const SSE_EVENT_TYPES = [
   "budget_started",
   "budget_terminated",
   "context_metrics_update",
+  "provider_retry_update",
   "tool_call",
   "tool_result",
   "guardrail_blocked",

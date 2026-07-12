@@ -3,6 +3,7 @@ import json
 import pytest
 
 from tech_doc_agent.app.core.errors import DependencyUnavailable, RateLimited, ValidationError
+from tech_doc_agent.app.core.retry_usage import capture_retry_usage
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.services.vectordb import web_search_backend
 from tech_doc_agent.app.services.vectordb.web_search_backend import WebSearchBackend
@@ -78,7 +79,8 @@ def test_web_search_falls_back_after_typed_tavily_failure(tmp_path, monkeypatch)
     )
 
     backend = _backend(tmp_path)
-    results = backend.search("StateGraph")
+    with capture_retry_usage() as collector:
+        results = backend.search("StateGraph")
 
     assert [result["provider"] for result in results] == ["duckduckgo"]
     assert FailingTavilyClient.calls == 3
@@ -88,6 +90,15 @@ def test_web_search_falls_back_after_typed_tavily_failure(tmp_path, monkeypatch)
     assert events[0][1]["error_code"] == "rate_limited"
     assert events[0][1]["retryable"] is True
     assert "tavily-key" not in str(events)
+    usages = collector.snapshot()
+    assert [usage.operation for usage in usages] == [
+        "web_search.tavily",
+        "web_search.duckduckgo",
+    ]
+    assert [usage.outcome for usage in usages] == ["exhausted", "succeeded"]
+    assert [usage.attempts for usage in usages] == [3, 1]
+    assert [usage.retries for usage in usages] == [2, 0]
+    assert "tavily-key" not in str([usage.to_payload() for usage in usages])
 
 
 def test_individual_provider_exposes_typed_safe_error_instead_of_empty_results(tmp_path, monkeypatch):

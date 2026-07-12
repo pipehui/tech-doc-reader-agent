@@ -41,4 +41,6 @@ class State(TypedDict):
     budget_termination: NotRequired[dict[str, Any]]
     context_metrics: NotRequired[dict[str, Any]]
     context_metrics_delta: NotRequired[dict[str, Any]]
+    provider_retry_usage: NotRequired[dict[str, Any]]
+    provider_retry_usage_delta: NotRequired[dict[str, Any]]
     conversation_summary: NotRequired[dict[str, Any]]

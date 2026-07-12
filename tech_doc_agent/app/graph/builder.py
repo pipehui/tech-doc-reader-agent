@@ -19,6 +19,10 @@ from .budgeting import (
 )
 from .budget_termination import create_budget_termination_node
 from .context_metrics import ContextMetricsTracker, context_metrics_request_start_node
+from .provider_retries import (
+    ProviderRetryUsageTracker,
+    provider_retry_usage_request_start_node,
+)
 from .reflection import route_after_tool_result
 from .routing import (
     NEXT_STEP_ROUTE_MAP,
@@ -42,6 +46,7 @@ def _register_tool_node(
     tools: tuple,
     execution_policy: ExecutionPolicy,
     budget_tracker: WorkflowBudgetTracker,
+    provider_retry_tracker: ProviderRetryUsageTracker,
     continue_node: str,
     terminate_node: str,
 ) -> None:
@@ -52,6 +57,7 @@ def _register_tool_node(
             execution_policy.tools,
             execution_policy.reflection,
             budget_tracker,
+            provider_retry_tracker,
         ),
     )
     builder.add_conditional_edges(
@@ -71,6 +77,7 @@ def register_subagent(
     execution_policy: ExecutionPolicy,
     budget_tracker: WorkflowBudgetTracker,
     context_tracker: ContextMetricsTracker,
+    provider_retry_tracker: ProviderRetryUsageTracker,
 ) -> None:
     builder.add_node(spec.entry_node, create_entry_node(spec.display_name, spec.key))
     builder.add_node(
@@ -91,6 +98,7 @@ def register_subagent(
             tools=spec.tools.safe,
             execution_policy=execution_policy,
             budget_tracker=budget_tracker,
+            provider_retry_tracker=provider_retry_tracker,
             continue_node=spec.key,
             terminate_node=spec.leave_node,
         )
@@ -102,6 +110,7 @@ def register_subagent(
             tools=spec.tools.sensitive,
             execution_policy=execution_policy,
             budget_tracker=budget_tracker,
+            provider_retry_tracker=provider_retry_tracker,
             continue_node=spec.key,
             terminate_node=spec.leave_node,
         )
@@ -139,12 +148,14 @@ def create_graph_builder(spec: GraphSpec) -> GraphBuilder:
     builder.add_edge("budget_terminated", END)
     builder.add_node(
         "fetch_user_info",
-        budgeted_request_start_node(
-            context_metrics_request_start_node(
-                spec.user_info_node,
-                spec.context_tracker,
+        provider_retry_usage_request_start_node(
+            budgeted_request_start_node(
+                context_metrics_request_start_node(
+                    spec.user_info_node,
+                    spec.context_tracker,
+                ),
+                spec.budget_tracker,
             ),
-            spec.budget_tracker,
         ),
     )
     builder.add_edge(START, "fetch_user_info")
@@ -158,6 +169,7 @@ def create_graph_builder(spec: GraphSpec) -> GraphBuilder:
             spec.execution_policy,
             spec.budget_tracker,
             spec.context_tracker,
+            spec.provider_retry_tracker,
         )
 
     builder.add_node(
@@ -174,6 +186,7 @@ def create_graph_builder(spec: GraphSpec) -> GraphBuilder:
         tools=spec.primary.tools.safe,
         execution_policy=spec.execution_policy,
         budget_tracker=spec.budget_tracker,
+        provider_retry_tracker=spec.provider_retry_tracker,
         continue_node="primary_assistant",
         terminate_node="primary_tool_failure",
     )
@@ -183,6 +196,7 @@ def create_graph_builder(spec: GraphSpec) -> GraphBuilder:
         tools=spec.primary.tools.sensitive,
         execution_policy=spec.execution_policy,
         budget_tracker=spec.budget_tracker,
+        provider_retry_tracker=spec.provider_retry_tracker,
         continue_node="primary_assistant",
         terminate_node="primary_tool_failure",
     )

@@ -60,6 +60,11 @@ export interface SsePayloadMap {
     delta: Record<string, unknown>;
     metrics: Record<string, unknown>;
   }>;
+  provider_retry_update: Payload<{
+    node: string;
+    delta: Record<string, unknown>;
+    usage: Record<string, unknown>;
+  }>;
   tool_call: Payload<{
     agent: string;
     node: string;
@@ -178,6 +183,11 @@ const DECODERS: {
     delta: requiredObject("context_metrics_update", data, "delta"),
     metrics: requiredObject("context_metrics_update", data, "metrics")
   }),
+  provider_retry_update: (data) => withData(data, {
+    node: requiredString("provider_retry_update", data, "node"),
+    delta: requiredObject("provider_retry_update", data, "delta"),
+    usage: requiredObject("provider_retry_update", data, "usage")
+  }),
   tool_call: (data) => withData(data, {
     agent: requiredString("tool_call", data, "agent"),
     node: requiredString("tool_call", data, "node"),
@@ -268,7 +278,8 @@ function decodeSessionSnapshot(data: SsePayload): SsePayloadMap["session_snapsho
     budget_usage: state.budget_usage,
     budget_status: state.budget_status,
     budget_termination: state.budget_termination,
-    context_metrics: state.context_metrics
+    context_metrics: state.context_metrics,
+    provider_retry_usage: state.provider_retry_usage
   });
 }
 
