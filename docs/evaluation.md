@@ -4,6 +4,47 @@
 
 所有 runner 的 judge/统计在内存中使用原始 case 和结果；写入 JSONL/Markdown、打印动态 query/error/recent payload 时统一使用 `evals/artifacts.py` 脱敏。这样 adversarial case 的评分语义不变，artifact 不保留 Authorization、API key、JWT、常见邮箱/手机号等原文。若配置 `TELEMETRY_PSEUDONYM_KEY`，JSONL 中的 `user_id` 使用与日志/Langfuse 相同的 keyed pseudonym。
 
+## 可复现验证矩阵
+
+Windows 本地环境先执行：
+
+```powershell
+conda activate agent
+$env:PYTHONUTF8="1"
+```
+
+| 范围 | 命令 | Redis/模型密钥 | 额外前置条件 |
+|---|---|---|---|
+| Backend unit/component/architecture | `python -m pytest -q` | 不需要 | 已安装 `requirements.txt` |
+| Backend lint | `python -m ruff check .` | 不需要 | 无 |
+| Backend type gate | `python -m mypy tech_doc_agent/app evals` | 不需要 | 无 |
+| Context-compaction offline | `python -m evals.run_context_compaction_eval --iterations 10 --output eval_results/context_compaction_latest.jsonl --report eval_reports/context_compaction_latest.md --manifest eval_results/context_compaction_latest.manifest.json` | 不需要 | 无 |
+| Retrieval BM25 diagnostic | `python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode bm25 --k 5 --output eval_results/retrieval_bm25.jsonl --report eval_reports/retrieval_bm25.md --manifest eval_results/retrieval_bm25.manifest.json` | 不需要 | 必须有版本化非空 corpus 才能解释质量 |
+| Retrieval vector/hybrid | 见下文 Retrieval Eval | embedding provider 需要 | 版本化非空 corpus、可验证 manifest |
+| Quick/full agent eval | 见下文 Agent Eval | 需要 chat/provider 配置 | Redis、运行中的 API、受信 runtime identity |
+| Concurrency smoke | 见下文 Concurrency Smoke | 需要 chat/provider 配置 | Redis、运行中的 API |
+| Frontend unit/type/build/audit | 在 `frontend/` 依次运行 `npm test`、`npm run check`、`npm run build`、`npm audit` | 不需要 | 先执行 `npm ci` |
+
+`eval_results/` 与 `eval_reports/` 受 `.gitignore` 保护。它们适合保存本地诊断；需要作为共享 baseline 时，必须把脱敏 results、manifest、policy/threshold 和说明一起放入 versioned baseline 目录，不能只复制 Markdown 指标。
+
+### 2026-07-12 无密钥本地 baseline
+
+以下结果对应 clean commit `f6e0f6bfda829b55c91b34f35250d2010ed8eb60`；两个 offline manifest 均记录 `runner_git.dirty=false`：
+
+| 检查 | 结果 | 可解释范围 |
+|---|---|---|
+| Backend pytest | 717 passed，4 warnings | unit/component/architecture 回归 |
+| Ruff | passed | 全仓静态 lint |
+| Mypy | 162 source files，0 issues | app + evals typed gate |
+| Frontend Vitest | 20 files / 85 tests passed | reducer/component/integration |
+| Frontend TypeScript/build/audit | passed；2042 modules；0 vulnerabilities | 类型、production bundle、依赖审计 |
+| Context compaction offline | 6/6 done；answer consistency 0.83；checkpoint reduction 62.8% | deterministic marker/token proxy，不是 provider 质量 |
+| BM25 retrieval diagnostic | 60/60 done，0 errors；Recall/MRR/coverage 全 0 | documents=0、chunks=0、vector index absent，因此不是质量 baseline |
+
+本次 BM25 manifest 的 corpus fingerprint 为 `f1551a21a1f95631e1c262a96533fda66a6da53e5e2c9f2a7979576677a7df1e`，明确记录 0 documents / 0 chunks。全 0 证明 runner 能在空库上完成并产出身份，而不是证明 BM25 质量退化。准备真实、可版本化 corpus 前，不运行 vector/hybrid 对比，也不为 retrieval 设置虚构阈值。
+
+Quick/full agent eval 和 concurrency smoke 本批未执行：它们依赖运行中的 Redis/API、真实 provider 配置与可验证 deployment identity。缺少这些前置条件应记录为 `not_run`，不能用 unit/offline 通过替代 online 质量结论。
+
 ## Agent Eval
 
 快速 baseline：
@@ -39,7 +80,7 @@ Online runner 会累计 SSE `provider_retry_update` 的 `operations` delta，并
 | `multi_agent_standard` | 10 | 标准 `parser -> relation -> explanation` 学习链路 |
 | `boundary_refusal` | 5 | 系统提示词、密钥、假写入、绕过审批、内部状态泄露等边界行为 |
 
-当前 full agent eval（2026-04-30）：
+历史 full agent eval（2026-04-30；当前 checkout 未跟踪 companion manifest，因此不可直接作为当前回归 baseline）：
 
 | Cases | Done | Error | Plan Match | Keyword | Behavior | E2E p50 | E2E p95 | Tool Results Avg | Structured Results Avg | Interrupts |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -75,7 +116,7 @@ python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mod
 python -m evals.run_retrieval_eval --cases evals/retrieval_cases_full.json --mode hybrid --k 5 --output eval_results/retrieval_hybrid.jsonl --report eval_reports/retrieval_hybrid.md --manifest eval_results/retrieval_hybrid.manifest.json
 ```
 
-当前 full retrieval eval（2026-04-29，60 cases，Top K=5）：
+历史 full retrieval eval（2026-04-29，60 cases，Top K=5；当前 checkout 未跟踪可重验 corpus manifest，仅作历史参考）：
 
 | Mode | Recall@5 | Hit@1 | MRR | Keyword Coverage | E2E p50 | E2E p95 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -89,7 +130,7 @@ Metadata filter eval：
 python -m evals.run_retrieval_eval --cases evals/retrieval_filter_cases.json --mode hybrid --k 5 --output eval_results/retrieval_filter.jsonl --report eval_reports/retrieval_filter.md --manifest eval_results/retrieval_filter.manifest.json
 ```
 
-当前 metadata filter eval（2026-04-29，8 filtered-confusable cases，Top K=5）：
+历史 metadata filter eval（2026-04-29，8 filtered-confusable cases，Top K=5；同样缺 companion manifest）：
 
 | Mode | Recall@5 | Hit@1 | MRR | Keyword Coverage | E2E p50 | E2E p95 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -183,7 +224,7 @@ runner 会对同一 synthetic 长会话分别构建 compaction off/on 状态，�
 python scripts/benchmark_latency.py --runs 1 --concurrency 10 --timeout 240 --output eval_results/bench_c10.jsonl
 ```
 
-当前 async SSE concurrency smoke（2026-04-30，11 enabled cases，10 并发）：
+历史 async SSE concurrency smoke（2026-04-30，11 enabled cases，10 并发；当前 checkout 无 companion artifact）：
 
 | Concurrency | Valid | Error Rate | Final Interrupted | Auto-Rejected Interrupts | TTFT p50 | TTFT p95 | E2E p50 | E2E p95 | Tool Events Avg |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|

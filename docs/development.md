@@ -2,15 +2,18 @@
 
 ## Quality Gates
 
-当前 CI 覆盖后端 lint、基础类型检查、pytest，以及前端类型检查、Vitest 单元测试、生产构建和 FastAPI dist/asset smoke：
+当前 CI 覆盖后端 lint、app/evals 类型检查、pytest 与 deterministic context-compaction regression gate，以及前端类型检查、Vitest 单元测试、生产构建和 FastAPI dist/asset smoke。本地完整检查：
 
 ```bash
-python -m ruff check tech_doc_agent tests evals
+python -m ruff check .
 python -m mypy tech_doc_agent/app evals
-python -m pytest
-cd frontend && npm run check && npm run test && npm run build
+python -m pytest -q
+cd frontend && npm test && npm run check && npm run build && npm audit
+cd ..
 python -m pytest tests/test_frontend_static.py -q
 ```
+
+Windows 已有环境使用 `conda activate agent`；若终端输出遇到 GBK 编码问题，可先设置 `$env:PYTHONUTF8="1"`。Agent/retrieval/context-compaction/concurrency 的可复现命令、密钥/corpus 前置条件和当前无密钥 baseline 见 [evaluation.md](evaluation.md)。`npm audit` 当前是本地显式检查，尚未配置为 CI blocking job。
 
 全量 pytest 同时执行递归 architecture dependency contracts。门禁基于 AST，不会启动模型、Redis 或应用资源；新增 app package/import 时无需维护手写文件清单，但若跨越稳定层级会报告具体相对路径、行号和目标 module。`bootstrap.py`/`composition.py` 是唯一明确的具体组装豁免点，不应通过在普通模块增加 allowlist 绕过依赖方向。
 
@@ -159,16 +162,18 @@ FAISS 文档库使用 generation snapshot。`faiss_store/current.json` 只会在
 ```text
 tech_doc_agent/
   app/
-    api/           FastAPI routes, SSE protocol and schemas
+    api/           request facades, delivery workflows, SSE protocol and schemas
+    agents/        role definitions, prompts, model factory and execution identity
+    application/   commands, ports, use cases and transaction boundaries
     composition.py explicit tools, models, assistants and graph wiring
     core/          settings, tenant, observability, guardrails
-    graph/         dependency-free graph specs, nodes, routing and builder
-    runtime/       lifecycle, execution, approvals and session queries
+    graph/         orchestration specs, execution nodes, routing and policies
+    infrastructure/
+      persistence/ JSON/Redis/generation repositories and stores
+      retrieval/   FAISS, embedding, BM25/vector/RRF and web provider adapters
+    runtime/       lifecycle, graph execution, projections and session queries
     tools/         dependency-bound document, learning and profile tools
-    services/
-      assistants/ prompts, model factory and assistant registry
-      retrieval/  hybrid retrieval and metadata helpers
-      vectordb/   FAISS, learning, memory and web-search stores
+    services/      controlled retrieval/user-profile compatibility facades only
   data/           runtime data
 docs/
 frontend/

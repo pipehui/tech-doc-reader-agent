@@ -21,7 +21,11 @@
 
 ## Results
 
-当前 full agent eval（2026-04-30，25 cases，覆盖 direct、学习状态读取、examination、multi-agent 标准链路和 boundary/refusal）：
+2026-07-12 在 clean commit `f6e0f6bfda829b55c91b34f35250d2010ed8eb60` 上完成的无密钥回归：backend `717 passed`，Ruff passed，mypy `162` 个源文件零问题；frontend `20` files / `85` tests、production build `2042` modules、`npm audit` 0 vulnerabilities。Deterministic context-compaction 为 6/6 done、answer consistency 0.83；BM25 runner 在 0 documents / 0 chunks 的空 corpus 上 60/60 完成但指标全 0，只是 diagnostic，不是质量 baseline。可复现命令和前置条件见 [docs/evaluation.md](docs/evaluation.md)。
+
+以下 2026-04-29/30 表格没有 companion manifest/artifact 跟随当前 checkout，保留为历史参考，不能与当前代码直接做 regression attribution。
+
+历史 full agent eval（2026-04-30，25 cases，覆盖 direct、学习状态读取、examination、multi-agent 标准链路和 boundary/refusal）：
 
 | Cases | Done | Error | Plan Match | Keyword | Behavior | Tool Results Avg | Structured Results Avg | Interrupts |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -37,7 +41,7 @@
 
 `multi_agent_standard` 是研读模式而不是聊天模式：典型链路会完成 6-10 次本地/Web 工具结果、parser/relation 结构化输出，以及 explanation 的最终长文生成。后续优化重点是 parser 与 relation 可并行部分、结构化结果流式渲染，以及按 `learning_target` 缓存 parser result。
 
-当前 full retrieval eval（2026-04-29，60 cases，Top K=5）：
+历史 full retrieval eval（2026-04-29，60 cases，Top K=5）：
 
 | Mode | Recall@5 | Hit@1 | MRR | Keyword Coverage | E2E p50 | E2E p95 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -45,7 +49,7 @@
 | Vector-only | 0.88 | 0.52 | 0.65 | 0.97 | 0.927s | 1.609s |
 | Hybrid | 0.93 | 0.53 | 0.70 | 0.98 | 1.209s | 2.148s |
 
-当前 async SSE concurrency smoke（2026-04-30，11 enabled cases，10 并发，自动拒绝 HITL 写入审批）：
+历史 async SSE concurrency smoke（2026-04-30，11 enabled cases，10 并发，自动拒绝 HITL 写入审批）：
 
 | Concurrency | Valid | Error Rate | Final Interrupted | Auto-Rejected Interrupts | TTFT p50 | TTFT p95 | E2E p50 | E2E p95 | Tool Events Avg |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
