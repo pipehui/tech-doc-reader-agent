@@ -30,6 +30,8 @@ tech_doc_agent
 │   │   ├── prompts
 │   │   └── registry.py
 │   ├── application
+│   │   ├── approval_models.py
+│   │   ├── approval_service.py
 │   │   ├── conversation_summarizer.py
 │   │   ├── input_guardrails.py
 │   │   ├── learning_commands.py
@@ -67,6 +69,7 @@ tech_doc_agent
 │   │       ├── fusion.py
 │   │       └── web_search.py
 │   ├── runtime
+│   │   ├── approval_projection.py
 │   │   ├── chat_runtime.py
 │   │   ├── approvals.py
 │   │   ├── config.py
@@ -115,7 +118,7 @@ Learning application slice 按变化轴拆分：`learning_commands.py` 拥有 up
 
 ### `app/runtime`
 
-运行时内聚组件：`config.py` 构造 tenant-scoped LangGraph config，`serialization.py` 负责消息 API 投影，`sessions.py` 读取 checkpoint 并形成 history/state view，`execution.py` 统一 send/resume 与 sync/async bridge，`approvals.py` 定义审批用例和 repository port，`telemetry.py` 统一 operation 日志，`lifecycle.py` 管理 resources/checkpointer/graph 的 start/retry/close。组件通过窄接口获取具体实现，不反向依赖 API。
+运行时内聚组件：`config.py` 构造 tenant-scoped LangGraph config，`serialization.py` 负责消息 API 投影，`sessions.py` 读取 checkpoint 并形成 history/state view，`execution.py` 统一 send/resume 与 sync/async bridge，`approval_projection.py` 只把拒绝的 guardrail approval 投影为 LangGraph `AIMessage` update，`telemetry.py` 统一 operation 日志，`lifecycle.py` 管理 resources/checkpointer/graph 的 start/retry/close。审批 request/repository 用例位于 `application/approval_service.py`；`runtime/approvals.py` 仅保留旧 import path 与 `rejection_part()` 的 compatibility wrapper，production runtime 不经过它。
 
 ### `app/runtime/chat_runtime.py`
 

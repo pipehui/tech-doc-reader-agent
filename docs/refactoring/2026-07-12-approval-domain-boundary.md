@@ -142,3 +142,5 @@ LangChain message annotation 错误；审批四个改动文件本身无错误。
 D7 的四类 domain model 主路径已完成。仍未完成的同组工作包括：versioned migration CLI 的 dry-run/backup/summary 与
 幂等重跑、JSON/未来 SQLite/其他 adapter 共用的 repository contract suite、processed command/profile/approval
 retention 和备份策略，以及评估 learning/memory/profile/runtime compatibility facade 的正式弃用窗口。
+
+后续同日批次把本日志仍共置在 runtime 的 ApprovalService repository 用例与 `AIMessage` rejection projection 分开；`runtime.approvals` 现在只保留兼容 wrapper。见 [2026-07-12-approval-service-application-boundary.md](2026-07-12-approval-service-application-boundary.md)。

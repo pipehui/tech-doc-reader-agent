@@ -8,11 +8,12 @@ from typing import Any, Protocol
 from langchain_core.messages import ToolMessage
 from langgraph.types import StateSnapshot
 
+from tech_doc_agent.app.application.approval_service import ApprovalService
 from tech_doc_agent.app.core.errors import PermissionDenied
 from tech_doc_agent.app.core.langfuse_tracing import flush_langfuse
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant
-from tech_doc_agent.app.runtime.approvals import ApprovalService
+from tech_doc_agent.app.runtime.approval_projection import guardrail_rejection_part
 from tech_doc_agent.app.runtime.sessions import GraphProvider, SessionConfigBuilder, SessionQueryService
 from tech_doc_agent.app.runtime.telemetry import OperationTrace, RuntimeOperationTelemetry
 
@@ -261,7 +262,7 @@ class GraphExecutionService:
                         request_started_monotonic=request_started_monotonic,
                     )
                 else:
-                    yield self.approvals.rejection_part(pending_guardrail, feedback)
+                    yield guardrail_rejection_part(pending_guardrail, feedback)
                 return
 
             snapshot = self.session_queries.get_snapshot(

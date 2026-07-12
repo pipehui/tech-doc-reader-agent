@@ -123,3 +123,5 @@ api / CLI -> services.ChatRuntime facade
 | 全量 pytest | 181 passed，3 个第三方 deprecation warnings |
 | 全量 Ruff | passed |
 | frontend production build | passed，2013 modules transformed |
+
+后续 2026-07-12 批次进一步把 ApprovalService 的 repository/tenant/telemetry 用例归位 application，并将 `AIMessage` rejection update 提取为 runtime projection；本日志保留的是首次从 ChatRuntime 拆出 service 时的阶段事实。见 [2026-07-12-approval-service-application-boundary.md](2026-07-12-approval-service-application-boundary.md)。

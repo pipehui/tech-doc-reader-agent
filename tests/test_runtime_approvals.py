@@ -1,11 +1,12 @@
 from contextlib import nullcontext
 
+from tech_doc_agent.app.application.approval_service import ApprovalService
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import TenantContext
 from tech_doc_agent.app.infrastructure.persistence.in_memory_approval_repository import (
     InMemoryApprovalRepository,
 )
-from tech_doc_agent.app.runtime.approvals import ApprovalService
+from tech_doc_agent.app.runtime.approvals import ApprovalService as RuntimeApprovalService
 from tech_doc_agent.app.runtime.telemetry import RuntimeOperationTelemetry
 from tests.fakes.chat_runtime import build_test_chat_runtime
 
@@ -67,6 +68,29 @@ def test_approval_service_isolates_tenants_and_resolves_once():
         "guardrail.approval.requested",
         "guardrail.approval.requested",
     ]
+
+
+def test_runtime_approval_service_compatibility_wrapper_preserves_rejection_part():
+    service = RuntimeApprovalService(
+        InMemoryApprovalRepository(),
+        event_logger=lambda *args, **kwargs: None,
+    )
+    pending = service.request_guardrail_approval(
+        "session-compat",
+        "message",
+        source="chat.message",
+        risk_level="medium",
+        findings=["rule"],
+        user_id="user-a",
+        namespace="docs",
+    )
+
+    stream_type, update = service.rejection_part(pending, "not now")
+
+    message = update["guardrail"]["messages"][0]
+    assert stream_type == "updates"
+    assert message.name == "guardrail"
+    assert "not now" in message.content
 
 
 def test_chat_runtime_accepts_an_injected_approval_repository():

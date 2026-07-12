@@ -121,6 +121,8 @@ replace-in-place 状态外，不启用自动数据 pruning。
 
 `runtime/chat_runtime.py` 是 API/CLI 共用 facade，只依赖 application/core/runtime ports。生产所需的 Redis approval repository、RedisSaver、resource factory、graph builder 与 prompt/model identity builder 由 `bootstrap.py` 显式注入；runtime 模块本身没有具体 adapter fallback。
 
+Guardrail approval 的 repository use case 位于 `application/approval_service.py`：tenant key、request/get/has/pop 与 requested/resolved telemetry 不依赖 LangChain 或 runtime。`runtime/approval_projection.py` 单独拥有拒绝时的 `AIMessage` graph update；`GraphExecutionService` 组合二者完成 resume。`runtime/approvals.py` 只为历史 import 和 `rejection_part()` 保留 compatibility wrapper，ChatRuntime 与 execution 主路径都直接依赖新所有者。
+
 Scoped task view 的实现位于 `graph/message_scope.py`。它读取 graph state 并决定 Agent prompt 可见消息，属于 graph orchestration policy，不再由 `services` 反向提供给 graph。
 
 Assistant invocation 模板位于 `graph/assistant_execution.py`：构造 scoped/full state、记录 context snapshot、在每次 LLM attempt 前检查 budget、合并 usage/context delta，并在无 tool output 后完成 reflection state。`graph/nodes.py` 只保留 user-info/entry/exit/finish/failure/plan lifecycle factories；builder 分别从两个模块组装，节点名与 topology 不变。

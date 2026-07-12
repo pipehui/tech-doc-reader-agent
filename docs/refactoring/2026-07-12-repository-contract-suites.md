@@ -156,3 +156,5 @@ InMemory 与 production Redis composition、tenant isolation、generation/latest
 D7 现在只剩 retention/删除/备份策略。Contract suite 不等于已经实现 SQLite；它为未来 adapter 提供可执行验收入口。
 当 SQLite 出现时还需增加 transaction/concurrency/durability-specific tests，不能只继承共享 happy-path contract 就宣称
 生产可用。
+
+后续同日批次已完成本日志指出的职责分离：Approval repository use case 位于 application，LangGraph rejection projection 位于 runtime；repository contract 与 Redis adapter 行为不变。见 [2026-07-12-approval-service-application-boundary.md](2026-07-12-approval-service-application-boundary.md)。

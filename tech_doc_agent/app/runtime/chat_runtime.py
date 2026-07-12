@@ -6,13 +6,11 @@ from tech_doc_agent.app.application.approval_models import (
     ApprovalRepository,
     GuardrailApprovalRequest,
 )
+from tech_doc_agent.app.application.approval_service import ApprovalService
 from tech_doc_agent.app.core.errors import safe_error_fields
 from tech_doc_agent.app.core.langfuse_tracing import shutdown_langfuse
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.runtime.approvals import (
-    ApprovalService,
-)
 from tech_doc_agent.app.runtime.config import SessionConfigFactory
 from tech_doc_agent.app.runtime.execution import GraphExecutionService
 from tech_doc_agent.app.runtime.identity import (

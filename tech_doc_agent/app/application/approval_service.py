@@ -1,0 +1,105 @@
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from tech_doc_agent.app.application.approval_models import (
+    ApprovalRepository,
+    GuardrailApprovalRequest,
+)
+from tech_doc_agent.app.core.observability import log_event
+from tech_doc_agent.app.core.tenant import TenantContext, parse_tenant, tenant_thread_id
+
+
+@dataclass(slots=True)
+class ApprovalService:
+    repository: ApprovalRepository
+    event_logger: Callable[..., None] = log_event
+
+    def _key(self, session_id: str, tenant: TenantContext) -> str:
+        return tenant_thread_id(session_id, tenant)
+
+    def request_guardrail_approval(
+        self,
+        session_id: str,
+        user_input: str,
+        *,
+        source: str,
+        risk_level: str,
+        findings: list[str] | tuple[str, ...],
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> GuardrailApprovalRequest:
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
+        request = GuardrailApprovalRequest.create(
+            session_id=session_id,
+            user_input=user_input,
+            tenant=tenant,
+            source=source,
+            risk_level=risk_level,
+            findings=findings,
+        )
+        self.repository.put(self._key(session_id, tenant), request)
+        self.event_logger(
+            "guardrail.approval.requested",
+            session_id=session_id,
+            user_id=tenant.user_id,
+            namespace=tenant.namespace,
+            source=source,
+            risk_level=risk_level,
+            findings=list(findings),
+        )
+        return request
+
+    def get_pending_guardrail_approval(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> GuardrailApprovalRequest | None:
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
+        return self.repository.get(self._key(session_id, tenant))
+
+    def has_pending_guardrail_approval(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> bool:
+        return (
+            self.get_pending_guardrail_approval(
+                session_id,
+                user_id=user_id,
+                namespace=namespace,
+            )
+            is not None
+        )
+
+    def pop_pending_guardrail_approval(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        namespace: str | None = None,
+    ) -> GuardrailApprovalRequest | None:
+        tenant = parse_tenant(user_id, namespace, prefer_context=True)
+        return self.repository.pop(self._key(session_id, tenant))
+
+    def log_resolved(
+        self,
+        pending: GuardrailApprovalRequest,
+        *,
+        approved: bool,
+        feedback: str,
+    ) -> None:
+        self.event_logger(
+            "guardrail.approval.resolved",
+            session_id=pending.session_id,
+            user_id=pending.user_id,
+            namespace=pending.namespace,
+            source=pending.source,
+            risk_level=pending.risk_level,
+            findings=list(pending.findings),
+            approved=approved,
+            feedback_length=len(feedback),
+        )
+
+
+__all__ = ["ApprovalService"]

@@ -352,6 +352,16 @@ def test_profile_domain_and_service_stay_typed_until_delivery_serialization():
 
 def test_approval_domain_does_not_live_under_runtime_or_leak_into_redis_adapter():
     runtime_source = (RUNTIME_DIR / "approvals.py").read_text(encoding="utf-8")
+    service_source = (APPLICATION_DIR / "approval_service.py").read_text(
+        encoding="utf-8"
+    )
+    projection_source = (RUNTIME_DIR / "approval_projection.py").read_text(
+        encoding="utf-8"
+    )
+    execution_source = (RUNTIME_DIR / "execution.py").read_text(encoding="utf-8")
+    chat_runtime_source = (RUNTIME_DIR / "chat_runtime.py").read_text(
+        encoding="utf-8"
+    )
     repository_source = (
         APP_DIR / "infrastructure" / "persistence" / "approval_repository.py"
     ).read_text(encoding="utf-8")
@@ -365,6 +375,17 @@ def test_approval_domain_does_not_live_under_runtime_or_leak_into_redis_adapter(
     assert "class GuardrailApprovalRequest" not in runtime_source
     assert "class ApprovalRepository(Protocol)" not in runtime_source
     assert "class InMemoryApprovalRepository" not in runtime_source
+    assert "def request_guardrail_approval" not in runtime_source
+    assert "class ApprovalService:" in service_source
+    assert "AIMessage" not in service_source
+    assert "langchain_core" not in service_source
+    assert "def guardrail_rejection_part(" in projection_source
+    assert "AIMessage" in projection_source
+    assert "application.approval_service import ApprovalService" in execution_source
+    assert "runtime.approval_projection import guardrail_rejection_part" in execution_source
+    assert "application.approval_service import ApprovalService" in chat_runtime_source
+    assert "runtime.approvals" not in execution_source
+    assert "runtime.approvals" not in chat_runtime_source
     assert "tech_doc_agent.app.application.approval_models" in repository_source
     assert "tech_doc_agent.app.runtime" not in repository_source
     assert "tech_doc_agent.app.application.approval_models" in in_memory_source

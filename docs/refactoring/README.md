@@ -88,6 +88,7 @@
 | 2026-07-12 | Phase 4：Chat request、guardrail decision 与 delivery 边界 | route 收敛为 80 行 facade，布尔 guardrail 旁路删除 | [2026-07-12-chat-delivery-boundary.md](2026-07-12-chat-delivery-boundary.md) |
 | 2026-07-12 | Phase 4：Learning command、ports、UoW 与 service 边界 | 厚 application module 拆为四个事实源，仓内调用方窄依赖 | [2026-07-12-learning-application-boundaries.md](2026-07-12-learning-application-boundaries.md) |
 | 2026-07-12 | Phase 4：Profile ports 与 service 边界 | ports 唯一定义迁出 service，旧 type import 受控兼容 | [2026-07-12-profile-application-ports.md](2026-07-12-profile-application-ports.md) |
+| 2026-07-12 | Phase 4：Approval application service 与 runtime projection 边界 | repository 用例向内归位，AIMessage mapping 独立，旧 runtime path 兼容 | [2026-07-12-approval-service-application-boundary.md](2026-07-12-approval-service-application-boundary.md) |
 
 ## 本地任务单策略
 
