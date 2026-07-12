@@ -9,7 +9,7 @@ APPLICATION_DIR = APP_DIR / "application"
 RUNTIME_DIR = APP_DIR / "runtime"
 TOOLS_DIR = APP_DIR / "tools"
 AGENTS_DIR = APP_DIR / "agents"
-RETRIEVAL_DIR = APP_DIR / "services" / "retrieval"
+RETRIEVAL_DIR = APP_DIR / "infrastructure" / "retrieval"
 FORBIDDEN_CORE_DEPENDENCIES = (
     "tech_doc_agent.app.agents",
     "tech_doc_agent.app.api",
@@ -446,6 +446,15 @@ def test_learning_state_stores_are_persistence_adapters_not_vectordb_backends():
     assert "services.vectordb.memory_store" not in source
 
 
+def test_retrieval_implementation_is_infrastructure_with_a_package_facade_only():
+    resource_source = (APP_DIR / "services" / "resources.py").read_text(encoding="utf-8")
+    facade_dir = APP_DIR / "services" / "retrieval"
+
+    assert "infrastructure.retrieval import HybridRetriever" in resource_source
+    assert "services.retrieval import HybridRetriever" not in resource_source
+    assert {path.name for path in facade_dir.glob("*.py")} == {"__init__.py"}
+
+
 def test_ambiguous_tenant_fallback_api_is_removed():
     violations = []
     for path in sorted(APP_DIR.rglob("*.py")):
@@ -457,7 +466,7 @@ def test_ambiguous_tenant_fallback_api_is_removed():
 
 
 def test_retrieval_metadata_helpers_follow_one_way_dependency_direction():
-    package = "tech_doc_agent.app.services.retrieval"
+    package = "tech_doc_agent.app.infrastructure.retrieval"
     assert _dependency_violations(
         RETRIEVAL_DIR,
         (f"{package}.inference", f"{package}.normalization", f"{package}.filters"),
@@ -480,7 +489,7 @@ def test_extracted_retrieval_components_do_not_depend_on_hybrid_or_settings():
         RETRIEVAL_DIR,
         (
             "tech_doc_agent.app.core.settings",
-            "tech_doc_agent.app.services.retrieval.hybrid",
+            "tech_doc_agent.app.infrastructure.retrieval.hybrid",
         ),
         filenames=(
             "bm25.py",

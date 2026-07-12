@@ -3,13 +3,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from tech_doc_agent.app.services.retrieval.inference import infer_category
-from tech_doc_agent.app.services.retrieval.normalization import (
+from .inference import infer_category
+from .normalization import (
     clean_scalar,
     normalize_metadata,
     normalize_tags,
 )
-from tech_doc_agent.app.services.retrieval.taxonomy import (
+from .taxonomy import (
     BROAD_CATEGORY_TAGS,
     CATEGORY_ALIASES,
     UNCATEGORIZED,

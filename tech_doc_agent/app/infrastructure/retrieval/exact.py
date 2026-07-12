@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from tech_doc_agent.app.services.retrieval.models import IndexedDocument, RankedCandidate
+from .models import IndexedDocument, RankedCandidate
 
 
 def rank_exact(

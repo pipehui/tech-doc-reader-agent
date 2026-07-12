@@ -4,9 +4,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from tech_doc_agent.app.application.retrieval import MetadataFilter
-from tech_doc_agent.app.services.retrieval.filters import metadata_matches
-from tech_doc_agent.app.services.retrieval.models import IndexedDocument
-from tech_doc_agent.app.services.retrieval.normalization import normalize_metadata
+from .filters import metadata_matches
+from .models import IndexedDocument
+from .normalization import normalize_metadata
 
 
 def normalize_documents(

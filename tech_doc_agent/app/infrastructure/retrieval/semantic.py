@@ -6,14 +6,14 @@ from typing import Any
 from tech_doc_agent.app.application.retrieval import MetadataFilter
 from tech_doc_agent.app.core.errors import ApplicationError, safe_error_fields
 from tech_doc_agent.app.core.observability import log_event
-from tech_doc_agent.app.services.retrieval.documents import document_key
-from tech_doc_agent.app.services.retrieval.filters import metadata_matches
-from tech_doc_agent.app.services.retrieval.models import (
+from .documents import document_key
+from .filters import metadata_matches
+from .models import (
     IndexedDocument,
     RankedCandidate,
     SemanticSearchPort,
 )
-from tech_doc_agent.app.services.retrieval.normalization import normalize_metadata
+from .normalization import normalize_metadata
 
 
 class SemanticRanker:

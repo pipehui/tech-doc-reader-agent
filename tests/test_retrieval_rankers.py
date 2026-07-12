@@ -1,8 +1,8 @@
 import pytest
 
 from tech_doc_agent.app.core.errors import Timeout
-from tech_doc_agent.app.services.retrieval.models import IndexedDocument
-from tech_doc_agent.app.services.retrieval.semantic import SemanticRanker, semantic_score
+from tech_doc_agent.app.infrastructure.retrieval.models import IndexedDocument
+from tech_doc_agent.app.infrastructure.retrieval.semantic import SemanticRanker, semantic_score
 
 
 class ChunkStore:
@@ -88,7 +88,7 @@ def test_semantic_ranker_preserves_dependency_failure_as_empty_degradation(monke
             )
 
     monkeypatch.setattr(
-        "tech_doc_agent.app.services.retrieval.semantic.log_event",
+        "tech_doc_agent.app.infrastructure.retrieval.semantic.log_event",
         lambda event, **fields: events.append((event, fields)),
     )
 

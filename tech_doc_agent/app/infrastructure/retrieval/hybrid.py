@@ -13,36 +13,36 @@ from tech_doc_agent.app.application.retrieval import (
 )
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.core.settings import Settings, get_settings
-from tech_doc_agent.app.services.retrieval.bm25 import BM25Index
-from tech_doc_agent.app.services.retrieval.documents import (
+from .bm25 import BM25Index
+from .documents import (
     document_key,
     filter_documents,
     metadata_signature,
     normalize_documents,
 )
-from tech_doc_agent.app.services.retrieval.exact import rank_exact
-from tech_doc_agent.app.services.retrieval.filters import normalize_filter
-from tech_doc_agent.app.services.retrieval.formatting import (
+from .exact import rank_exact
+from .filters import normalize_filter
+from .formatting import (
     MATCH_TYPE_ORDER as MATCH_TYPE_ORDER,
     format_result,
 )
-from tech_doc_agent.app.services.retrieval.fusion import (
+from .fusion import (
     best_signal_rank,
     clean_signal_metadata,
     reciprocal_rank_fusion,
 )
-from tech_doc_agent.app.services.retrieval.models import (
+from .models import (
     FusedCandidate as FusedCandidate,
     IndexedDocument,
     RankedCandidate,
     RetrievalStorePort,
 )
-from tech_doc_agent.app.services.retrieval.semantic import (
+from .semantic import (
     SemanticRanker,
     document_for_chunk,
     semantic_score,
 )
-from tech_doc_agent.app.services.retrieval.tokenization import (
+from .tokenization import (
     CAMEL_RE as CAMEL_RE,
     TOKEN_RE as TOKEN_RE,
     is_cjk,

@@ -4,8 +4,8 @@ import math
 from collections import Counter
 from collections.abc import Sequence
 
-from tech_doc_agent.app.services.retrieval.models import IndexedDocument, RankedCandidate
-from tech_doc_agent.app.services.retrieval.tokenization import tokenize
+from .models import IndexedDocument, RankedCandidate
+from .tokenization import tokenize
 
 
 class BM25Index:

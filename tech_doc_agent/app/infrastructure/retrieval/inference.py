@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tech_doc_agent.app.services.retrieval.taxonomy import (
+from .taxonomy import (
     CATEGORY_PREFIXES,
     CATEGORY_RULES,
     UNCATEGORIZED,

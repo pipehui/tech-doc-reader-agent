@@ -3,12 +3,14 @@ from tech_doc_agent.app.application.retrieval import (
     SearchQuery,
     SearchResult,
 )
+from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
 from tech_doc_agent.app.services import retrieval as compatibility_retrieval
 
 
 def test_service_facade_reexports_the_single_application_contract_types():
     assert compatibility_retrieval.SearchQuery is SearchQuery
     assert compatibility_retrieval.SearchResult is SearchResult
+    assert compatibility_retrieval.HybridRetriever is HybridRetriever
 
 
 def test_document_retriever_port_accepts_application_contracts():

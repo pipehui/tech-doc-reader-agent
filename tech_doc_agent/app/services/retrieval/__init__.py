@@ -1,10 +1,12 @@
+"""Compatibility facade for the relocated retrieval implementation."""
+
 from tech_doc_agent.app.application.retrieval import (
     MetadataFilter,
     RetrievalMode,
     SearchQuery,
     SearchResult,
 )
-from tech_doc_agent.app.services.retrieval.hybrid import HybridRetriever
+from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
 
 __all__ = [
     "HybridRetriever",

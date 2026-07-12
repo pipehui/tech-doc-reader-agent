@@ -41,11 +41,16 @@ tech_doc_agent
 │   │   ├── specs.py
 │   │   └── tool_policy.py
 │   ├── infrastructure
-│   │   └── persistence
-│   │       ├── approval_repository.py
-│   │       ├── atomic_json.py
-│   │       ├── learning_store.py
-│   │       └── memory_store.py
+│   │   ├── persistence
+│   │   │   ├── approval_repository.py
+│   │   │   ├── atomic_json.py
+│   │   │   ├── learning_store.py
+│   │   │   └── memory_store.py
+│   │   └── retrieval
+│   │       ├── hybrid.py
+│   │       ├── filters.py
+│   │       ├── semantic.py
+│   │       └── fusion.py
 │   ├── runtime
 │   │   ├── chat_runtime.py
 │   │   ├── approvals.py
@@ -147,11 +152,11 @@ facade 不构造 RedisSaver、repository、resources、graph 或 assistant ident
 - `faiss_store.py`
 - `web_search_backend.py`
 
-### `app/services/retrieval`
+### `app/infrastructure/retrieval`
 
 `HybridRetriever` 保持统一 facade，只负责 mode、cache、settings 和 telemetry。内部按职责拆为 metadata taxonomy/filter/inference/normalization，以及 BM25、semantic、exact、RRF、formatter；ranker 通过 typed candidates 与窄 store ports 协作，可独立测试且不反向依赖 facade。
 
-跨层 contract 不放在实现目录：`app/application/retrieval.py` 定义 `SearchQuery`、`SearchResult` 和 `DocumentRetrieverPort`。tools/eval 依赖该 contract；filter normalization 的所有权只在 retrieval 实现层。`app/services/retrieval` 仅为已有 package facade re-export 同一个类型对象，不复制 model 定义。
+跨层 contract 不放在实现目录：`app/application/retrieval.py` 定义 `SearchQuery`、`SearchResult` 和 `DocumentRetrieverPort`。tools 依赖该 contract，resource factory/eval 直接使用 infrastructure implementation；filter normalization 的所有权只在 retrieval 实现层。`app/services/retrieval/__init__.py` 仅作为已有 package facade re-export 同一个 contract 与 `HybridRetriever`，不保留深层实现或复制 model 定义。
 
 ## 当前状态
 

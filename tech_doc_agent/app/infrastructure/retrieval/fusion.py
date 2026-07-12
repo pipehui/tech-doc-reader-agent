@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tech_doc_agent.app.services.retrieval.models import FusedCandidate, RankedCandidate
+from .models import FusedCandidate, RankedCandidate
 
 
 def reciprocal_rank_fusion(

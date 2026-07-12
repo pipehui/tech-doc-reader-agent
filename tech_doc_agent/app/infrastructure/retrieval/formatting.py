@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from tech_doc_agent.app.application.retrieval import MatchType, SearchResult
-from tech_doc_agent.app.services.retrieval.models import (
+from .models import (
     FusedCandidate,
 )
 

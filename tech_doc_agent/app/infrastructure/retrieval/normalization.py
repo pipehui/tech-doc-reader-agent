@@ -4,8 +4,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, DEFAULT_USER_ID
-from tech_doc_agent.app.services.retrieval.inference import infer_category, infer_tags
-from tech_doc_agent.app.services.retrieval.taxonomy import tagify
+from .inference import infer_category, infer_tags
+from .taxonomy import tagify
 
 
 METADATA_KEYS = ("user_id", "namespace", "category", "tags")

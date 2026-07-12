@@ -2,7 +2,7 @@ import json
 
 from tech_doc_agent.app.core.observability import trace_context
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.retrieval import HybridRetriever
+from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
 from tech_doc_agent.app.tools import ToolDependencies, build_tool_bundle
 
 

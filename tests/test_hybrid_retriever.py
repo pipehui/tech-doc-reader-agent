@@ -12,17 +12,17 @@ from tech_doc_agent.app.application.retrieval import (
     SearchResult,
 )
 from tech_doc_agent.app.core.settings import Settings
-from tech_doc_agent.app.services.retrieval import HybridRetriever
-from tech_doc_agent.app.services.retrieval import hybrid as hybrid_module
-from tech_doc_agent.app.services.retrieval.bm25 import BM25Index
-from tech_doc_agent.app.services.retrieval.exact import rank_exact
-from tech_doc_agent.app.services.retrieval.formatting import format_result
-from tech_doc_agent.app.services.retrieval.fusion import reciprocal_rank_fusion
-from tech_doc_agent.app.services.retrieval.models import (
+from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
+from tech_doc_agent.app.infrastructure.retrieval import hybrid as hybrid_module
+from tech_doc_agent.app.infrastructure.retrieval.bm25 import BM25Index
+from tech_doc_agent.app.infrastructure.retrieval.exact import rank_exact
+from tech_doc_agent.app.infrastructure.retrieval.formatting import format_result
+from tech_doc_agent.app.infrastructure.retrieval.fusion import reciprocal_rank_fusion
+from tech_doc_agent.app.infrastructure.retrieval.models import (
     IndexedDocument,
     RankedCandidate,
 )
-from tech_doc_agent.app.services.retrieval.tokenization import tokenize
+from tech_doc_agent.app.infrastructure.retrieval.tokenization import tokenize
 
 
 class FakeStore:
@@ -479,7 +479,7 @@ def test_rrf_equal_scores_and_ranks_use_title_as_final_tie_break():
 
 
 def test_hybrid_module_keeps_staged_private_ranker_aliases():
-    from tech_doc_agent.app.services.retrieval import hybrid
+    from tech_doc_agent.app.infrastructure.retrieval import hybrid
 
     assert hybrid.BM25Index is BM25Index
     assert hybrid._tokenize is tokenize

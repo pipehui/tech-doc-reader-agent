@@ -26,7 +26,7 @@ from tech_doc_agent.app.application.retrieval import (
     SearchQuery,
     SearchResult,
 )
-from tech_doc_agent.app.services.retrieval import HybridRetriever
+from tech_doc_agent.app.infrastructure.retrieval import HybridRetriever
 from tech_doc_agent.app.services.resources import RetrievalResources
 
 

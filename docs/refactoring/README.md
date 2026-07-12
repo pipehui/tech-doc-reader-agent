@@ -76,6 +76,7 @@
 | 2026-07-12 | Phase 4：Agents 顶层 package、prompt 资源无损迁移与双向依赖门禁 | role/prompt/model/identity 已迁出 services，旧路径不保留 | [2026-07-12-agents-package-boundary.md](2026-07-12-agents-package-boundary.md) |
 | 2026-07-12 | Phase 4：Learning/Memory persistence adapters 归位与 vectordb 职责收窄 | store/UoW/query helper 已进入 infrastructure，行为保持 | [2026-07-12-learning-memory-persistence-adapters.md](2026-07-12-learning-memory-persistence-adapters.md) |
 | 2026-07-12 | Phase 4：Extractive conversation summarizer 归位 application | core port、application policy、graph consumer 与 composition 注入已分离 | [2026-07-12-conversation-summarizer-application-boundary.md](2026-07-12-conversation-summarizer-application-boundary.md) |
+| 2026-07-12 | Phase 4：Retrieval implementation 归位 infrastructure 与单文件 services facade | contract/implementation/compatibility 三层分离，深层旧路径删除 | [2026-07-12-retrieval-infrastructure-boundary.md](2026-07-12-retrieval-infrastructure-boundary.md) |
 
 ## 本地任务单策略
 

@@ -14,7 +14,7 @@ from tech_doc_agent.app.core.errors import (
 from tech_doc_agent.app.core.settings import Settings, get_settings
 from tech_doc_agent.app.infrastructure.persistence.faiss_snapshot import FaissSnapshotRepository
 from tech_doc_agent.app.services.embedding import generate_embedding
-from tech_doc_agent.app.services.retrieval.normalization import (
+from tech_doc_agent.app.infrastructure.retrieval.normalization import (
     normalize_chunk_metadata,
     normalize_document,
 )

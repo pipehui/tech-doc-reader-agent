@@ -1,7 +1,7 @@
 from tech_doc_agent.app.core.tenant import DEFAULT_NAMESPACE, DEFAULT_USER_ID
-from tech_doc_agent.app.services.retrieval.filters import metadata_matches, normalize_filter
-from tech_doc_agent.app.services.retrieval.inference import infer_category
-from tech_doc_agent.app.services.retrieval.normalization import (
+from tech_doc_agent.app.infrastructure.retrieval.filters import metadata_matches, normalize_filter
+from tech_doc_agent.app.infrastructure.retrieval.inference import infer_category
+from tech_doc_agent.app.infrastructure.retrieval.normalization import (
     normalize_chunk_metadata,
     normalize_document,
     normalize_metadata,
@@ -143,7 +143,7 @@ def test_metadata_matches_non_tag_filter_lists_as_allowed_values():
 
 
 def test_legacy_metadata_facade_reexports_owning_helpers():
-    from tech_doc_agent.app.services.retrieval import metadata
+    from tech_doc_agent.app.infrastructure.retrieval import metadata
 
     assert metadata.normalize_document is normalize_document
     assert metadata.normalize_filter is normalize_filter
