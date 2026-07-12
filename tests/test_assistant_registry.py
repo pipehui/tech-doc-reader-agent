@@ -11,6 +11,8 @@ from tech_doc_agent.app.graph.commands import (
     ToRelationAssistant,
     ToSummaryAssistant,
 )
+from tech_doc_agent.app.core.settings import Settings
+from tech_doc_agent.app.services.assistants import model_factory
 from tech_doc_agent.app.services.assistants.model_factory import AssistantModelProvider
 from tech_doc_agent.app.services.assistants.prompt_registry import build_prompt_registry
 from tech_doc_agent.app.services.assistants.registry import build_assistant_registry
@@ -150,6 +152,33 @@ def test_model_provider_binds_primary_and_backup_before_adding_fallback():
     assert primary.calls == backup.calls == [
         {"names": ["read_docs"], "parallel_tool_calls": False}
     ]
+
+
+def test_model_provider_disables_sdk_retries_and_owns_shared_transport_policy(monkeypatch):
+    created = []
+
+    class FakeChatModel:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+            created.append(self)
+
+    monkeypatch.setattr(model_factory, "ChatOpenAI", FakeChatModel)
+
+    provider = model_factory.build_assistant_model_provider(
+        Settings(
+            OPENAI_API_KEY="primary-key",
+            PRIMARY_MODEL="primary-model",
+            BACKUP_API_KEY="backup-key",
+            BACKUP_MODEL="backup-model",
+            TRANSPORT_RETRY_MAX_ATTEMPTS=4,
+        )
+    )
+
+    assert len(created) == 2
+    assert created[0].kwargs["max_retries"] == 0
+    assert created[1].kwargs["max_retries"] == 0
+    assert provider.retry_executor is not None
+    assert provider.retry_executor.policy.max_attempts == 4
 
 
 def test_model_visible_command_names_and_required_fields_are_stable():

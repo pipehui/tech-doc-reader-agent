@@ -8,17 +8,24 @@ from tavily import TavilyClient
 from tech_doc_agent.app.core.errors import (
     ApplicationError,
     DependencyUnavailable,
+    RateLimited,
     ValidationError,
-    classify_error,
     safe_error_fields,
 )
 from tech_doc_agent.app.core.observability import log_event
+from tech_doc_agent.app.core.retry import RetryExecutor, build_retry_executor
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.settings import get_settings
 from tech_doc_agent.app.infrastructure.persistence import read_json, write_json_atomic
 
+
 class WebSearchBackend:
-    def __init__(self, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        *,
+        retry_executor: RetryExecutor | None = None,
+    ) -> None:
         settings = settings or get_settings()
         self.store_dir = Path(settings.DATA_PATH) / "web_search"
         self.usage_path = self.store_dir / "tavily_usage.json"
@@ -29,6 +36,7 @@ class WebSearchBackend:
             "tavily_calls": 0,
         }
         self.proxy_url = settings.PROXY_URL
+        self.retry_executor = retry_executor or build_retry_executor(settings)
         self._usage_lock = threading.Lock()
         self.load_usage_state()
     
@@ -64,19 +72,58 @@ class WebSearchBackend:
         today = datetime.now().strftime("%Y-%m-%d")
         with self._usage_lock:
             if self.usage_state["date"] != today:
+                previous = dict(self.usage_state)
                 self.usage_state["date"] = today
                 self.usage_state["tavily_calls"] = 0
-                self.save_usage_state()
+                try:
+                    self.save_usage_state()
+                except Exception:
+                    self.usage_state = previous
+                    raise
 
     def can_use_tavily(self) -> bool:
-        if self.tavily_api_key != "" and self.usage_state["tavily_calls"] < self.tavily_daily_limit:
-            return True
-        return False
-
-    def consume_tavily_quota(self) -> bool:
+        self.sync_today_usage()
         with self._usage_lock:
+            return bool(
+                self.tavily_api_key
+                and self.usage_state["tavily_calls"] < self.tavily_daily_limit
+            )
+
+    def _reserve_tavily_quota(self, attempt: int) -> None:
+        del attempt
+        today = datetime.now().strftime("%Y-%m-%d")
+        with self._usage_lock:
+            if not self.tavily_api_key:
+                raise ValidationError(
+                    "The Tavily search provider is not configured.",
+                    code="tavily_not_configured",
+                    dependency="tavily",
+                    tool="web_search",
+                    cause_type="MissingConfiguration",
+                )
+
+            current_calls = (
+                self.usage_state["tavily_calls"] if self.usage_state["date"] == today else 0
+            )
+            if current_calls >= self.tavily_daily_limit:
+                raise RateLimited(
+                    "The local Tavily daily limit was reached.",
+                    code="tavily_daily_limit_reached",
+                    retryable=False,
+                    dependency="tavily",
+                    tool="web_search",
+                    cause_type="LocalDailyLimit",
+                )
+
+            previous = dict(self.usage_state)
+            self.usage_state["date"] = today
+            self.usage_state["tavily_calls"] = current_calls
             self.usage_state["tavily_calls"] += 1
-            return self.save_usage_state()
+            try:
+                self.save_usage_state()
+            except Exception:
+                self.usage_state = previous
+                raise
 
     def _clean_text(self, text: str, max_length: int = 300) -> str:
         if not text:
@@ -168,38 +215,59 @@ class WebSearchBackend:
         
 
     def search_with_ddg(self, query: str, max_results: int = 5) -> list[dict]:
-        try:
+        def request():
             with DDGS(proxy=self.proxy_url, timeout=20) as ddgs:
-                raw_results = list(ddgs.text(query, max_results=max_results))
+                return list(ddgs.text(query, max_results=max_results))
+
+        raw_results = self.retry_executor.run(
+            request,
+            operation_name="web_search.duckduckgo",
+            dependency="duckduckgo",
+            tool="web_search",
+            idempotent=True,
+        )
+        try:
             return self._normalize_ddg_results(raw_results)
-        except Exception as exc:
-            raise classify_error(
-                exc,
+        except (AttributeError, TypeError) as exc:
+            raise ValidationError(
+                "The DuckDuckGo dependency returned an invalid response.",
+                code="duckduckgo_response_invalid",
                 dependency="duckduckgo",
                 tool="web_search",
+                cause=exc,
             ) from exc
 
     def search_with_tavily(self, query: str, max_results: int = 5) -> list[dict]:
-        try:
+        def request():
             client = TavilyClient(self.tavily_api_key)
-            response = client.search(
+            return client.search(
                 query=query,
                 search_depth="basic",
-                max_results=max_results
+                max_results=max_results,
             )
+
+        response = self.retry_executor.run(
+            request,
+            operation_name="web_search.tavily",
+            dependency="tavily",
+            tool="web_search",
+            idempotent=True,
+            before_attempt=self._reserve_tavily_quota,
+        )
+        try:
             return self._normalize_tavily_results(response.get("results", []))
-        except Exception as exc:
-            raise classify_error(
-                exc,
+        except (AttributeError, TypeError) as exc:
+            raise ValidationError(
+                "The Tavily dependency returned an invalid response.",
+                code="tavily_response_invalid",
                 dependency="tavily",
                 tool="web_search",
+                cause=exc,
             ) from exc
 
     def search(self, query: str) -> list[dict]:
-        self.sync_today_usage()
         tavily_error: ApplicationError | None = None
         if self.can_use_tavily():
-            self.consume_tavily_quota()
             try:
                 results = self.search_with_tavily(query)
             except ApplicationError as exc:

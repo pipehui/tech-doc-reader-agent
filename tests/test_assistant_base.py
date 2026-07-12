@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage
 
 from tech_doc_agent.app.core.errors import Timeout
 from tech_doc_agent.app.core import observability
+from tech_doc_agent.app.core.retry import RetryExecutor, RetryPolicy
 from tech_doc_agent.app.services.assistants.assistant_base import (
     Assistant,
     is_empty_assistant_output,
@@ -35,6 +36,26 @@ class FailingRunnable:
         raise TimeoutError("provider URL and bearer token are private")
 
 
+class SequencedRunnable:
+    def __init__(self, outputs):
+        self.outputs = list(outputs)
+        self.states = []
+
+    def invoke(self, state, config=None):
+        self.states.append(state)
+        output = self.outputs.pop(0)
+        if isinstance(output, BaseException):
+            raise output
+        return output
+
+    async def ainvoke(self, state, config=None):
+        self.states.append(state)
+        output = self.outputs.pop(0)
+        if isinstance(output, BaseException):
+            raise output
+        return output
+
+
 class ListHandler(logging.Handler):
     def __init__(self):
         super().__init__()
@@ -61,7 +82,7 @@ def test_assistant_retries_empty_response_and_returns_next_result():
             AIMessage(content="real answer"),
         ]
     )
-    assistant = Assistant(runnable, name="tester", max_retries=2)
+    assistant = Assistant(runnable, name="tester", max_empty_response_retries=2)
     handler = _capture_observability_logs()
 
     try:
@@ -72,7 +93,7 @@ def test_assistant_retries_empty_response_and_returns_next_result():
     assert result["messages"].content == "real answer"
     assert result["messages"].name == "tester"
     assert len(runnable.states) == 2
-    assert runnable.states[1]["messages"][-1] == ("user", "Respond with a real output.")
+    assert runnable.states[1]["messages"][-1].content == "Respond with a real output."
 
     events = _log_events(handler)
     assert [event["event"] for event in events] == ["assistant.empty_response"]
@@ -87,7 +108,7 @@ def test_assistant_raises_after_empty_response_retry_budget_is_exhausted():
             AIMessage(content=[]),
         ]
     )
-    assistant = Assistant(runnable, name="tester", max_retries=1)
+    assistant = Assistant(runnable, name="tester", max_empty_response_retries=1)
     handler = _capture_observability_logs()
 
     try:
@@ -119,7 +140,7 @@ def test_assistant_does_not_retry_empty_tool_call_response():
         ],
     )
     runnable = FakeRunnable([tool_call_message])
-    assistant = Assistant(runnable, name="tester", max_retries=2)
+    assistant = Assistant(runnable, name="tester", max_empty_response_retries=2)
 
     result = assistant({"messages": [("user", "hi")]})
 
@@ -128,9 +149,9 @@ def test_assistant_does_not_retry_empty_tool_call_response():
     assert is_empty_assistant_output(tool_call_message) is False
 
 
-def test_assistant_rejects_negative_max_retries():
-    with pytest.raises(ValueError, match="max_retries"):
-        Assistant(FakeRunnable([]), max_retries=-1)
+def test_assistant_rejects_negative_empty_response_retries():
+    with pytest.raises(ValueError, match="max_empty_response_retries"):
+        Assistant(FakeRunnable([]), max_empty_response_retries=-1)
 
 
 def test_assistant_maps_llm_transport_failure_without_exposing_provider_text():
@@ -144,6 +165,43 @@ def test_assistant_maps_llm_transport_failure_without_exposing_provider_text():
     assert "bearer token" not in str(exc_info.value)
 
 
+def test_assistant_keeps_transport_retry_separate_from_empty_response_repair():
+    runnable = SequencedRunnable(
+        [
+            TimeoutError("private endpoint"),
+            AIMessage(content=""),
+            AIMessage(content="real answer"),
+        ]
+    )
+    retry_events = []
+    retry_executor = RetryExecutor(
+        RetryPolicy(
+            max_attempts=2,
+            initial_delay_seconds=0,
+            max_delay_seconds=0,
+            jitter_ratio=0,
+        ),
+        sleeper=lambda delay: None,
+        event_logger=lambda event, **fields: retry_events.append((event, fields)),
+    )
+    assistant = Assistant(
+        runnable,
+        name="tester",
+        max_empty_response_retries=1,
+        retry_executor=retry_executor,
+    )
+
+    result = assistant({"messages": []})
+
+    assert result["messages"].content == "real answer"
+    assert len(runnable.states) == 3
+    assert runnable.states[0]["messages"] == []
+    assert runnable.states[1]["messages"] == []
+    assert runnable.states[2]["messages"][-1].content == "Respond with a real output."
+    final_events = [fields for event, fields in retry_events if event == "retry.final"]
+    assert [event["attempts"] for event in final_events] == [2, 1]
+
+
 def test_assistant_ainvoke_retries_empty_response_and_returns_next_result():
     async def run():
         runnable = FakeRunnable(
@@ -152,7 +210,7 @@ def test_assistant_ainvoke_retries_empty_response_and_returns_next_result():
                 AIMessage(content="real async answer"),
             ]
         )
-        assistant = Assistant(runnable, name="tester", max_retries=2)
+        assistant = Assistant(runnable, name="tester", max_empty_response_retries=2)
         return runnable, await assistant.ainvoke({"messages": [("user", "hi")]})
 
     runnable, result = asyncio.run(run())
@@ -160,4 +218,36 @@ def test_assistant_ainvoke_retries_empty_response_and_returns_next_result():
     assert result["messages"].content == "real async answer"
     assert result["messages"].name == "tester"
     assert len(runnable.states) == 2
-    assert runnable.states[1]["messages"][-1] == ("user", "Respond with a real output.")
+    assert runnable.states[1]["messages"][-1].content == "Respond with a real output."
+
+
+def test_assistant_ainvoke_uses_transport_retry_executor():
+    async def run():
+        runnable = SequencedRunnable(
+            [
+                TimeoutError("private endpoint"),
+                AIMessage(content="real async answer"),
+            ]
+        )
+
+        async def no_sleep(delay):
+            return None
+
+        retry_executor = RetryExecutor(
+            RetryPolicy(
+                max_attempts=2,
+                initial_delay_seconds=0,
+                max_delay_seconds=0,
+                jitter_ratio=0,
+            ),
+            async_sleeper=no_sleep,
+            event_logger=lambda event, **fields: None,
+        )
+        assistant = Assistant(runnable, name="tester", retry_executor=retry_executor)
+        result = await assistant.ainvoke({"messages": []})
+        return runnable, result
+
+    runnable, result = asyncio.run(run())
+
+    assert result["messages"].content == "real async answer"
+    assert len(runnable.states) == 2

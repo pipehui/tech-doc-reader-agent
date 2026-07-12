@@ -42,7 +42,11 @@ def build_assistant_definition(
         }
     )
     return AssistantDefinition(
-        assistant=Assistant(runnable, name=name),
+        assistant=Assistant(
+            runnable,
+            name=name,
+            retry_executor=models.retry_executor,
+        ),
         safe_tools=safe_tools,
         prompt_id=prompt.prompt_id,
         prompt_sha256=prompt.sha256,

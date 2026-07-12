@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = ""
 
     TAVILY_API_KEY: str = ""
-    TAVILY_DAILY_LIMIT: int = 10
+    TAVILY_DAILY_LIMIT: int = Field(default=10, ge=0)
 
     PROXY_URL: str = ""
 
@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379"
     REDIS_SETUP_MAX_ATTEMPTS: int = 60
     REDIS_SETUP_RETRY_SECONDS: float = 1.0
+    TRANSPORT_RETRY_MAX_ATTEMPTS: int = Field(default=3, ge=1)
+    TRANSPORT_RETRY_INITIAL_DELAY_SECONDS: float = Field(default=0.25, ge=0)
+    TRANSPORT_RETRY_MAX_DELAY_SECONDS: float = Field(default=2.0, ge=0)
+    TRANSPORT_RETRY_BACKOFF_MULTIPLIER: float = Field(default=2.0, ge=1)
+    TRANSPORT_RETRY_JITTER_RATIO: float = Field(default=0.2, ge=0, le=1)
+    TRANSPORT_RETRY_MAX_RETRY_AFTER_SECONDS: float = Field(default=30.0, ge=0)
     GUARDRAIL_APPROVAL_TTL_SECONDS: int = Field(default=900, gt=0)
     LANGGRAPH_RECURSION_LIMIT: int = 80
     MAX_IDENTICAL_TOOL_REPEATS: int = Field(default=2, ge=0)

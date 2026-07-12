@@ -4,6 +4,7 @@ from typing import Any
 from langchain_openai import ChatOpenAI
 from pydantic import SecretStr
 
+from tech_doc_agent.app.core.retry import RetryExecutor, build_retry_executor
 from tech_doc_agent.app.core.settings import Settings
 
 
@@ -19,6 +20,7 @@ def _base_url_or_none(value: str) -> str | None:
 class AssistantModelProvider:
     primary: Any
     backup: Any | None = None
+    retry_executor: RetryExecutor | None = None
 
     def bind_tools(self, tools: list[Any], *, parallel_tool_calls: bool = False) -> Any:
         primary_bound = self.primary.bind_tools(
@@ -41,6 +43,7 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
         api_key=_secret_or_placeholder(settings.OPENAI_API_KEY),
         base_url=_base_url_or_none(settings.OPENAI_BASE_URL),
         temperature=0,
+        max_retries=0,
     )
 
     backup = None
@@ -50,6 +53,11 @@ def build_assistant_model_provider(settings: Settings) -> AssistantModelProvider
             api_key=_secret_or_placeholder(settings.BACKUP_API_KEY),
             base_url=_base_url_or_none(settings.BACKUP_API_BASE),
             temperature=0,
+            max_retries=0,
         )
 
-    return AssistantModelProvider(primary=primary, backup=backup)
+    return AssistantModelProvider(
+        primary=primary,
+        backup=backup,
+        retry_executor=build_retry_executor(settings),
+    )
