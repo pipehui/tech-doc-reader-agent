@@ -108,6 +108,7 @@ http://127.0.0.1:5173
 
 | Document | Content |
 |---|---|
+| [docs/code-reading/README.md](docs/code-reading/README.md) | 重构后源码研读手册：从请求主链到函数输入输出、调用关系、修改清单和调试索引 |
 | [docs/architecture.md](docs/architecture.md) | 多 agent 编排、状态流转、工具层和数据层设计 |
 | [docs/evaluation.md](docs/evaluation.md) | Agent eval、retrieval eval、concurrency benchmark 和指标解释 |
 | [docs/learning-state.md](docs/learning-state.md) | 学习记录、学习轨迹 memory、长期用户画像的边界和写入策略 |

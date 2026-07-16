@@ -2,6 +2,8 @@
 
 Tech Doc Reader Agent 是一个围绕“技术概念学习”设计的多智能体系统。它不把所有任务都交给一个聊天模型，而是先判断任务复杂度，再选择直接回答、单 agent 或多 agent 链路。
 
+本页说明稳定架构边界；需要沿具体函数、输入输出和调用顺序研读当前实现时，请使用 [重构后源码研读手册](code-reading/README.md)。
+
 ![Multi-agent technical document reader architecture](../graphs/tech_doc_reader_agent_architecture.svg)
 
 ## Request Path
