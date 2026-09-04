@@ -14,12 +14,15 @@ from tech_doc_agent.app.api.routes.chat import router as chat_router
 from tech_doc_agent.app.api.routes.health import router as health_router
 from tech_doc_agent.app.api.routes.learning import router as learning_router
 from tech_doc_agent.app.bootstrap import build_chat_runtime
+from tech_doc_agent.app.core.local_tracing import initialize_local_tracing
 from tech_doc_agent.app.core.settings import get_settings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    with build_chat_runtime() as runtime:
+    resolved_settings = get_settings()
+    initialize_local_tracing(resolved_settings)
+    with build_chat_runtime(resolved_settings) as runtime:
         app.state.runtime = runtime
         yield
 

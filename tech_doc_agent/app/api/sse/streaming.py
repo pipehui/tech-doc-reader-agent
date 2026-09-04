@@ -3,6 +3,7 @@ from collections.abc import AsyncIterable, Iterable
 from fastapi.sse import ServerSentEvent
 
 from tech_doc_agent.app.core.errors import ApplicationError, classify_error, safe_error_fields
+from tech_doc_agent.app.core.local_tracing import record_local_exception
 from tech_doc_agent.app.core.observability import log_event
 from tech_doc_agent.app.runtime.chat_runtime import ChatRuntime
 
@@ -110,6 +111,7 @@ def stream_parts_as_sse(
         )
 
     except Exception as exc:
+        record_local_exception(exc, name="sse.stream.translation")
         error = _stream_error(exc)
         log_event(
             "sse.stream.error",
@@ -153,6 +155,7 @@ async def astream_parts_as_sse(
         )
 
     except Exception as exc:
+        record_local_exception(exc, name="sse.stream.translation")
         error = _stream_error(exc)
         log_event(
             "sse.stream.error",

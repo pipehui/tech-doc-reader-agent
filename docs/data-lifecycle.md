@@ -10,6 +10,7 @@ The safe default is deliberately conservative:
 
 - pending approval data uses its existing Redis TTL;
 - usage counters overwrite their current state;
+- local diagnostic traces are opt-in and retain only the latest configured request files;
 - all other durable records are retained until an explicit, authenticated operation exists;
 - generation, processed-command, legacy-source, and migration-backup pruning is disabled;
 - current manifests and their referenced generations must never be deleted independently.
@@ -29,6 +30,7 @@ No arbitrary “30/90 day” period is introduced without a product/legal requir
 | FAISS non-current generations | Previous index generations and possible interrupted artifacts | Repository-wide | Retain; automatic GC disabled | None | Same classification limitation as LearningState generations. |
 | Migration backups and legacy sources | Copies of learning/memory/profile data | Mixed | Operator-controlled; retain through migration verification and one tested rollback window | No automatic deletion | May contain personal data even after current state changes. Backup expiry must be part of a future operator policy. |
 | Web search usage state | Date and Tavily call count | Deployment | Current day/counter is overwritten | Daily state replacement | Does not store search query/results in the current adapter. |
+| Local diagnostic traces | Full request, prompt, model/tool input-output, span hierarchy, and raw exception stack when content capture is enabled | Deployment-local request trace | Latest `LOCAL_TRACE_RETENTION_COUNT` completed requests, default 100 | Oldest completed file is removed after finalization; active files are recovered as abandoned after restart | Stored under `${DATA_PATH}/traces`; excluded from Git and Docker build context. Contains raw sensitive content and is not included in a user-facing export/delete API. |
 | Structured logs / Langfuse | Redacted events, pseudonymous tenant metadata, traces | External sink | Controlled by log platform/Langfuse configuration | External | Shared redaction is mandatory before export. External retention must be documented per deployment. |
 | Frontend browser storage | Session directory, transcript/context/preferences | Browser/device | Until user/browser clears or UI delete/reset runs | Client-side repository delete/reset | Not covered by backend backups. A backend delete API cannot erase another device’s local storage. |
 
@@ -128,7 +130,7 @@ A GDPR-like API remains blocked until these conditions are met:
 3. LearningState deletion atomically filters records, memories, and owned processed outcomes in one new generation.
 4. Redis checkpoint and pending-approval keys can be enumerated/deleted for the authorized tenant without wildcard cross-tenant access.
 5. Legacy processed outcomes without owner key have an explicit migration/full-snapshot rule.
-6. Backup, AOF, logs, Langfuse, and browser-storage limitations are disclosed; “delete complete” must not claim immediate physical
+6. Backup, AOF, local traces, logs, Langfuse, and browser-storage limitations are disclosed; “delete complete” must not claim immediate physical
    erasure of unmanaged copies.
 7. Deletion produces a minimal audit event that does not copy the deleted content.
 8. Legal/security hold semantics exist if the deployment requires them; held data must block both primary and backup expiry.

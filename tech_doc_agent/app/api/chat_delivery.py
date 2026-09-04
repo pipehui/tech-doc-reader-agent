@@ -7,6 +7,12 @@ from fastapi.sse import ServerSentEvent
 from tech_doc_agent.app.api import sse as _sse
 from tech_doc_agent.app.application.input_guardrails import evaluate_input_guardrail
 from tech_doc_agent.app.core.guardrails import InputRisk
+from tech_doc_agent.app.core.local_tracing import (
+    LocalTrace,
+    activate_local_trace,
+    begin_local_trace,
+    trace_async_events,
+)
 from tech_doc_agent.app.core.observability import (
     get_trace_context,
     log_event,
@@ -217,16 +223,40 @@ def _stream_response(
     operation: str,
     user_id: str,
     namespace: str,
+    local_trace: LocalTrace | None,
 ) -> Response:
+    contextual_events = _sse.aiter_with_trace_context(
+        events,
+        trace_id,
+        session_id,
+        operation,
+        user_id=user_id,
+        namespace=namespace,
+    )
     return _sse.event_source_response(
-        _sse.aiter_with_trace_context(
-            events,
-            trace_id,
-            session_id,
-            operation,
-            user_id=user_id,
-            namespace=namespace,
-        )
+        trace_async_events(contextual_events, local_trace)
+    )
+
+
+def _begin_request_trace(
+    runtime: ChatRuntime,
+    *,
+    trace_id: str,
+    session_id: str,
+    user_id: str,
+    namespace: str,
+    operation: str,
+    request_payload: dict,
+) -> LocalTrace | None:
+    settings = getattr(runtime, "settings", None)
+    return begin_local_trace(
+        settings,
+        trace_id=trace_id,
+        session_id=session_id,
+        user_id=user_id,
+        namespace=namespace,
+        operation=operation,
+        request_payload=request_payload,
     )
 
 
@@ -240,56 +270,75 @@ def chat_response(
     namespace: str,
     request_started_monotonic: float,
 ) -> Response:
-    with trace_context(
+    local_trace = _begin_request_trace(
+        runtime,
         trace_id=trace_id,
         session_id=session_id,
         user_id=user_id,
         namespace=namespace,
         operation="chat",
-    ):
-        risk = evaluate_input_guardrail(message, source="chat.message")
-        if risk.level == "high":
-            return _guardrail_blocked_response(
-                risk,
-                session_id=session_id,
-                source="chat.message",
-            )
-        if risk.level == "medium":
-            _request_guardrail_approval(
-                runtime,
-                session_id,
-                message,
-                risk,
-                source="chat.message",
-                user_id=user_id,
-                namespace=namespace,
-            )
-            events = _astream_guardrail_approval_events(
-                runtime,
-                session_id,
-                risk,
-                source="chat.message",
-                user_id=user_id,
-                namespace=namespace,
-            )
-        else:
-            events = _astream_chat_events(
-                runtime,
-                session_id,
-                message,
-                user_id=user_id,
-                namespace=namespace,
-                request_started_monotonic=request_started_monotonic,
-            )
-
-        return _stream_response(
-            events,
+        request_payload={"message": message},
+    )
+    try:
+        with activate_local_trace(local_trace), trace_context(
             trace_id=trace_id,
             session_id=session_id,
-            operation="chat",
             user_id=user_id,
             namespace=namespace,
-        )
+            operation="chat",
+        ):
+            risk = evaluate_input_guardrail(message, source="chat.message")
+            if risk.level == "high":
+                response = _guardrail_blocked_response(
+                    risk,
+                    session_id=session_id,
+                    source="chat.message",
+                )
+                if local_trace is not None:
+                    local_trace.finish("blocked")
+                return response
+            if risk.level == "medium":
+                _request_guardrail_approval(
+                    runtime,
+                    session_id,
+                    message,
+                    risk,
+                    source="chat.message",
+                    user_id=user_id,
+                    namespace=namespace,
+                )
+                events = _astream_guardrail_approval_events(
+                    runtime,
+                    session_id,
+                    risk,
+                    source="chat.message",
+                    user_id=user_id,
+                    namespace=namespace,
+                )
+            else:
+                events = _astream_chat_events(
+                    runtime,
+                    session_id,
+                    message,
+                    user_id=user_id,
+                    namespace=namespace,
+                    request_started_monotonic=request_started_monotonic,
+                )
+
+            return _stream_response(
+                events,
+                trace_id=trace_id,
+                session_id=session_id,
+                operation="chat",
+                user_id=user_id,
+                namespace=namespace,
+                local_trace=local_trace,
+            )
+    except BaseException as exc:
+        if local_trace is not None and not local_trace.finished:
+            local_trace.record_exception(exc, name="chat.request")
+            local_trace.finish("error")
+        raise
 
 
 def approval_response(
@@ -303,39 +352,58 @@ def approval_response(
     namespace: str,
     request_started_monotonic: float,
 ) -> Response:
-    with trace_context(
+    local_trace = _begin_request_trace(
+        runtime,
         trace_id=trace_id,
         session_id=session_id,
         user_id=user_id,
         namespace=namespace,
         operation="approval",
-    ):
-        if feedback:
-            risk = evaluate_input_guardrail(
-                feedback,
-                source="chat.approval.feedback",
-            )
-            if risk.level == "high":
-                return _guardrail_blocked_response(
-                    risk,
-                    session_id=session_id,
-                    source="chat.approval.feedback",
-                )
-
-        events = _astream_approval_events(
-            runtime,
-            session_id,
-            approved,
-            feedback,
-            user_id=user_id,
-            namespace=namespace,
-            request_started_monotonic=request_started_monotonic,
-        )
-        return _stream_response(
-            events,
+        request_payload={"approved": approved, "feedback": feedback},
+    )
+    try:
+        with activate_local_trace(local_trace), trace_context(
             trace_id=trace_id,
             session_id=session_id,
-            operation="approval",
             user_id=user_id,
             namespace=namespace,
-        )
+            operation="approval",
+        ):
+            if feedback:
+                risk = evaluate_input_guardrail(
+                    feedback,
+                    source="chat.approval.feedback",
+                )
+                if risk.level == "high":
+                    response = _guardrail_blocked_response(
+                        risk,
+                        session_id=session_id,
+                        source="chat.approval.feedback",
+                    )
+                    if local_trace is not None:
+                        local_trace.finish("blocked")
+                    return response
+
+            events = _astream_approval_events(
+                runtime,
+                session_id,
+                approved,
+                feedback,
+                user_id=user_id,
+                namespace=namespace,
+                request_started_monotonic=request_started_monotonic,
+            )
+            return _stream_response(
+                events,
+                trace_id=trace_id,
+                session_id=session_id,
+                operation="approval",
+                user_id=user_id,
+                namespace=namespace,
+                local_trace=local_trace,
+            )
+    except BaseException as exc:
+        if local_trace is not None and not local_trace.finished:
+            local_trace.record_exception(exc, name="chat.approval")
+            local_trace.finish("error")
+        raise

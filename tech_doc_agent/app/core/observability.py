@@ -65,6 +65,13 @@ def log_event(event: str, **fields: Any) -> None:
         **fields,
     }
 
+    # Imported lazily to keep observability initialization acyclic. The local
+    # trace receives the original diagnostic payload; console logs continue to
+    # use the shared redaction policy below.
+    from tech_doc_agent.app.core.local_tracing import record_local_application_event
+
+    record_local_application_event(event, payload)
+
     settings = get_settings()
     policy = telemetry_redaction_policy(
         settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value()

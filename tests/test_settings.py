@@ -35,6 +35,10 @@ def test_settings_parses_typed_values():
         CONTEXT_COMPACTION_KEEP_RECENT_TURNS="5",
         CONTEXT_SUMMARY_MAX_CHARS="10000",
         TELEMETRY_PSEUDONYM_KEY="controlled-key-with-32-random-bytes",
+        LOCAL_TRACE_ENABLED="true",
+        LOCAL_TRACE_RETENTION_COUNT="100",
+        LOCAL_TRACE_MAX_PAYLOAD_BYTES="20971520",
+        LOCAL_TRACE_CAPTURE_CONTENT="true",
         MODEL_PROVIDER_ID="provider-a",
         DEPLOYMENT_COMMIT_SHA="a" * 40,
     )
@@ -70,6 +74,10 @@ def test_settings_parses_typed_values():
     assert settings.LANGFUSE_ENABLED is True
     assert settings.LANGFUSE_FLUSH_ON_REQUEST is True
     assert settings.TELEMETRY_PSEUDONYM_KEY.get_secret_value() == "controlled-key-with-32-random-bytes"
+    assert settings.LOCAL_TRACE_ENABLED is True
+    assert settings.LOCAL_TRACE_RETENTION_COUNT == 100
+    assert settings.LOCAL_TRACE_MAX_PAYLOAD_BYTES == 20 * 1024 * 1024
+    assert settings.LOCAL_TRACE_CAPTURE_CONTENT is True
     assert settings.MODEL_PROVIDER_ID == "provider-a"
     assert settings.DEPLOYMENT_COMMIT_SHA == "a" * 40
 
@@ -119,6 +127,8 @@ def test_settings_rejects_conflicting_runtime_and_image_commit_identity():
         "WORKFLOW_MAX_ESTIMATED_COST_USD",
         "CONTEXT_COMPACTION_MAX_MESSAGES",
         "CONTEXT_COMPACTION_MAX_SERIALIZED_BYTES",
+        "LOCAL_TRACE_RETENTION_COUNT",
+        "LOCAL_TRACE_MAX_PAYLOAD_BYTES",
     ],
 )
 def test_settings_rejects_negative_tool_policy_limits(field):
@@ -155,10 +165,22 @@ def test_settings_rejects_invalid_context_compaction_policy(field, value):
         Settings(**{field: value})
 
 
-def test_settings_uses_project_data_path_by_default():
+def test_settings_uses_project_data_path_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    for field in (
+        "LOCAL_TRACE_ENABLED",
+        "LOCAL_TRACE_RETENTION_COUNT",
+        "LOCAL_TRACE_MAX_PAYLOAD_BYTES",
+        "LOCAL_TRACE_CAPTURE_CONTENT",
+    ):
+        monkeypatch.delenv(field, raising=False)
     settings = Settings()
 
     assert settings.DATA_PATH == "./tech_doc_agent/data"
+    assert settings.LOCAL_TRACE_ENABLED is False
+    assert settings.LOCAL_TRACE_RETENTION_COUNT == 100
+    assert settings.LOCAL_TRACE_MAX_PAYLOAD_BYTES == 20 * 1024 * 1024
+    assert settings.LOCAL_TRACE_CAPTURE_CONTENT is True
 
 
 def test_settings_parses_allowed_origins_from_dotenv(tmp_path, monkeypatch):

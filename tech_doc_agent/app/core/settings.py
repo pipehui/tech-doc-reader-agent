@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     DATA_PATH: str = "./tech_doc_agent/data"
     LOG_LEVEL: str = "DEBUG"
     TELEMETRY_PSEUDONYM_KEY: SecretStr = SecretStr("")
+    LOCAL_TRACE_ENABLED: bool = False
+    LOCAL_TRACE_RETENTION_COUNT: int = Field(default=100, ge=1)
+    LOCAL_TRACE_MAX_PAYLOAD_BYTES: int = Field(default=20 * 1024 * 1024, ge=1)
+    LOCAL_TRACE_CAPTURE_CONTENT: bool = True
 
     EMBEDDING_API_KEY: str = ""
     EMBEDDING_API_BASE: str = ""

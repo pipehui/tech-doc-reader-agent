@@ -8,6 +8,7 @@ from tech_doc_agent.app.core.execution_budget import (
     build_execution_budget,
 )
 from tech_doc_agent.app.core.langfuse_tracing import build_langfuse_trace, langfuse_metadata
+from tech_doc_agent.app.core.local_tracing import build_local_trace_callback
 from tech_doc_agent.app.core.observability import get_trace_context
 from tech_doc_agent.app.core.settings import Settings
 from tech_doc_agent.app.core.tenant import parse_tenant, tenant_thread_id
@@ -35,6 +36,11 @@ class SessionConfigFactory:
         trace_id = context.get("trace_id")
         langfuse_trace = (
             build_langfuse_trace(self.settings, trace_id)
+            if with_callbacks and isinstance(trace_id, str)
+            else None
+        )
+        local_trace_callback = (
+            build_local_trace_callback(self.settings, trace_id)
             if with_callbacks and isinstance(trace_id, str)
             else None
         )
@@ -74,7 +80,12 @@ class SessionConfigFactory:
             "recursion_limit": self.settings.LANGGRAPH_RECURSION_LIMIT,
         }
 
+        callbacks = []
+        if local_trace_callback is not None:
+            callbacks.append(local_trace_callback)
         if langfuse_trace is not None:
-            config["callbacks"] = [langfuse_trace.callback]
+            callbacks.append(langfuse_trace.callback)
+        if callbacks:
+            config["callbacks"] = callbacks
 
         return config
